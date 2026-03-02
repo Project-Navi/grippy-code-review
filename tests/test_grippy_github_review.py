@@ -404,10 +404,14 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        mock_pr.create_review.assert_called_once()
-        call_kwargs = mock_pr.create_review.call_args
-        assert call_kwargs.kwargs["event"] == "COMMENT"
-        assert len(call_kwargs.kwargs["comments"]) == 1
+        assert mock_pr.create_review.call_count == 2
+        # First call: inline COMMENT
+        first_call = mock_pr.create_review.call_args_list[0]
+        assert first_call.kwargs["event"] == "COMMENT"
+        assert len(first_call.kwargs["comments"]) == 1
+        # Second call: APPROVE verdict
+        second_call = mock_pr.create_review.call_args_list[1]
+        assert second_call.kwargs["event"] == "APPROVE"
 
     @patch("grippy.github_review.Github")
     def test_off_diff_findings_in_summary_only(self, mock_github_cls: MagicMock) -> None:
@@ -438,7 +442,9 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        mock_pr.create_review.assert_not_called()
+        # No inline comments, but APPROVE verdict still posted
+        mock_pr.create_review.assert_called_once()
+        assert mock_pr.create_review.call_args.kwargs["event"] == "APPROVE"
         mock_pr.create_issue_comment.assert_called_once()
         body = mock_pr.create_issue_comment.call_args[0][0]
         assert "Off-diff findings" in body
@@ -499,7 +505,9 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        mock_pr.create_review.assert_not_called()
+        # No inline comments, but APPROVE verdict posted
+        mock_pr.create_review.assert_called_once()
+        assert mock_pr.create_review.call_args.kwargs["event"] == "APPROVE"
         mock_pr.create_issue_comment.assert_called_once()
 
     @patch("grippy.github_review.Github")
@@ -537,8 +545,9 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        # Should NOT post inline since the finding already exists
-        mock_pr.create_review.assert_not_called()
+        # No inline comments (finding exists), but APPROVE verdict posted
+        mock_pr.create_review.assert_called_once()
+        assert mock_pr.create_review.call_args.kwargs["event"] == "APPROVE"
 
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.Github")
@@ -576,6 +585,87 @@ class TestPostReview:
         mock_resolve.assert_called_once()
         call_kwargs = mock_resolve.call_args[1]
         assert "PRRT_old" in call_kwargs["thread_ids"]
+
+
+# --- verdict review (APPROVE / REQUEST_CHANGES) ---
+
+
+class TestVerdictReview:
+    """post_review submits APPROVE on PASS, REQUEST_CHANGES on FAIL."""
+
+    @patch("grippy.github_review.Github")
+    def test_pass_submits_approve(self, mock_github_cls: MagicMock) -> None:
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_review_comments.return_value = []
+
+        post_review(
+            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
+            diff="", score=92, verdict="PASS",
+        )
+
+        mock_pr.create_review.assert_called_once()
+        assert mock_pr.create_review.call_args.kwargs["event"] == "APPROVE"
+        assert "92/100" in mock_pr.create_review.call_args.kwargs["body"]
+
+    @patch("grippy.github_review.Github")
+    def test_fail_submits_request_changes(self, mock_github_cls: MagicMock) -> None:
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_review_comments.return_value = []
+
+        post_review(
+            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
+            diff="", score=45, verdict="FAIL",
+        )
+
+        mock_pr.create_review.assert_called_once()
+        assert mock_pr.create_review.call_args.kwargs["event"] == "REQUEST_CHANGES"
+        assert "45/100" in mock_pr.create_review.call_args.kwargs["body"]
+
+    @patch("grippy.github_review.Github")
+    def test_provisional_skips_verdict_review(self, mock_github_cls: MagicMock) -> None:
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_review_comments.return_value = []
+
+        post_review(
+            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
+            diff="", score=70, verdict="PROVISIONAL",
+        )
+
+        mock_pr.create_review.assert_not_called()
+
+    @patch("grippy.github_review.Github")
+    def test_verdict_review_failure_is_non_fatal(self, mock_github_cls: MagicMock) -> None:
+        from github import GithubException
+
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_review_comments.return_value = []
+        mock_pr.create_review.side_effect = GithubException(
+            403, {"message": "Forbidden"}, None
+        )
+
+        # Should NOT raise — verdict review is non-fatal
+        post_review(
+            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
+            diff="", score=90, verdict="PASS",
+        )
+
+        mock_pr.create_issue_comment.assert_called_once()
 
 
 # --- resolve_threads ---

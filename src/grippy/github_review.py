@@ -434,7 +434,19 @@ def post_review(
         except Exception as exc:
             print(f"::warning::Thread resolution failed: {exc}")
 
-    # 6. Build summary comment
+    # 6. Submit APPROVE / REQUEST_CHANGES review verdict (non-fatal)
+    try:
+        if verdict == "PASS":
+            pr.create_review(event="APPROVE", body=f"Grippy approves — **PASS** ({score}/100)")
+        elif verdict == "FAIL":
+            pr.create_review(
+                event="REQUEST_CHANGES",
+                body=f"Grippy requests changes — **FAIL** ({score}/100)",
+            )
+    except GithubException as exc:
+        print(f"::warning::Verdict review ({verdict}) failed: {exc.status}")
+
+    # 7. Build summary comment
     summary = format_summary_comment(
         score=score,
         verdict=verdict,
