@@ -44,32 +44,49 @@ class TestFullPipelineRoundTrip:
         # Phase 2: Review start
         review_id = _record_id(NodeType.REVIEW, "repo", "42", "abc123")
         author_id = _record_id(NodeType.AUTHOR, "ndspence")
-        store.upsert_node(review_id, NodeType.REVIEW, {
-            "repo": "repo", "pr": 42, "status": "running",
-        })
+        store.upsert_node(
+            review_id,
+            NodeType.REVIEW,
+            {
+                "repo": "repo",
+                "pr": 42,
+                "status": "running",
+            },
+        )
         store.upsert_node(author_id, NodeType.AUTHOR, {"login": "ndspence"})
         store.upsert_edge(author_id, review_id, EdgeType.AUTHORED)
         store.upsert_edge(review_id, file_ids["src/grippy/schema.py"], EdgeType.TOUCHED)
 
         # Phase 3: Post-review — persist findings
         finding_id = _record_id(NodeType.FINDING, review_id, "F-001")
-        store.upsert_node(finding_id, NodeType.FINDING, {
-            "finding_id": "F-001",
-            "severity": "HIGH",
-            "severity_rank": 3,
-            "confidence": 0.85,
-            "category": "security",
-            "title": "SQL injection risk",
-            "fingerprint": "abc123def456",
-        })
+        store.upsert_node(
+            finding_id,
+            NodeType.FINDING,
+            {
+                "finding_id": "F-001",
+                "severity": "HIGH",
+                "severity_rank": 3,
+                "confidence": 0.85,
+                "category": "security",
+                "title": "SQL injection risk",
+                "fingerprint": "abc123def456",  # pragma: allowlist secret
+            },
+        )
         store.upsert_edge(finding_id, file_ids["src/grippy/schema.py"], EdgeType.FOUND_IN)
         store.upsert_edge(review_id, finding_id, EdgeType.PRODUCED)
 
         # Update review to success
-        store.upsert_node(review_id, NodeType.REVIEW, {
-            "repo": "repo", "pr": 42, "status": "success",
-            "score": 72, "findings_count": 1,
-        })
+        store.upsert_node(
+            review_id,
+            NodeType.REVIEW,
+            {
+                "repo": "repo",
+                "pr": 42,
+                "status": "success",
+                "score": 72,
+                "findings_count": 1,
+            },
+        )
 
         # Phase 4: Next PR — query context for schema.py changes
         pack = build_context_pack(
@@ -104,8 +121,11 @@ class TestFullPipelineRoundTrip:
 
         # Walk incoming from a.py — "who depends on a.py?"
         result = store.walk(
-            [ids["a.py"]], max_depth=3, max_nodes=50,
-            rel_allow=["IMPORTS"], direction="incoming",
+            [ids["a.py"]],
+            max_depth=3,
+            max_nodes=50,
+            rel_allow=["IMPORTS"],
+            direction="incoming",
         )
         node_ids = {n.id for n in result.nodes}
         # a.py + b (imports a) + c (imports b) + d (imports c)
@@ -121,17 +141,24 @@ class TestFullPipelineRoundTrip:
 
         # First review: add history observation
         store.add_observations(
-            fid, ["PR #42: score 72, 3 findings (FAIL)"],
-            source="pipeline", kind="history",
+            fid,
+            ["PR #42: score 72, 3 findings (FAIL)"],
+            source="pipeline",
+            kind="history",
         )
         # Second review: add another
         store.add_observations(
-            fid, ["PR #43: score 91, 0 findings (PASS)"],
-            source="pipeline", kind="history",
+            fid,
+            ["PR #43: score 91, 0 findings (PASS)"],
+            source="pipeline",
+            kind="history",
         )
         # Tag the file
         store.add_observations(
-            fid, ["high-churn"], source="pipeline", kind="tag",
+            fid,
+            ["high-churn"],
+            source="pipeline",
+            kind="tag",
         )
 
         # Query all

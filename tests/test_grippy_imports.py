@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from grippy.imports import extract_imports, resolve_import_to_path
 
@@ -28,6 +29,41 @@ class TestResolveImportToPath:
     def test_stdlib_returns_none(self, tmp_path: Path) -> None:
         result = resolve_import_to_path("os.path", tmp_path)
         assert result is None
+
+    def test_resolve_py_file_valueerror_fallback(self, tmp_path: Path) -> None:
+        """ValueError fallback for .py files when relative_to(parent) fails."""
+        (tmp_path / "src" / "grippy").mkdir(parents=True)
+        (tmp_path / "src" / "grippy" / "agent.py").write_text("")
+        search_root = tmp_path / "src"
+        original = Path.relative_to
+
+        def _raise_on_parent(self: Path, other: Path) -> Path:
+            # Force ValueError when resolving relative to search_root.parent
+            if other == search_root.parent:
+                raise ValueError("forced")
+            return original(self, other)
+
+        with patch.object(Path, "relative_to", _raise_on_parent):
+            result = resolve_import_to_path("grippy.agent", search_root)
+        assert result is not None
+        assert result.endswith("grippy/agent.py")
+
+    def test_resolve_package_valueerror_fallback(self, tmp_path: Path) -> None:
+        """ValueError fallback for __init__.py when relative_to(parent) fails."""
+        (tmp_path / "src" / "grippy").mkdir(parents=True)
+        (tmp_path / "src" / "grippy" / "__init__.py").write_text("")
+        search_root = tmp_path / "src"
+        original = Path.relative_to
+
+        def _raise_on_parent(self: Path, other: Path) -> Path:
+            if other == search_root.parent:
+                raise ValueError("forced")
+            return original(self, other)
+
+        with patch.object(Path, "relative_to", _raise_on_parent):
+            result = resolve_import_to_path("grippy", search_root)
+        assert result is not None
+        assert result.endswith("grippy/__init__.py")
 
 
 class TestExtractImports:
@@ -80,3 +116,38 @@ class TestExtractImports:
         (pkg / "schema.py").write_text("")
         result = extract_imports(pkg / "agent.py", tmp_path)
         assert result.count("grippy/schema.py") == 1
+
+    def test_relative_import_parent_level(self, tmp_path: Path) -> None:
+        """Level-2 relative import (from ..target import X) resolves correctly."""
+        pkg = tmp_path / "pkg"
+        sub = pkg / "sub"
+        sub.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (sub / "__init__.py").write_text("")
+        (pkg / "target.py").write_text("")
+        (sub / "mod.py").write_text("from ..target import X\n")
+        result = extract_imports(sub / "mod.py", tmp_path)
+        assert "pkg/target.py" in result
+
+    def test_relative_import_to_package(self, tmp_path: Path) -> None:
+        """Relative import resolving to a package __init__.py (not a .py file)."""
+        pkg = tmp_path / "pkg"
+        sub = pkg / "sub"
+        sub.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (sub / "__init__.py").write_text("")
+        # Use `from .sub import X` — AST gives module="sub", level=1.
+        # sub.py does NOT exist, so it falls through to sub/__init__.py.
+        (pkg / "mod.py").write_text("from .sub import X\n")
+        result = extract_imports(pkg / "mod.py", tmp_path)
+        assert "pkg/sub/__init__.py" in result
+
+    def test_relative_import_unresolvable(self, tmp_path: Path) -> None:
+        """Relative import that resolves to neither .py nor __init__.py returns None."""
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        # Reference a module that doesn't exist as .py or package
+        (pkg / "mod.py").write_text("from .nonexistent import X\n")
+        result = extract_imports(pkg / "mod.py", tmp_path)
+        assert result == []

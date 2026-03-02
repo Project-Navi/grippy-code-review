@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -765,3 +767,89 @@ class TestObservations:
         )
         assert added == ["real fact"]
         assert store.get_observations("A:aaa") == ["real fact"]
+
+
+# --- Edge cases ---
+
+
+class TestEdgeCases:
+    def test_walk_max_edges_inner_truncation(self, store: SQLiteGraphStore) -> None:
+        """Walk truncates when inner edge loop hits max_edges mid-expansion.
+
+        A has 3 outgoing edges. With max_edges=2, the inner for-loop
+        breaks after collecting 2 edges (lines 430-433), then the
+        outer while loop breaks via `if truncated` (line 440-441).
+        """
+        store.upsert_node("A:aaa", "FILE")
+        for label in ["B:bbb", "C:ccc", "D:ddd"]:
+            store.upsert_node(label, "FILE")
+            store.upsert_edge("A:aaa", label, "IMPORTS")
+        result = store.walk(["A:aaa"], max_depth=3, max_nodes=100, max_edges=2)
+        assert result.receipt.truncated is True
+        assert result.receipt.reason == "max_edges"
+        assert len(result.edges) == 2
+
+    def test_walk_max_depth_does_not_explore_beyond(self, store: SQLiteGraphStore) -> None:
+        """Walk at max_depth visits boundary nodes but does not expand them.
+
+        Exercises the `depth >= max_depth: continue` path (line 424-425)
+        and the post-loop max_depth check (line 447).
+        """
+        for nid in ["A:aaa", "B:bbb", "C:ccc", "D:ddd"]:
+            store.upsert_node(nid, "FILE")
+        store.upsert_edge("A:aaa", "B:bbb", "IMPORTS")
+        store.upsert_edge("B:bbb", "C:ccc", "IMPORTS")
+        store.upsert_edge("C:ccc", "D:ddd", "IMPORTS")
+        result = store.walk(["A:aaa"], max_depth=1, max_nodes=100, max_edges=200)
+        node_ids = {n.id for n in result.nodes}
+        # A (depth 0) and B (depth 1) are visited; C, D are not
+        assert "A:aaa" in node_ids
+        assert "B:bbb" in node_ids
+        assert "C:ccc" not in node_ids
+        assert result.receipt.max_depth_reached == 1
+        # BFS drains the queue fully — no truncation from depth alone
+        assert result.receipt.truncated is False
+
+    def test_delete_observations_empty_list(self, store: SQLiteGraphStore) -> None:
+        """delete_observations with empty list is a no-op."""
+        store.upsert_node("A:aaa", "FILE")
+        store.add_observations("A:aaa", ["keep me"], source="pipeline", kind="history")
+        store.delete_observations("A:aaa", [])
+        assert store.get_observations("A:aaa") == ["keep me"]
+
+    def test_pragma_mismatch_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Pragma mismatch logs a warning but init still succeeds.
+
+        Patches _PRAGMAS so the expected value doesn't match what SQLite returns,
+        triggering the mismatch warning on lines 114-119.
+        """
+        fake_pragmas = [
+            # synchronous returns "1" (NORMAL) — expect "999" to force mismatch
+            ("PRAGMA synchronous = NORMAL", "PRAGMA synchronous", "999"),
+            ("PRAGMA journal_mode = WAL", "PRAGMA journal_mode", "wal"),
+            ("PRAGMA foreign_keys = ON", "PRAGMA foreign_keys", "1"),
+        ]
+        with caplog.at_level(logging.WARNING, logger="grippy.graph_store"):
+            with patch("grippy.graph_store._PRAGMAS", fake_pragmas):
+                SQLiteGraphStore(db_path=tmp_path / "warn.db")
+        assert any("expected" in r.message for r in caplog.records)
+
+    def test_pragma_operational_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """OperationalError during pragma is caught and logged.
+
+        Patches _PRAGMAS to include a malformed SQL statement,
+        triggering the OperationalError handler on lines 120-121.
+        """
+        fake_pragmas = [
+            # Malformed SQL triggers OperationalError
+            ("NOT_SQL bad", "PRAGMA journal_mode", None),
+            ("PRAGMA foreign_keys = ON", "PRAGMA foreign_keys", "1"),
+        ]
+        with caplog.at_level(logging.WARNING, logger="grippy.graph_store"):
+            with patch("grippy.graph_store._PRAGMAS", fake_pragmas):
+                SQLiteGraphStore(db_path=tmp_path / "operr.db")
+        assert any("not supported" in r.message.lower() for r in caplog.records)
