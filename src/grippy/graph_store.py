@@ -258,7 +258,7 @@ class SQLiteGraphStore:
         placeholders = ",".join("?" for _ in ids)
         cur = self._conn.cursor()
         cur.execute(
-            f"SELECT * FROM nodes WHERE id IN ({placeholders})",
+            f"SELECT * FROM nodes WHERE id IN ({placeholders})",  # nosec B608
             ids,
         )
         rows = cur.fetchall()
@@ -267,7 +267,7 @@ class SQLiteGraphStore:
             with self._conn:
                 self._conn.execute(
                     "UPDATE nodes SET accessed_at = ?, access_count = access_count + 1 "
-                    f"WHERE id IN ({placeholders})",
+                    f"WHERE id IN ({placeholders})",  # nosec B608
                     [now, *ids],
                 )
         return [self._row_to_node(r) for r in rows]
@@ -281,7 +281,7 @@ class SQLiteGraphStore:
         if types:
             placeholders = ",".join("?" for _ in types)
             cur = self._conn.execute(
-                f"SELECT * FROM nodes WHERE type IN ({placeholders}) "
+                f"SELECT * FROM nodes WHERE type IN ({placeholders}) "  # nosec B608
                 "ORDER BY accessed_at DESC LIMIT ?",
                 [*types, limit],
             )
@@ -332,13 +332,13 @@ class SQLiteGraphStore:
         if rel_filter:
             placeholders = ",".join("?" for _ in rel_filter)
             query = (
-                f"SELECT * FROM edges WHERE {col} = ? "
+                f"SELECT * FROM edges WHERE {col} = ? "  # nosec B608
                 f"AND relationship IN ({placeholders}) "
                 f"ORDER BY {order} LIMIT ?"
             )
             params: list[Any] = [node_id, *rel_filter, limit]
         else:
-            query = f"SELECT * FROM edges WHERE {col} = ? ORDER BY {order} LIMIT ?"
+            query = f"SELECT * FROM edges WHERE {col} = ? ORDER BY {order} LIMIT ?"  # nosec B608
             params = [node_id, limit]
 
         cur = self._conn.execute(query, params)
@@ -350,7 +350,7 @@ class SQLiteGraphStore:
             return []
         ph = ",".join("?" for _ in peer_ids)
         node_cur = self._conn.execute(
-            f"SELECT * FROM nodes WHERE id IN ({ph})",
+            f"SELECT * FROM nodes WHERE id IN ({ph})",  # nosec B608
             peer_ids,
         )
         nodes_by_id = {r["id"]: self._row_to_node(r) for r in node_cur.fetchall()}
@@ -484,12 +484,12 @@ class SQLiteGraphStore:
         if rel_allow:
             ph = ",".join("?" for _ in rel_allow)
             cur = self._conn.execute(
-                f"SELECT * FROM edges WHERE {col} = ? AND relationship IN ({ph}) ORDER BY {order}",
+                f"SELECT * FROM edges WHERE {col} = ? AND relationship IN ({ph}) ORDER BY {order}",  # nosec B608
                 [node_id, *rel_allow],
             )
         else:
             cur = self._conn.execute(
-                f"SELECT * FROM edges WHERE {col} = ? ORDER BY {order}",
+                f"SELECT * FROM edges WHERE {col} = ? ORDER BY {order}",  # nosec B608
                 (node_id,),
             )
         return [self._row_to_edge(r) for r in cur.fetchall()]
@@ -501,7 +501,7 @@ class SQLiteGraphStore:
         with self._conn:
             self._conn.execute(
                 "UPDATE nodes SET accessed_at = ?, access_count = access_count + 1 "
-                f"WHERE id IN ({ph})",
+                f"WHERE id IN ({ph})",  # nosec B608
                 [now, *node_ids],
             )
 
@@ -523,7 +523,7 @@ class SQLiteGraphStore:
             chunk = node_ids[i : i + chunk_size]
             ph = ",".join("?" for _ in chunk)
             cur = self._conn.execute(
-                f"SELECT * FROM nodes WHERE id IN ({ph})",
+                f"SELECT * FROM nodes WHERE id IN ({ph})",  # nosec B608
                 chunk,
             )
             all_nodes.extend(self._row_to_node(r) for r in cur.fetchall())
@@ -538,7 +538,7 @@ class SQLiteGraphStore:
             chunk = node_ids[i : i + chunk_size]
             ph = ",".join("?" for _ in chunk)
             cur = self._conn.execute(
-                f"SELECT * FROM edges WHERE source IN ({ph}) "
+                f"SELECT * FROM edges WHERE source IN ({ph}) "  # nosec B608
                 "ORDER BY source ASC, relationship ASC, target ASC",
                 chunk,
             )
@@ -612,7 +612,7 @@ class SQLiteGraphStore:
             params.append(kind)
         where = " AND ".join(clauses)
         cur = self._conn.execute(
-            f"SELECT content FROM observations WHERE {where} ORDER BY created_at ASC, id ASC",
+            f"SELECT content FROM observations WHERE {where} ORDER BY created_at ASC, id ASC",  # nosec B608
             params,
         )
         return [row[0] for row in cur.fetchall()]
@@ -628,6 +628,6 @@ class SQLiteGraphStore:
         ph = ",".join("?" for _ in observations)
         with self._conn:
             self._conn.execute(
-                f"DELETE FROM observations WHERE node_id = ? AND content IN ({ph})",
+                f"DELETE FROM observations WHERE node_id = ? AND content IN ({ph})",  # nosec B608
                 [node_id, *observations],
             )

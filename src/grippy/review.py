@@ -326,7 +326,7 @@ def main(*, profile: str | None = None) -> None:
                     tgt_id = _record_id(NodeType.FILE, imp_path)
                     try:
                         graph_store.upsert_edge(src_id, tgt_id, EdgeType.IMPORTS)
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass  # target file not in graph — skip
             print(f"  Graph: {len(py_files)} files indexed")
     except Exception as exc:
@@ -593,7 +593,7 @@ def main(*, profile: str | None = None) -> None:
                     file_id = _record_id(NodeType.FILE, finding.file)
                     try:
                         graph_store.upsert_edge(finding_id, file_id, EdgeType.FOUND_IN)
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass  # file not in graph
                 graph_store.upsert_edge(review_id, finding_id, EdgeType.PRODUCED)
 
@@ -614,7 +614,7 @@ def main(*, profile: str | None = None) -> None:
                             source="pipeline",
                             kind="history",
                         )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass  # file not in graph
         except Exception as exc:
             print(f"::warning::Graph persistence failed (non-fatal): {exc}")
