@@ -6,6 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import navi_sanitize
+
 from grippy.graph_store import SQLiteGraphStore
 from grippy.graph_types import _record_id
 
@@ -93,7 +95,7 @@ def build_context_pack(
 
 
 def format_context_for_llm(pack: ContextPack, max_chars: int = 2000) -> str:
-    """Format context pack as text for LLM prompt injection."""
+    """Format context pack as sanitized text for LLM prompt context."""
     if not pack.touched_files:
         return ""
 
@@ -108,7 +110,9 @@ def format_context_for_llm(pack: ContextPack, max_chars: int = 2000) -> str:
     if pack.recurring_findings:
         lines.append("Prior findings in changed files:")
         for f in pack.recurring_findings[:10]:
-            lines.append(f"- {f['file']}: {f['severity']} — {f['title']}")
+            sev = navi_sanitize.clean(str(f.get("severity", "UNKNOWN")))
+            title = navi_sanitize.clean(str(f.get("title", "")))
+            lines.append(f"- {f['file']}: {sev} — {title}")
         lines.append("")
 
     if pack.file_history:

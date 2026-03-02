@@ -584,8 +584,8 @@ def main(*, profile: str | None = None) -> None:
                             if hasattr(finding.severity, "value")
                             else str(finding.severity)
                         ),
-                        "category": finding.category,
-                        "title": finding.title,
+                        "category": navi_sanitize.clean(str(finding.category)),
+                        "title": navi_sanitize.clean(finding.title),
                         "confidence": finding.confidence,
                     },
                 )
