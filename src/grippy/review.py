@@ -20,6 +20,7 @@ Environment variables:
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import sys
@@ -35,7 +36,7 @@ from grippy.embedder import create_embedder
 from grippy.github_review import post_review
 from grippy.graph_context import build_context_pack, format_context_for_llm
 from grippy.graph_store import SQLiteGraphStore
-from grippy.graph_types import EdgeType, NodeType, _record_id
+from grippy.graph_types import EdgeType, MissingNodeError, NodeType, _record_id
 from grippy.imports import extract_imports
 from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
@@ -307,7 +308,7 @@ def main(*, profile: str | None = None) -> None:
         graph_store = SQLiteGraphStore(db_path=data_dir / "navi-graph.db")
         if workspace:
             ws = Path(workspace)
-            py_files = list(ws.rglob("*.py"))[:5000]
+            py_files = list(itertools.islice(ws.rglob("*.py"), 5000))
             for py_f in py_files:
                 try:
                     rel = str(py_f.relative_to(ws))
@@ -326,7 +327,7 @@ def main(*, profile: str | None = None) -> None:
                     tgt_id = _record_id(NodeType.FILE, imp_path)
                     try:
                         graph_store.upsert_edge(src_id, tgt_id, EdgeType.IMPORTS)
-                    except Exception:  # nosec B110
+                    except MissingNodeError:
                         pass  # target file not in graph — skip
             print(f"  Graph: {len(py_files)} files indexed")
     except Exception as exc:
@@ -357,6 +358,13 @@ def main(*, profile: str | None = None) -> None:
         sys.exit(1)
     file_count = diff.count("diff --git")
     print(f"  {file_count} files, {len(diff)} chars")
+
+    # Extract touched files from FULL diff (before truncation)
+    touched_files_from_diff = [
+        line.split(" b/", 1)[1]
+        for line in diff.splitlines()
+        if line.startswith("diff --git") and " b/" in line
+    ]
 
     # 3b. Run security rule engine on FULL diff (before truncation)
     try:
@@ -426,15 +434,9 @@ def main(*, profile: str | None = None) -> None:
     graph_context_text = ""
     if graph_store:
         try:
-            # Extract touched files from diff headers
-            touched = [
-                line.split(" b/", 1)[1]
-                for line in diff.splitlines()
-                if line.startswith("diff --git") and " b/" in line
-            ]
             pack = build_context_pack(
                 graph_store,
-                touched_files=touched,
+                touched_files=touched_files_from_diff,
                 author_login=pr_event.get("author"),
             )
             graph_context_text = format_context_for_llm(pack)
@@ -593,29 +595,27 @@ def main(*, profile: str | None = None) -> None:
                     file_id = _record_id(NodeType.FILE, finding.file)
                     try:
                         graph_store.upsert_edge(finding_id, file_id, EdgeType.FOUND_IN)
-                    except Exception:  # nosec B110
+                    except MissingNodeError:
                         pass  # file not in graph
                 graph_store.upsert_edge(review_id, finding_id, EdgeType.PRODUCED)
 
-            # Add history observations to touched files
-            for line in diff.splitlines():
-                if line.startswith("diff --git") and " b/" in line:
-                    path = line.split(" b/", 1)[1]
-                    fid = _record_id(NodeType.FILE, path)
-                    try:
-                        graph_store.add_observations(
-                            fid,
-                            [
-                                f"PR #{pr_event['pr_number']}: "
-                                f"score {review.score.overall}, "
-                                f"{len(review.findings)} findings "
-                                f"({review.verdict.status.value})"
-                            ],
-                            source="pipeline",
-                            kind="history",
-                        )
-                    except Exception:  # nosec B110
-                        pass  # file not in graph
+            # Add history observations to touched files (from pre-truncation diff)
+            for path in touched_files_from_diff:
+                fid = _record_id(NodeType.FILE, path)
+                try:
+                    graph_store.add_observations(
+                        fid,
+                        [
+                            f"PR #{pr_event['pr_number']}: "
+                            f"score {review.score.overall}, "
+                            f"{len(review.findings)} findings "
+                            f"({review.verdict.status.value})"
+                        ],
+                        source="pipeline",
+                        kind="history",
+                    )
+                except Exception:  # nosec B110
+                    pass  # file not in graph
         except Exception as exc:
             print(f"::warning::Graph persistence failed (non-fatal): {exc}")
 

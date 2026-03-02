@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -46,10 +47,12 @@ def build_context_pack(
         )
         # Count dependents per touched file (exclude the file itself)
         touched_set = set(touched_ids)
+        dep_counts: Counter[str] = Counter()
         for node in walk_result.nodes:
             if node.id not in touched_set:
                 path = node.data.get("path", node.id)
-                blast.append((path, 1))  # simplified count
+                dep_counts[path] += 1
+        blast = [(path, count) for path, count in dep_counts.items()]
 
     for path in touched_files:
         fid = _record_id("FILE", path)
