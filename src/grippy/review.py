@@ -20,6 +20,7 @@ Environment variables:
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import sys
@@ -33,6 +34,10 @@ import navi_sanitize
 from grippy.agent import create_reviewer, format_pr_context
 from grippy.embedder import create_embedder
 from grippy.github_review import post_review
+from grippy.graph_context import build_context_pack, format_context_for_llm
+from grippy.graph_store import SQLiteGraphStore
+from grippy.graph_types import EdgeType, MissingNodeError, NodeType, _record_id
+from grippy.imports import extract_imports
 from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
 
@@ -297,6 +302,38 @@ def main(*, profile: str | None = None) -> None:
         except Exception as exc:
             print(f"::warning::Codebase indexing failed (non-fatal): {exc}")
 
+    # 2b. Build dependency graph (non-fatal)
+    graph_store: SQLiteGraphStore | None = None
+    try:
+        graph_store = SQLiteGraphStore(db_path=data_dir / "navi-graph.db")
+        if workspace:
+            ws = Path(workspace)
+            py_files = list(itertools.islice(ws.rglob("*.py"), 5000))
+            for py_f in py_files:
+                try:
+                    rel = str(py_f.relative_to(ws))
+                except ValueError:
+                    continue
+                fid = _record_id(NodeType.FILE, rel)
+                graph_store.upsert_node(fid, NodeType.FILE, {"path": rel, "lang": "python"})
+            for py_f in py_files:
+                try:
+                    rel = str(py_f.relative_to(ws))
+                except ValueError:
+                    continue
+                imports = extract_imports(py_f, ws)
+                src_id = _record_id(NodeType.FILE, rel)
+                for imp_path in imports:
+                    tgt_id = _record_id(NodeType.FILE, imp_path)
+                    try:
+                        graph_store.upsert_edge(src_id, tgt_id, EdgeType.IMPORTS)
+                    except MissingNodeError:
+                        pass  # target file not in graph — skip
+            print(f"  Graph: {len(py_files)} files indexed")
+    except Exception as exc:
+        print(f"::warning::Graph store init failed (non-fatal): {exc}")
+        graph_store = None
+
     # 3. Fetch diff (graceful 403 handling for fork PRs)
     print("Fetching PR diff...")
     try:
@@ -321,6 +358,13 @@ def main(*, profile: str | None = None) -> None:
         sys.exit(1)
     file_count = diff.count("diff --git")
     print(f"  {file_count} files, {len(diff)} chars")
+
+    # Extract touched files from FULL diff (before truncation)
+    touched_files_from_diff = [
+        line.split(" b/", 1)[1]
+        for line in diff.splitlines()
+        if line.startswith("diff --git") and " b/" in line
+    ]
 
     # 3b. Run security rule engine on FULL diff (before truncation)
     try:
@@ -386,12 +430,31 @@ def main(*, profile: str | None = None) -> None:
         )
         sys.exit(1)
 
+    # 3d. Query graph for contextual hints (non-fatal)
+    graph_context_text = ""
+    if graph_store:
+        try:
+            pack = build_context_pack(
+                graph_store,
+                touched_files=touched_files_from_diff,
+                author_login=pr_event.get("author"),
+            )
+            graph_context_text = format_context_for_llm(pack)
+            if graph_context_text:
+                print(f"  Graph context: {len(graph_context_text)} chars")
+        except Exception as exc:
+            print(f"::warning::Graph context query failed (non-fatal): {exc}")
+
     # 4. Format context
+    description = pr_event["description"]
+    if graph_context_text:
+        description = f"{description}\n\n<graph-context>\n{graph_context_text}\n</graph-context>"
+
     user_message = format_pr_context(
         title=pr_event["title"],
         author=pr_event["author"],
         branch=f"{pr_event['head_ref']} → {pr_event['base_ref']}",
-        description=pr_event["description"],
+        description=description,
         diff=diff,
         rule_findings=rule_findings_text,
     )
@@ -478,6 +541,83 @@ def main(*, profile: str | None = None) -> None:
             )
         except Exception:
             pass  # nosec B110 — best-effort error posting
+
+    # 6b. Persist review to graph (fire-and-forget)
+    if graph_store:
+        try:
+            review_id = _record_id(
+                NodeType.REVIEW,
+                pr_event["repo"],
+                str(pr_event["pr_number"]),
+                head_sha,
+            )
+            author_id = _record_id(NodeType.AUTHOR, pr_event["author"])
+            graph_store.upsert_node(
+                review_id,
+                NodeType.REVIEW,
+                {
+                    "repo": pr_event["repo"],
+                    "pr": pr_event["pr_number"],
+                    "status": review.verdict.status.value,
+                    "score": review.score.overall,
+                    "findings_count": len(review.findings),
+                },
+            )
+            graph_store.upsert_node(
+                author_id,
+                NodeType.AUTHOR,
+                {"login": pr_event["author"]},
+            )
+            graph_store.upsert_edge(author_id, review_id, EdgeType.AUTHORED)
+
+            for finding in review.findings:
+                finding_id = _record_id(
+                    NodeType.FINDING,
+                    review_id,
+                    finding.id,
+                )
+                graph_store.upsert_node(
+                    finding_id,
+                    NodeType.FINDING,
+                    {
+                        "finding_id": finding.id,
+                        "severity": (
+                            finding.severity.value
+                            if hasattr(finding.severity, "value")
+                            else str(finding.severity)
+                        ),
+                        "category": navi_sanitize.clean(str(finding.category)),
+                        "title": navi_sanitize.clean(finding.title),
+                        "confidence": finding.confidence,
+                    },
+                )
+                if finding.file:
+                    file_id = _record_id(NodeType.FILE, finding.file)
+                    try:
+                        graph_store.upsert_edge(finding_id, file_id, EdgeType.FOUND_IN)
+                    except MissingNodeError:
+                        pass  # file not in graph
+                graph_store.upsert_edge(review_id, finding_id, EdgeType.PRODUCED)
+
+            # Add history observations to touched files (from pre-truncation diff)
+            for path in touched_files_from_diff:
+                fid = _record_id(NodeType.FILE, path)
+                try:
+                    graph_store.add_observations(
+                        fid,
+                        [
+                            f"PR #{pr_event['pr_number']}: "
+                            f"score {review.score.overall}, "
+                            f"{len(review.findings)} findings "
+                            f"({review.verdict.status.value})"
+                        ],
+                        source="pipeline",
+                        kind="history",
+                    )
+                except Exception:  # nosec B110
+                    pass  # file not in graph
+        except Exception as exc:
+            print(f"::warning::Graph persistence failed (non-fatal): {exc}")
 
     # 7. Set outputs for GitHub Actions
     github_output = os.environ.get("GITHUB_OUTPUT", "")

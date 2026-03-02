@@ -1,29 +1,6 @@
 # SPDX-License-Identifier: MIT
-"""Graph enums for Grippy's codebase knowledge graph.
+"""Graph enums — re-exported from graph_types for backward compatibility."""
 
-Provides node/edge type enums for the graph persistence layer.
-Finding lifecycle is owned by GitHub (not tracked locally).
-"""
+from grippy.graph_types import EdgeType, NodeType
 
-from __future__ import annotations
-
-from enum import StrEnum
-
-
-class EdgeType(StrEnum):
-    VIOLATES = "VIOLATES"
-    FOUND_IN = "FOUND_IN"
-    FIXED_BY = "FIXED_BY"
-    IS_A = "IS_A"
-    PREREQUISITE_FOR = "PREREQUISITE_FOR"
-    EXTRACTED_FROM = "EXTRACTED_FROM"
-    TENDENCY = "TENDENCY"
-    REVIEWED_BY = "REVIEWED_BY"
-
-
-class NodeType(StrEnum):
-    REVIEW = "REVIEW"
-    RULE = "RULE"
-    PATTERN = "PATTERN"
-    AUTHOR = "AUTHOR"
-    FILE = "FILE"
+__all__ = ["EdgeType", "NodeType"]

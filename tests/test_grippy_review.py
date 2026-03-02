@@ -568,6 +568,52 @@ class TestMainOrchestration:
     @patch("grippy.review.run_review")
     @patch("grippy.review.create_reviewer")
     @patch("grippy.review.fetch_pr_diff")
+    def test_graph_pipeline_integration(
+        self,
+        mock_fetch: MagicMock,
+        mock_create: MagicMock,
+        mock_run_review: MagicMock,
+        mock_post_review: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Graph pipeline: index files, query context, persist findings."""
+        event_path = self._make_event_file(tmp_path)
+        self._setup_env(monkeypatch, event_path, tmp_path)
+
+        # Create a workspace with real .py files that import each other
+        ws = tmp_path / "workspace"
+        pkg = ws / "src" / "app"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "main.py").write_text("from src.app.utils import helper\n")
+        (pkg / "utils.py").write_text("def helper(): pass\n")
+        monkeypatch.setenv("GITHUB_WORKSPACE", str(ws))
+
+        # Diff references files in the workspace
+        mock_fetch.return_value = (
+            "diff --git a/src/app/main.py b/src/app/main.py\n"
+            "--- a/src/app/main.py\n"
+            "+++ b/src/app/main.py\n"
+            "@@ -1 +1 @@\n"
+            "-old\n"
+            "+new\n"
+        )
+        review = _make_review(
+            findings=[_make_finding(file="src/app/main.py")],
+        )
+        mock_run_review.return_value = review
+
+        from grippy.review import main
+
+        main()
+
+        mock_post_review.assert_called_once()
+
+    @patch("grippy.review.post_review")
+    @patch("grippy.review.run_review")
+    @patch("grippy.review.create_reviewer")
+    @patch("grippy.review.fetch_pr_diff")
     def test_model_override_replaces_llm_self_report(
         self,
         mock_fetch: MagicMock,

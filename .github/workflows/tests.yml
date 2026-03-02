@@ -64,6 +64,14 @@ jobs:
             test-results.xml
           retention-days: 5
 
+      - name: Upload to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
+
       - name: Check quality gate
         if: matrix.python-version == '3.12'
         run: uv run python scripts/quality_gate.py check

@@ -13,9 +13,15 @@ from grippy.github_review import (
     post_review,
     resolve_threads,
 )
-from grippy.graph import (
+from grippy.graph_store import SQLiteGraphStore
+from grippy.graph_types import (
     EdgeType,
+    GraphEdge,
+    GraphNode,
+    MissingNodeError,
     NodeType,
+    TraversalReceipt,
+    TraversalResult,
 )
 from grippy.retry import ReviewParseError, run_review
 from grippy.review import (
@@ -24,19 +30,19 @@ from grippy.review import (
 )
 from grippy.schema import GrippyReview
 
-try:
-    from grippy.persistence import GrippyStore
-except ImportError:  # lancedb not installed (optional [persistence] extra)
-    GrippyStore = None  # type: ignore[assignment,misc]
-
 __all__ = [
     "CodebaseIndex",
     "CodebaseToolkit",
     "EdgeType",
+    "GraphEdge",
+    "GraphNode",
     "GrippyReview",
-    "GrippyStore",
+    "MissingNodeError",
     "NodeType",
     "ReviewParseError",
+    "SQLiteGraphStore",
+    "TraversalReceipt",
+    "TraversalResult",
     "build_review_comment",
     "classify_findings",
     "create_embedder",
