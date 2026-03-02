@@ -1,0 +1,19 @@
+# Default owners for everything in the repo
+* @Fieldnote-Echo
+
+# CI/CD workflows and configuration
+.github/ @Fieldnote-Echo
+
+# Security-sensitive modules
+src/grippy/codebase.py @Fieldnote-Echo
+src/grippy/github_review.py @Fieldnote-Echo
+src/grippy/review.py @Fieldnote-Echo
+src/grippy/retry.py @Fieldnote-Echo
+src/grippy/prompts.py @Fieldnote-Echo
+src/grippy/graph_store.py @Fieldnote-Echo
+
+# Prompt chain (identity + instructions)
+src/grippy/prompts_data/ @Fieldnote-Echo
+
+# Rules engine
+src/grippy/rules/ @Fieldnote-Echo
