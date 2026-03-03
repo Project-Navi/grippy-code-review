@@ -3,10 +3,14 @@
 > Open-source AI code review agent. Your model, your infrastructure, your rules.
 
 [![Tests](https://github.com/Project-Navi/grippy-code-review/actions/workflows/tests.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/tests.yml)
-[![Coverage](https://raw.githubusercontent.com/Project-Navi/grippy-code-review/main/.github/badges/coverage.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/tests.yml)
-[![OpenSSF Scorecard](https://raw.githubusercontent.com/Project-Navi/grippy-code-review/main/.github/badges/scorecard.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/scorecard.yml)
+[![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/Project-Navi/grippy-code-review/graph/badge.svg)](https://codecov.io/gh/Project-Navi/grippy-code-review)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Project-Navi/grippy-code-review/badge)](https://scorecard.dev/viewer/?uri=github.com/Project-Navi/grippy-code-review)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
+[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://pypi.org/project/grippy-code-review/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, or a local LLM running on your own hardware. It indexes your codebase into a vector store for context-aware analysis, then posts structured findings with scores, verdicts, and escalation paths. It also happens to be a grumpy security auditor who secretly respects good code.
 
