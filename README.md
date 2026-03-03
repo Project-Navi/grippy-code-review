@@ -16,6 +16,8 @@ Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, 
 
 - **Codebase-aware, not diff-blind.** Grippy embeds your repository into a LanceDB vector index and searches it during review. It understands the code around the diff, not just the diff itself. Most OSS alternatives paywall this behind a hosted tier.
 
+- **Cross-PR memory, not amnesia.** Grippy builds a knowledge graph of your codebase — tracking files, reviews, findings, and import dependencies across every PR. It knows which modules are blast-radius risks, which files have recurring findings, and which authors have patterns worth watching. Tools like CodeRabbit, Greptile, and Qodo charge $20–38/seat/month for comparable cross-PR context. Here, it's free and open-source.
+
 - **Structured output, not just comments.** Every review produces typed findings with severity, confidence, and category. A score out of 100. A verdict (PASS / FAIL / PROVISIONAL). Escalation targets for findings that need human attention.
 
 - **Security-first, not security-added.** Grippy is a security auditor that also reviews code, not the other way around. Dedicated audit modes go deeper than a general-purpose linter.
