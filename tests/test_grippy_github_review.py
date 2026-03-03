@@ -603,8 +603,14 @@ class TestVerdictReview:
         mock_pr.get_review_comments.return_value = []
 
         post_review(
-            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
-            diff="", score=92, verdict="PASS",
+            token="t",
+            repo="o/r",
+            pr_number=1,
+            findings=[],
+            head_sha="a",
+            diff="",
+            score=92,
+            verdict="PASS",
         )
 
         mock_pr.create_review.assert_called_once()
@@ -621,8 +627,14 @@ class TestVerdictReview:
         mock_pr.get_review_comments.return_value = []
 
         post_review(
-            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
-            diff="", score=45, verdict="FAIL",
+            token="t",
+            repo="o/r",
+            pr_number=1,
+            findings=[],
+            head_sha="a",
+            diff="",
+            score=45,
+            verdict="FAIL",
         )
 
         mock_pr.create_review.assert_called_once()
@@ -639,8 +651,14 @@ class TestVerdictReview:
         mock_pr.get_review_comments.return_value = []
 
         post_review(
-            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
-            diff="", score=70, verdict="PROVISIONAL",
+            token="t",
+            repo="o/r",
+            pr_number=1,
+            findings=[],
+            head_sha="a",
+            diff="",
+            score=70,
+            verdict="PROVISIONAL",
         )
 
         mock_pr.create_review.assert_not_called()
@@ -655,14 +673,18 @@ class TestVerdictReview:
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
         mock_pr.get_review_comments.return_value = []
-        mock_pr.create_review.side_effect = GithubException(
-            403, {"message": "Forbidden"}, None
-        )
+        mock_pr.create_review.side_effect = GithubException(403, {"message": "Forbidden"}, None)
 
         # Should NOT raise — verdict review is non-fatal
         post_review(
-            token="t", repo="o/r", pr_number=1, findings=[], head_sha="a",
-            diff="", score=90, verdict="PASS",
+            token="t",
+            repo="o/r",
+            pr_number=1,
+            findings=[],
+            head_sha="a",
+            diff="",
+            score=90,
+            verdict="PASS",
         )
 
         mock_pr.create_issue_comment.assert_called_once()
