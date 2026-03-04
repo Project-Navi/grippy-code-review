@@ -551,9 +551,9 @@ def post_review(
 
     # Upsert: edit existing summary or create new
     marker = f"<!-- grippy-summary-{pr_number} -->"
-    for comment in pr.get_issue_comments():
-        if marker in comment.body:
-            comment.edit(summary)
+    for issue_comment in pr.get_issue_comments():
+        if marker in issue_comment.body:
+            issue_comment.edit(summary)
             return
 
     pr.create_issue_comment(summary)
