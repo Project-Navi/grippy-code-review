@@ -1181,3 +1181,217 @@ class TestCodebaseSearch:
         index, _vdb = self._make_index(tmp_path, table_exists=False)
         results = index.search("anything")
         assert results == []
+
+
+# --- is_indexed property ---
+
+
+class TestIsIndexed:
+    """is_indexed checks vector_db.exists() + manifest validity."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", False)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_not_indexed_when_no_table(self, tmp_path: Path) -> None:
+        index, _vdb = self._make_index(tmp_path, table_exists=False)
+        assert index.is_indexed is False
+
+    def test_not_indexed_when_no_manifest(self, tmp_path: Path) -> None:
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
+        assert index.is_indexed is False
+
+    def test_indexed_when_manifest_valid(self, tmp_path: Path) -> None:
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()
+        _vdb.exists.return_value = True
+        assert index.is_indexed is True
+
+
+# --- Cache invalidation logging ---
+
+
+class TestCacheInvalidation:
+    """_is_cache_valid() logs reasons for cache misses."""
+
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_schema_version_mismatch(self, tmp_path: Path) -> None:
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="abc",
+            repo_dirty=False,
+            config_fingerprint="fp",
+        )
+        # Tamper schema_version
+        from grippy.codebase import _read_manifest
+
+        m = _read_manifest(tmp_path / "codebase_index_manifest.json")
+        assert m is not None
+        m["schema_version"] = 999
+        (tmp_path / "codebase_index_manifest.json").write_text(json.dumps(m))
+        assert index._is_cache_valid() is False
+
+    def test_config_fingerprint_mismatch(self, tmp_path: Path) -> None:
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="abc",
+            repo_dirty=False,
+            config_fingerprint="wrong-fingerprint",
+        )
+        assert index._is_cache_valid() is False
+
+    def test_dirty_working_tree(self, tmp_path: Path) -> None:
+        """Dirty working tree invalidates cache even if SHA matches."""
+        index = self._make_index(tmp_path)
+        sha, _ = _get_repo_state(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha=sha,
+            repo_dirty=False,
+            config_fingerprint=index._current_config_fingerprint(),
+        )
+        with patch("grippy.codebase._get_repo_state", return_value=(sha, True)):
+            assert index._is_cache_valid() is False
+
+    def test_sha_mismatch_logs(self, tmp_path: Path) -> None:
+        """SHA mismatch invalidates cache."""
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="old-sha-from-yesterday",
+            repo_dirty=False,
+            config_fingerprint=index._current_config_fingerprint(),
+        )
+        assert index._is_cache_valid() is False
+
+
+# --- Build edge cases ---
+
+
+class TestBuildEdgeCases:
+    """Edge cases in CodebaseIndex.build()."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        vdb = overrides.pop("vector_db", MagicMock())
+        vdb.exists.return_value = overrides.pop("table_exists", False)
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+            **overrides,
+        ), vdb
+
+    def test_nonexistent_index_path_skipped(self, tmp_path: Path) -> None:
+        """Index path that doesn't exist is silently skipped."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, _vdb = self._make_index(tmp_path, index_paths=["src", "nonexistent"])
+        # src doesn't exist either, but a.py is at root — index_paths restricts
+        count = index.build()
+        assert count == 0  # no files found under the specified paths
+
+    def test_single_file_index_path(self, tmp_path: Path) -> None:
+        """Index path pointing to a single file works."""
+        (tmp_path / "target.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, index_paths=["target.py"])
+        count = index.build()
+        assert count == 1
+        vdb.insert.assert_called_once()
+
+    def test_max_files_cap(self, tmp_path: Path) -> None:
+        """build() caps indexing at _MAX_INDEX_FILES."""
+        from grippy.codebase import _MAX_INDEX_FILES
+
+        # Create enough files to trigger the cap
+        for i in range(_MAX_INDEX_FILES + 5):
+            (tmp_path / f"f{i:05d}.py").write_text(f"x = {i}\n")
+        index, _vdb = self._make_index(tmp_path)
+        count = index.build()
+        # Should be capped at _MAX_INDEX_FILES, not _MAX_INDEX_FILES + 5
+        assert count <= _MAX_INDEX_FILES
+
+
+# --- FTS index edge cases ---
+
+
+class TestFtsIndexEdgeCases:
+    """_ensure_fts_index() edge cases."""
+
+    def _make_index(self, tmp_path: Path) -> tuple[CodebaseIndex, MagicMock]:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        ), vdb
+
+    def test_table_none_returns_false(self, tmp_path: Path) -> None:
+        index, vdb = self._make_index(tmp_path)
+        vdb.table = None
+        assert index._ensure_fts_index() is False
+
+    def test_cached_result_returned(self, tmp_path: Path) -> None:
+        """Second call returns cached result without re-checking."""
+        index, vdb = self._make_index(tmp_path)
+        table = MagicMock()
+        vdb.table = table
+        table.list_indices.return_value = [MagicMock(index_type="FTS")]
+        assert index._ensure_fts_index() is True
+        # Second call — list_indices should not be called again
+        table.list_indices.reset_mock()
+        assert index._ensure_fts_index() is True
+        table.list_indices.assert_not_called()
+
+
+# --- Vector search edge cases ---
+
+
+class TestVectorSearchEdgeCases:
+    """_vector_search() edge cases."""
+
+    def test_table_none_returns_empty(self, tmp_path: Path) -> None:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        vdb.table = None
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+        assert index._vector_search("query", 5) == []
+
+
+# --- Parse results edge case ---
+
+
+class TestParseResultsEdgeCases:
+    """Additional edge cases for _parse_results_static."""
+
+    def test_payload_non_dict_after_json_parse(self) -> None:
+        """JSON-valid payload that isn't a dict is skipped."""
+        row = {"payload": json.dumps([1, 2, 3])}  # list, not dict
+        results = CodebaseIndex._parse_results_static([row])
+        assert results == []

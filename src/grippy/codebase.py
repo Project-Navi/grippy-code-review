@@ -200,7 +200,11 @@ def _write_manifest(
     repo_dirty: bool,
     config_fingerprint: str,
 ) -> None:
-    """Write index manifest for cache validation."""
+    """Write index manifest atomically for cache validation.
+
+    Uses write-to-temp + os.replace() to avoid partial writes on crash or
+    concurrent builds.
+    """
     manifest = {
         "schema_version": _SCHEMA_VERSION,
         "repo_sha": repo_sha,
@@ -208,7 +212,9 @@ def _write_manifest(
         "config_fingerprint": config_fingerprint,
         "built_at": datetime.now(UTC).isoformat(),
     }
-    path.write_text(json.dumps(manifest, indent=2))
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(manifest, indent=2))
+    tmp_path.replace(path)
 
 
 def _read_manifest(path: Path) -> dict[str, Any] | None:
@@ -221,7 +227,10 @@ def _read_manifest(path: Path) -> dict[str, Any] | None:
 
 def _chunk_id(file_path: str, start_line: int, end_line: int) -> str:
     """Deterministic chunk ID including location to avoid content collisions."""
-    return hashlib.sha1(f"{file_path}:{start_line}:{end_line}".encode()).hexdigest()
+    return hashlib.sha1(  # nosec B324 — non-cryptographic ID
+        f"{file_path}:{start_line}:{end_line}".encode(),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 # --- File discovery ---
@@ -409,17 +418,27 @@ class CodebaseIndex:
         """Check manifest against current state. Returns False if rebuild needed."""
         manifest = _read_manifest(self._manifest_path)
         if manifest is None:
+            log.info("Cache miss: no manifest found")
             return False
         if manifest.get("schema_version") != _SCHEMA_VERSION:
+            log.info("Cache miss: schema version changed")
             return False
         if manifest.get("repo_dirty", False):
-            return False  # dirty builds are always stale
+            log.info("Cache miss: previous build was dirty")
+            return False
         if manifest.get("config_fingerprint") != self._current_config_fingerprint():
+            log.info("Cache miss: config fingerprint changed")
             return False
         sha, dirty = _get_repo_state(self._repo_root)
         if dirty:
-            return False  # current working tree is dirty
-        return manifest.get("repo_sha") == sha
+            log.info("Cache miss: working tree is dirty")
+            return False
+        if manifest.get("repo_sha") != sha:
+            log.info(
+                "Cache miss: repo SHA changed (%s → %s)", manifest.get("repo_sha", "?")[:8], sha[:8]
+            )
+            return False
+        return True
 
     def build(self, *, force: bool = False) -> int:
         """Walk, chunk, embed, and store source files. Returns chunk count.
