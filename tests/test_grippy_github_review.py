@@ -1095,10 +1095,11 @@ class TestPostReview422Fallback:
 
 
 class TestResolveThreadsBatchSafety:
-    """Batch mutation contains resolveReviewThread aliases."""
+    """Batch mutation uses GraphQL variables — no string interpolation of IDs."""
 
     @patch("grippy.github_review.subprocess.run")
-    def test_query_contains_resolve_mutation(self, mock_run: MagicMock) -> None:
+    def test_uses_graphql_variables_not_interpolation(self, mock_run: MagicMock) -> None:
+        """Thread IDs are passed as $id0, $id1 variables, not embedded in query."""
         import json
 
         from grippy.github_review import resolve_threads
@@ -1114,6 +1115,37 @@ class TestResolveThreadsBatchSafety:
         query_args = [a for a in cmd if a.startswith("query=")]
         assert len(query_args) == 1
         assert "resolveReviewThread" in query_args[0]
+        # Thread ID must NOT appear in the query string — it's a variable
+        assert "PRRT_test" not in query_args[0]
+        assert "$id0" in query_args[0]
+        # Thread ID passed as separate -f variable arg
+        var_args = [a for a in cmd if a.startswith("id0=")]
+        assert len(var_args) == 1
+        assert var_args[0] == "id0=PRRT_test"
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_injection_attempt_in_thread_id_is_variable_only(self, mock_run: MagicMock) -> None:
+        """Malicious thread ID cannot break GraphQL structure — passed as variable."""
+        import json
+
+        from grippy.github_review import resolve_threads
+
+        malicious = 'PRRT_abc"}}mutation BadActor{}'
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {"data": {"t0": {"thread": {"id": malicious, "isResolved": True}}}}
+            ),
+        )
+        resolve_threads(repo="org/repo", pr_number=1, thread_ids=[malicious])
+        cmd = mock_run.call_args[0][0]
+        query_args = [a for a in cmd if a.startswith("query=")]
+        # Malicious payload must NOT appear in the query string
+        assert malicious not in query_args[0]
+        assert "BadActor" not in query_args[0]
+        # It's safely in the variable arg
+        var_args = [a for a in cmd if a.startswith("id0=")]
+        assert var_args[0] == f"id0={malicious}"
 
 
 # --- Comment sanitization ---

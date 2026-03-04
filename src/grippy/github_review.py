@@ -573,19 +573,23 @@ def resolve_threads(
 
     import json
 
-    # Build aliased mutation: t0: resolveReviewThread(...) { ... }
-    aliases = []
+    # Build aliased mutation with proper GraphQL variables ($id0, $id1, ...)
+    # to prevent injection — aligns with fetch_thread_states() pattern.
+    var_decls = ", ".join(f"$id{i}: ID!" for i in range(len(thread_ids)))
+    aliases = [
+        f"t{i}: resolveReviewThread(input: {{threadId: $id{i}}}) "
+        f"{{ thread {{ id isResolved }} }}"
+        for i in range(len(thread_ids))
+    ]
+    mutation = f"mutation BatchResolve({var_decls}) {{ {' '.join(aliases)} }}"
+
+    cmd = ["gh", "api", "graphql", "-f", f"query={mutation}"]
     for i, tid in enumerate(thread_ids):
-        escaped_tid = tid.replace("\\", "\\\\").replace('"', '\\"')
-        aliases.append(
-            f't{i}: resolveReviewThread(input: {{threadId: "{escaped_tid}"}}) '
-            f"{{ thread {{ id isResolved }} }}"
-        )
-    mutation = "mutation BatchResolve { " + " ".join(aliases) + " }"
+        cmd.extend(["-f", f"id{i}={tid}"])
 
     try:
         result = subprocess.run(
-            ["gh", "api", "graphql", "-f", f"query={mutation}"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30,
