@@ -307,6 +307,9 @@ def main(*, profile: str | None = None) -> None:
     workspace = os.environ.get("GITHUB_WORKSPACE", "")
     if workspace:
         try:
+            from agno.vectordb.lancedb import LanceDb
+            from agno.vectordb.search import SearchType
+
             from grippy.codebase import CodebaseIndex, CodebaseToolkit
 
             cb_embedder = create_embedder(
@@ -317,20 +320,32 @@ def main(*, profile: str | None = None) -> None:
             )
             lance_dir = data_dir / "lance"
             lance_dir.mkdir(parents=True, exist_ok=True)
-            import lancedb  # type: ignore[import-untyped]
 
-            lance_db = lancedb.connect(str(lance_dir))
-            cb_index = CodebaseIndex(
-                repo_root=Path(workspace),
-                lance_db=lance_db,
+            # NOTE: embedder is passed to both vector_db (Agno internals)
+            # and index (batch embedding + query). Must be same instance.
+            vector_db = LanceDb(
+                uri=str(lance_dir),
+                table_name="codebase_chunks",
+                search_type=SearchType.hybrid,
+                use_tantivy=False,
                 embedder=cb_embedder,
             )
-            if not cb_index.is_indexed:
-                print("Indexing codebase...")
-                chunk_count = cb_index.build()
+            cb_index = CodebaseIndex(
+                repo_root=Path(workspace),
+                vector_db=vector_db,
+                embedder=cb_embedder,
+                data_dir=data_dir,
+            )
+            force_reindex = os.environ.get("GRIPPY_FORCE_REINDEX", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            chunk_count = cb_index.build(force=force_reindex)
+            if chunk_count > 0:
                 print(f"  Indexed {chunk_count} chunks")
             else:
-                print("Codebase index found (cached)")
+                print("Codebase index up-to-date (cached)")
             codebase_tools = [CodebaseToolkit(index=cb_index, repo_root=Path(workspace))]
         except Exception as exc:
             print(f"::warning::Codebase indexing failed (non-fatal): {exc}")

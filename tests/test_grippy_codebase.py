@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -16,11 +17,13 @@ from grippy.codebase import (
     _MAX_RESULT_CHARS,
     CodebaseIndex,
     CodebaseToolkit,
+    _get_repo_state,
     _limit_result,
     _make_grep_code,
     _make_list_files,
     _make_read_file,
     _make_search_code,
+    _write_manifest,
     chunk_file,
     sanitize_tool_hook,
     walk_source_files,
@@ -44,33 +47,6 @@ def tmp_repo(tmp_path: Path) -> Path:
     (tmp_path / ".git").mkdir()
     (tmp_path / ".git" / "config").write_text("gitconfig")
     return tmp_path
-
-
-@pytest.fixture
-def mock_embedder() -> MagicMock:
-    """Create a mock embedder returning fixed-size vectors."""
-    embedder = MagicMock()
-    embedder.get_embedding = MagicMock(return_value=[0.1] * 8)
-    return embedder
-
-
-@pytest.fixture
-def mock_batch_embedder() -> MagicMock:
-    """Create a mock batch embedder."""
-    embedder = MagicMock()
-    embedder.get_embedding = MagicMock(return_value=[0.1] * 8)
-    embedder.get_embedding_batch = MagicMock(side_effect=lambda texts: [[0.1] * 8 for _ in texts])
-    return embedder
-
-
-@pytest.fixture
-def lance_db(tmp_path: Path) -> Any:
-    """Create a LanceDB connection for testing."""
-    import lancedb  # type: ignore[import-untyped]
-
-    lance_dir = tmp_path / "lance_test"
-    lance_dir.mkdir()
-    return lancedb.connect(str(lance_dir))
 
 
 # --- _limit_result tests ---
@@ -199,152 +175,84 @@ class TestChunkFile:
         assert chunks[0]["file_path"] == str(path)
 
 
-# --- CodebaseIndex tests ---
-
-
-class TestCodebaseIndex:
-    def test_not_indexed_initially(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        assert not idx.is_indexed
-
-    def test_is_indexed_after_build(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        assert count > 0
-        assert idx.is_indexed
-
-    def test_build_returns_chunk_count(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        # Should have chunks for main.py, utils.py, README.md, pyproject.toml
-        assert count >= 4
-
-    def test_build_uses_batch_embedder(
-        self, tmp_repo: Path, lance_db: Any, mock_batch_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_batch_embedder)
-        idx.build()
-        mock_batch_embedder.get_embedding_batch.assert_called()
-
-    def test_build_with_index_paths(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(
-            repo_root=tmp_repo,
-            lance_db=lance_db,
-            embedder=mock_embedder,
-            index_paths=["src"],
-        )
-        count = idx.build()
-        # Only src/ files: main.py, utils.py
-        assert count == 2
-
-    def test_build_stores_relative_paths(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("hello")
-        assert results
-        # Paths should be relative, not absolute
-        for r in results:
-            assert not r["file_path"].startswith("/"), (
-                f"Expected relative path, got {r['file_path']}"
-            )
-
-    def test_build_empty_dir(self, tmp_path: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        empty = tmp_path / "empty_repo"
-        empty.mkdir()
-        idx = CodebaseIndex(repo_root=empty, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        assert count == 0
-
-    def test_search_returns_results(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("hello function")
-        assert len(results) > 0
-        assert "file_path" in results[0]
-        assert "text" in results[0]
-
-    def test_search_before_build_empty(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        results = idx.search("anything")
-        assert results == []
-
-    def test_search_respects_k(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("test", k=2)
-        assert len(results) <= 2
-
-    def test_rebuild_replaces_old_table(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count1 = idx.build()
-        count2 = idx.build()
-        assert count1 == count2  # Same files, same count
+# --- CodebaseIndex tests (legacy — replaced by TestCodebaseIndexAgno) ---
+# Old TestCodebaseIndex class deleted. Unit tests are in TestCodebaseIndexAgno.
+# Integration tests (real Agno LanceDb) deferred to Task 8 if needed.
 
 
 # --- search_code tool tests ---
 
 
 class TestSearchCodeTool:
-    def test_returns_results(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_returns_results(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "src/main.py",
+                    "start_line": 1,
+                    "end_line": 5,
+                    "text": "def hello(): pass",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("hello function")
-        assert "main.py" in result or "utils.py" in result
+        assert "main.py" in result
 
-    def test_not_indexed_message(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        search = _make_search_code(idx)
-        result = search("anything")
-        assert "not indexed" in result.lower()
-
-    def test_no_results_message(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        # Mock search to return empty
+    def test_no_results_message(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
         idx.search = MagicMock(return_value=[])  # type: ignore[method-assign]
         search = _make_search_code(idx)
         result = search("nonexistent xyz")
         assert "no results" in result.lower()
 
-    def test_respects_k_parameter(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def test_respects_k_parameter(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "text": "x = 1",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("test", k=1)
-        # Should have at most 1 result block
-        assert result.count("---") <= 4  # header has dashes
+        idx.search.assert_called_once_with("test", k=1)
+        assert "a.py" in result
 
-    def test_result_format(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def test_result_format(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "src/app.py",
+                    "start_line": 10,
+                    "end_line": 20,
+                    "text": "def run(): pass",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("hello")
-        assert "lines" in result
+        assert "lines 10-20" in result
+        assert "src/app.py" in result
 
 
 # --- grep_code tool tests ---
@@ -526,15 +434,23 @@ class TestListFilesTool:
 
 
 class TestCodebaseToolkit:
-    def test_registers_four_tools(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = False
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_registers_four_tools(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         assert len(toolkit.functions) == 4
 
-    def test_tool_names(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def test_tool_names(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         names = set(toolkit.functions.keys())
         assert "search_code" in names
@@ -542,10 +458,8 @@ class TestCodebaseToolkit:
         assert "read_file" in names
         assert "list_files" in names
 
-    def test_tools_are_callable(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def test_tools_are_callable(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         for func in toolkit.functions.values():
             assert func.entrypoint is not None
@@ -778,3 +692,706 @@ class TestSanitizeToolHook:
 
         result = sanitize_tool_hook("fake_tool", fake_tool, {"query": "test", "k": 3})
         assert result == "test:3"
+
+
+# --- Repo state detection ---
+
+
+class TestRepoState:
+    """_get_repo_state() detects git SHA + dirtiness or non-git file hash."""
+
+    def test_git_repo_returns_sha_and_clean(self, tmp_path: Path) -> None:
+        """Git repo returns HEAD SHA and dirty=False when clean."""
+        from grippy.codebase import _get_repo_state
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        (tmp_path / "a.py").write_text("x = 1\n")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-gpg-sign"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+        sha, dirty = _get_repo_state(tmp_path)
+        assert len(sha) == 40
+        assert dirty is False
+
+    def test_dirty_repo_detected(self, tmp_path: Path) -> None:
+        """Uncommitted changes set dirty=True."""
+        from grippy.codebase import _get_repo_state
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        (tmp_path / "a.py").write_text("x = 1\n")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-gpg-sign"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+        (tmp_path / "a.py").write_text("x = 2\n")
+        _sha, dirty = _get_repo_state(tmp_path)
+        assert dirty is True
+
+    def test_non_git_dir_uses_file_hash(self, tmp_path: Path) -> None:
+        """Non-git directory hashes (path, size, mtime) tuples."""
+        from grippy.codebase import _get_repo_state
+
+        (tmp_path / "a.py").write_text("x = 1\n")
+        sha1, dirty1 = _get_repo_state(tmp_path)
+        assert len(sha1) == 64  # SHA-256 hex
+        assert dirty1 is False  # no dirtiness concept without git
+
+        sha2, _ = _get_repo_state(tmp_path)
+        assert sha1 == sha2
+
+    def test_non_git_detects_content_change_via_mtime(self, tmp_path: Path) -> None:
+        """File content change updates mtime → different hash."""
+        import time
+
+        from grippy.codebase import _get_repo_state
+
+        (tmp_path / "a.py").write_text("x = 1\n")
+        sha1, _ = _get_repo_state(tmp_path)
+        time.sleep(0.05)
+        (tmp_path / "a.py").write_text("x = 2\n")
+        sha2, _ = _get_repo_state(tmp_path)
+        assert sha1 != sha2
+
+
+# --- Manifest infrastructure ---
+
+
+class TestIndexManifest:
+    """Manifest read/write and config fingerprinting."""
+
+    def test_write_and_read_manifest(self, tmp_path: Path) -> None:
+        """Manifest round-trips all fields."""
+        from grippy.codebase import _read_manifest, _write_manifest
+
+        path = tmp_path / "manifest.json"
+        _write_manifest(
+            path,
+            repo_sha="abc123",
+            repo_dirty=False,
+            config_fingerprint="fp-hash",
+        )
+        m = _read_manifest(path)
+        assert m is not None
+        assert m["repo_sha"] == "abc123"
+        assert m["repo_dirty"] is False
+        assert m["config_fingerprint"] == "fp-hash"
+        assert "schema_version" in m
+        assert "built_at" in m
+
+    def test_read_missing_manifest(self, tmp_path: Path) -> None:
+        """Missing manifest returns None."""
+        from grippy.codebase import _read_manifest
+
+        assert _read_manifest(tmp_path / "missing.json") is None
+
+    def test_read_corrupt_manifest(self, tmp_path: Path) -> None:
+        """Corrupt manifest returns None (non-fatal)."""
+        from grippy.codebase import _read_manifest
+
+        bad = tmp_path / "bad.json"
+        bad.write_text("not json{{{")
+        assert _read_manifest(bad) is None
+
+    def test_config_fingerprint_changes_with_params(self) -> None:
+        """Different config params produce different fingerprints."""
+        from grippy.codebase import _config_fingerprint
+
+        fp1 = _config_fingerprint(
+            extensions=[".py"],
+            ignore_dirs=["__pycache__"],
+            index_paths=None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=5000,
+            embedder_id="model-a",
+            embedding_dims=1024,
+        )
+        fp2 = _config_fingerprint(
+            extensions=[".py", ".md"],
+            ignore_dirs=["__pycache__"],
+            index_paths=None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=5000,
+            embedder_id="model-a",
+            embedding_dims=1024,
+        )
+        assert fp1 != fp2
+
+    def test_config_fingerprint_stable(self) -> None:
+        """Same params always produce the same fingerprint."""
+        from grippy.codebase import _config_fingerprint
+
+        kwargs: dict[str, Any] = {
+            "extensions": [".py"],
+            "ignore_dirs": ["__pycache__"],
+            "index_paths": None,
+            "max_chunk_chars": 4000,
+            "overlap": 200,
+            "max_index_files": 5000,
+            "embedder_id": "model-a",
+            "embedding_dims": 1024,
+        }
+        assert _config_fingerprint(**kwargs) == _config_fingerprint(**kwargs)
+
+
+# --- Chunk ID ---
+
+
+class TestChunkId:
+    """_chunk_id() produces location-based IDs."""
+
+    def test_different_files_different_ids(self) -> None:
+        """Same content in different files gets different IDs."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) != _chunk_id("src/b.py", 1, 10)
+
+    def test_same_location_stable(self) -> None:
+        """Same file+range always produces the same ID."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) == _chunk_id("src/a.py", 1, 10)
+
+    def test_different_ranges_different_ids(self) -> None:
+        """Different line ranges in same file get different IDs."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) != _chunk_id("src/a.py", 11, 20)
+
+
+# --- FakeBatchEmbedder ---
+
+
+class FakeBatchEmbedder:
+    """Test double that properly satisfies BatchEmbedder protocol.
+
+    Do NOT use MagicMock — it passes isinstance(mock, BatchEmbedder) by
+    accident via runtime_checkable Protocol + attribute presence.
+    """
+
+    def __init__(self, dim: int = 8) -> None:
+        self._dim = dim
+
+    def get_embedding(self, text: str) -> list[float]:
+        return [0.1] * self._dim
+
+    def get_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1] * self._dim for _ in texts]
+
+
+# --- CodebaseIndex Agno migration tests ---
+
+
+class TestCodebaseIndexAgno:
+    """Tests for migrated CodebaseIndex with Agno LanceDb wrapper."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        embedder = overrides.pop("embedder", FakeBatchEmbedder())
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", False)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=embedder,
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_build_indexes_files(self, tmp_path: Path) -> None:
+        """build() indexes files and returns chunk count."""
+        (tmp_path / "hello.py").write_text("def hello():\n    return 'world'\n")
+        index, vdb = self._make_index(tmp_path)
+        count = index.build()
+        assert count == 1
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_skips_when_manifest_matches(self, tmp_path: Path) -> None:
+        """build() skips rebuild when manifest matches current state."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        # First build creates manifest
+        index.build()
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        # Second build should skip
+        count = index.build()
+        assert count == 0
+        vdb.insert.assert_not_called()
+
+    def test_build_force_bypasses_manifest(self, tmp_path: Path) -> None:
+        """build(force=True) rebuilds even when manifest matches."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()  # creates manifest
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        count = index.build(force=True)
+        assert count == 1
+        vdb.drop.assert_called_once()
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_drops_stale_on_sha_mismatch(self, tmp_path: Path) -> None:
+        """SHA change triggers drop -> create -> insert."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        # Write manifest with stale SHA
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="stale-sha-from-yesterday",
+            repo_dirty=False,
+            config_fingerprint="whatever",
+        )
+        index.build()
+        vdb.drop.assert_called_once()
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_invalidates_on_config_fingerprint_change(self, tmp_path: Path) -> None:
+        """Config change (e.g. extensions) triggers rebuild."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()  # creates manifest with current config
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        # Create new index with different extensions (different config_fingerprint)
+        index2, _vdb2 = self._make_index(
+            tmp_path,
+            table_exists=True,
+            extensions=frozenset({".py", ".rs"}),
+        )
+        count = index2.build()
+        assert count == 1  # rebuilt, not skipped
+
+    def test_build_batch_embeds_documents(self, tmp_path: Path) -> None:
+        """build() batch-embeds and sets Document.embedding before insert."""
+        (tmp_path / "a.py").write_text("line1\nline2\n")
+        index, vdb = self._make_index(tmp_path)
+        index.build()
+        docs = vdb.insert.call_args.kwargs["documents"]
+        for doc in docs:
+            assert doc.embedding is not None
+            assert len(doc.embedding) == 8
+
+    def test_build_sets_location_based_chunk_ids(self, tmp_path: Path) -> None:
+        """build() sets Document.id from file location."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path)
+        index.build()
+        docs = vdb.insert.call_args.kwargs["documents"]
+        for doc in docs:
+            assert doc.id is not None
+            assert len(doc.id) == 40  # SHA-1 hex
+
+    def test_build_dirty_repo_always_rebuilds(self, tmp_path: Path) -> None:
+        """If repo was dirty when manifest written, next build always rebuilds."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
+        # Write manifest with dirty=True
+        sha, _ = _get_repo_state(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha=sha,
+            repo_dirty=True,
+            config_fingerprint="fp",
+        )
+        count = index.build()
+        assert count >= 1  # rebuilt even though SHA matches
+
+
+# --- Result parsing ---
+
+
+class TestParseResults:
+    """_parse_results_static() handles various LanceDB payload formats."""
+
+    def test_payload_as_json_string(self) -> None:
+        """Normal case: payload is a JSON string."""
+        row = {
+            "payload": json.dumps(
+                {
+                    "content": "def hello(): pass",
+                    "name": "src/app.py",
+                    "meta_data": {
+                        "file_path": "src/app.py",
+                        "start_line": 1,
+                        "end_line": 1,
+                        "chunk_index": 0,
+                    },
+                }
+            )
+        }
+        results = CodebaseIndex._parse_results_static([row])
+        assert len(results) == 1
+        assert results[0]["file_path"] == "src/app.py"
+        assert results[0]["text"] == "def hello(): pass"
+        assert results[0]["start_line"] == 1
+
+    def test_payload_as_dict(self) -> None:
+        """Some LanceDB versions may return payload as already-parsed dict."""
+        row = {
+            "payload": {
+                "content": "x = 1",
+                "name": "a.py",
+                "meta_data": {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        }
+        results = CodebaseIndex._parse_results_static([row])
+        assert len(results) == 1
+        assert results[0]["text"] == "x = 1"
+
+    def test_payload_missing(self) -> None:
+        """Missing payload -> row skipped."""
+        results = CodebaseIndex._parse_results_static([{"id": "abc", "vector": []}])
+        assert results == []
+
+    def test_payload_malformed_json(self) -> None:
+        """Malformed JSON -> row skipped, no crash."""
+        results = CodebaseIndex._parse_results_static([{"payload": "not{json"}])
+        assert results == []
+
+    def test_meta_data_missing(self) -> None:
+        """Missing meta_data -> uses name as file_path, defaults for lines."""
+        row = {"payload": json.dumps({"content": "x", "name": "fallback.py"})}
+        results = CodebaseIndex._parse_results_static([row])
+        assert results[0]["file_path"] == "fallback.py"
+        assert results[0]["start_line"] == 0
+
+
+# --- Hybrid search ---
+
+
+class TestCodebaseSearch:
+    """search() uses hybrid with RRF, falls back to vector-only."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        embedder = overrides.pop("embedder", FakeBatchEmbedder())
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", True)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=embedder,
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_hybrid_search_returns_parsed_results(self, tmp_path: Path) -> None:
+        """Hybrid search returns parsed chunk dicts from payload."""
+        index, vdb = self._make_index(tmp_path)
+        table_mock = MagicMock()
+        vdb.table = table_mock
+        # Simulate FTS index exists
+        table_mock.list_indices.return_value = [MagicMock(index_type="FTS")]
+        # Simulate hybrid search chain
+        payload = json.dumps(
+            {
+                "content": "def hello(): pass",
+                "name": "src/app.py",
+                "meta_data": {
+                    "file_path": "src/app.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        )
+        chain = MagicMock()
+        table_mock.search.return_value = chain
+        chain.vector.return_value = chain
+        chain.text.return_value = chain
+        chain.rerank.return_value = chain
+        chain.limit.return_value = chain
+        chain.to_list.return_value = [{"payload": payload}]
+
+        results = index.search("hello")
+        assert len(results) == 1
+        assert results[0]["file_path"] == "src/app.py"
+        assert results[0]["text"] == "def hello(): pass"
+
+    def test_fallback_to_vector_on_fts_failure(self, tmp_path: Path) -> None:
+        """If FTS unavailable, falls back to vector-only search."""
+        index, vdb = self._make_index(tmp_path)
+        table_mock = MagicMock()
+        vdb.table = table_mock
+        # FTS creation fails
+        table_mock.list_indices.return_value = []
+        table_mock.create_fts_index.side_effect = Exception("FTS failed")
+        # Vector search returns results
+        payload = json.dumps(
+            {
+                "content": "x = 1",
+                "name": "a.py",
+                "meta_data": {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        )
+        vec_chain = MagicMock()
+        table_mock.search.return_value = vec_chain
+        vec_chain.limit.return_value = vec_chain
+        vec_chain.to_list.return_value = [{"payload": payload}]
+
+        results = index.search("test query")
+        assert len(results) == 1
+        assert results[0]["file_path"] == "a.py"
+
+    def test_total_failure_returns_empty(self, tmp_path: Path) -> None:
+        """If both hybrid and vector fail, returns empty list."""
+        index, vdb = self._make_index(tmp_path)
+        vdb.table = None
+        results = index.search("anything")
+        assert results == []
+
+    def test_search_not_indexed_returns_empty(self, tmp_path: Path) -> None:
+        """Search on non-existent table returns empty."""
+        index, _vdb = self._make_index(tmp_path, table_exists=False)
+        results = index.search("anything")
+        assert results == []
+
+
+# --- is_indexed property ---
+
+
+class TestIsIndexed:
+    """is_indexed checks vector_db.exists() + manifest validity."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", False)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_not_indexed_when_no_table(self, tmp_path: Path) -> None:
+        index, _vdb = self._make_index(tmp_path, table_exists=False)
+        assert index.is_indexed is False
+
+    def test_not_indexed_when_no_manifest(self, tmp_path: Path) -> None:
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
+        assert index.is_indexed is False
+
+    def test_indexed_when_manifest_valid(self, tmp_path: Path) -> None:
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()
+        _vdb.exists.return_value = True
+        assert index.is_indexed is True
+
+
+# --- Cache invalidation logging ---
+
+
+class TestCacheInvalidation:
+    """_is_cache_valid() logs reasons for cache misses."""
+
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_schema_version_mismatch(self, tmp_path: Path) -> None:
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="abc",
+            repo_dirty=False,
+            config_fingerprint="fp",
+        )
+        # Tamper schema_version
+        from grippy.codebase import _read_manifest
+
+        m = _read_manifest(tmp_path / "codebase_index_manifest.json")
+        assert m is not None
+        m["schema_version"] = 999
+        (tmp_path / "codebase_index_manifest.json").write_text(json.dumps(m))
+        assert index._is_cache_valid() is False
+
+    def test_config_fingerprint_mismatch(self, tmp_path: Path) -> None:
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="abc",
+            repo_dirty=False,
+            config_fingerprint="wrong-fingerprint",
+        )
+        assert index._is_cache_valid() is False
+
+    def test_dirty_working_tree(self, tmp_path: Path) -> None:
+        """Dirty working tree invalidates cache even if SHA matches."""
+        index = self._make_index(tmp_path)
+        sha, _ = _get_repo_state(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha=sha,
+            repo_dirty=False,
+            config_fingerprint=index._current_config_fingerprint(),
+        )
+        with patch("grippy.codebase._get_repo_state", return_value=(sha, True)):
+            assert index._is_cache_valid() is False
+
+    def test_sha_mismatch_logs(self, tmp_path: Path) -> None:
+        """SHA mismatch invalidates cache."""
+        index = self._make_index(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="old-sha-from-yesterday",
+            repo_dirty=False,
+            config_fingerprint=index._current_config_fingerprint(),
+        )
+        assert index._is_cache_valid() is False
+
+
+# --- Build edge cases ---
+
+
+class TestBuildEdgeCases:
+    """Edge cases in CodebaseIndex.build()."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        vdb = overrides.pop("vector_db", MagicMock())
+        vdb.exists.return_value = overrides.pop("table_exists", False)
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+            **overrides,
+        ), vdb
+
+    def test_nonexistent_index_path_skipped(self, tmp_path: Path) -> None:
+        """Index path that doesn't exist is silently skipped."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, _vdb = self._make_index(tmp_path, index_paths=["src", "nonexistent"])
+        # src doesn't exist either, but a.py is at root — index_paths restricts
+        count = index.build()
+        assert count == 0  # no files found under the specified paths
+
+    def test_single_file_index_path(self, tmp_path: Path) -> None:
+        """Index path pointing to a single file works."""
+        (tmp_path / "target.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, index_paths=["target.py"])
+        count = index.build()
+        assert count == 1
+        vdb.insert.assert_called_once()
+
+    def test_max_files_cap(self, tmp_path: Path) -> None:
+        """build() caps indexing at _MAX_INDEX_FILES."""
+        from grippy.codebase import _MAX_INDEX_FILES
+
+        # Create enough files to trigger the cap
+        for i in range(_MAX_INDEX_FILES + 5):
+            (tmp_path / f"f{i:05d}.py").write_text(f"x = {i}\n")
+        index, _vdb = self._make_index(tmp_path)
+        count = index.build()
+        # Should be capped at _MAX_INDEX_FILES, not _MAX_INDEX_FILES + 5
+        assert count <= _MAX_INDEX_FILES
+
+
+# --- FTS index edge cases ---
+
+
+class TestFtsIndexEdgeCases:
+    """_ensure_fts_index() edge cases."""
+
+    def _make_index(self, tmp_path: Path) -> tuple[CodebaseIndex, MagicMock]:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        ), vdb
+
+    def test_table_none_returns_false(self, tmp_path: Path) -> None:
+        index, vdb = self._make_index(tmp_path)
+        vdb.table = None
+        assert index._ensure_fts_index() is False
+
+    def test_cached_result_returned(self, tmp_path: Path) -> None:
+        """Second call returns cached result without re-checking."""
+        index, vdb = self._make_index(tmp_path)
+        table = MagicMock()
+        vdb.table = table
+        table.list_indices.return_value = [MagicMock(index_type="FTS")]
+        assert index._ensure_fts_index() is True
+        # Second call — list_indices should not be called again
+        table.list_indices.reset_mock()
+        assert index._ensure_fts_index() is True
+        table.list_indices.assert_not_called()
+
+
+# --- Vector search edge cases ---
+
+
+class TestVectorSearchEdgeCases:
+    """_vector_search() edge cases."""
+
+    def test_table_none_returns_empty(self, tmp_path: Path) -> None:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        vdb.table = None
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+        assert index._vector_search("query", 5) == []
+
+
+# --- Parse results edge case ---
+
+
+class TestParseResultsEdgeCases:
+    """Additional edge cases for _parse_results_static."""
+
+    def test_payload_non_dict_after_json_parse(self) -> None:
+        """JSON-valid payload that isn't a dict is skipped."""
+        row = {"payload": json.dumps([1, 2, 3])}  # list, not dict
+        results = CodebaseIndex._parse_results_static([row])
+        assert results == []

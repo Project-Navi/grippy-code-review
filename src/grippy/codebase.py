@@ -9,15 +9,19 @@ codebase — not just the diff.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
+import json
 import logging
 import os
 import re
 import subprocess
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import navi_sanitize
+from agno.knowledge.document import Document
 from agno.tools.function import Function
 from agno.tools.toolkit import Toolkit
 
@@ -109,6 +113,127 @@ def sanitize_tool_hook(function_name: str, func: Any, args: dict[str, Any]) -> A
     if isinstance(result, str):
         return _limit_result(_sanitize_tool_output(result))
     return result
+
+
+# --- Repo state & cache infrastructure ---
+
+_SCHEMA_VERSION = 1
+_DATASET_ID = "grippy-codebase-v1"
+
+
+def _get_repo_state(repo_root: Path) -> tuple[str, bool]:
+    """Get repo identity for cache invalidation.
+
+    Git path: HEAD SHA + dirtiness from ``git status --porcelain``.
+    Non-git fallback: SHA-256 of sorted (path, size, mtime_ns) tuples.
+
+    Returns:
+        (sha_or_hash, is_dirty). Non-git repos always return dirty=False.
+    """
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            check=True,
+        )
+        sha = head.stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            check=True,
+        )
+        dirty = bool(status.stdout.strip())
+        return sha, dirty
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # Non-git fallback: hash (path, size, mtime_ns) tuples
+    files = walk_source_files(repo_root)
+    parts: list[str] = []
+    for f in files:
+        try:
+            st = f.stat()
+            rel = str(f.relative_to(repo_root))
+            parts.append(f"{rel}:{st.st_size}:{st.st_mtime_ns}")
+        except OSError:
+            continue
+    content = "\n".join(sorted(parts))
+    return hashlib.sha256(content.encode()).hexdigest(), False
+
+
+def _config_fingerprint(
+    *,
+    extensions: list[str],
+    ignore_dirs: list[str],
+    index_paths: list[str] | None,
+    max_chunk_chars: int,
+    overlap: int,
+    max_index_files: int,
+    embedder_id: str,
+    embedding_dims: int,
+) -> str:
+    """Hash config params that affect index content. Change = cache miss."""
+    parts = json.dumps(
+        {
+            "extensions": sorted(extensions),
+            "ignore_dirs": sorted(ignore_dirs),
+            "index_paths": sorted(index_paths) if index_paths else None,
+            "max_chunk_chars": max_chunk_chars,
+            "overlap": overlap,
+            "max_index_files": max_index_files,
+            "embedder_id": embedder_id,
+            "embedding_dims": embedding_dims,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(parts.encode()).hexdigest()
+
+
+def _write_manifest(
+    path: Path,
+    *,
+    repo_sha: str,
+    repo_dirty: bool,
+    config_fingerprint: str,
+) -> None:
+    """Write index manifest atomically for cache validation.
+
+    Uses write-to-temp + os.replace() to avoid partial writes on crash or
+    concurrent builds.
+    """
+    manifest = {
+        "schema_version": _SCHEMA_VERSION,
+        "repo_sha": repo_sha,
+        "repo_dirty": repo_dirty,
+        "config_fingerprint": config_fingerprint,
+        "built_at": datetime.now(UTC).isoformat(),
+    }
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(manifest, indent=2))
+    tmp_path.replace(path)
+
+
+def _read_manifest(path: Path) -> dict[str, Any] | None:
+    """Read index manifest. Returns None if missing or corrupt."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def _chunk_id(file_path: str, start_line: int, end_line: int) -> str:
+    """Deterministic chunk ID including location to avoid content collisions."""
+    return hashlib.sha1(  # nosec B324 — non-cryptographic ID
+        f"{file_path}:{start_line}:{end_line}".encode(),
+        usedforsecurity=False,
+    ).hexdigest()
+
+
+# --- File discovery ---
 
 
 def walk_source_files(
@@ -243,48 +368,104 @@ def chunk_file(
 
 
 class CodebaseIndex:
-    """Indexes source files into LanceDB for vector search."""
+    """Indexes source files into LanceDB for hybrid search."""
 
     def __init__(
         self,
         *,
         repo_root: Path,
-        lance_db: Any,
-        embedder: Embedder,
+        vector_db: Any,
+        embedder: Embedder | BatchEmbedder,
+        data_dir: Path,
         extensions: frozenset[str] = _DEFAULT_EXTENSIONS,
         ignore_dirs: frozenset[str] = _DEFAULT_IGNORE_DIRS,
         index_paths: list[str] | None = None,
     ) -> None:
         self._repo_root = repo_root
-        self._lance_db = lance_db
+        self._vector_db = vector_db
         self._embedder = embedder
+        self._data_dir = data_dir
         self._extensions = extensions
         self._ignore_dirs = ignore_dirs
         self._index_paths = index_paths
-        self._table: Any | None = None
+        self._manifest_path = data_dir / "codebase_index_manifest.json"
+
+    def _current_config_fingerprint(self) -> str:
+        """Compute config fingerprint for current settings."""
+        embedder_id = getattr(self._embedder, "id", getattr(self._embedder, "model", "unknown"))
+        embedding_dims = 0
+        if hasattr(self._embedder, "dimensions"):
+            embedding_dims = self._embedder.dimensions or 0
+        return _config_fingerprint(
+            extensions=sorted(self._extensions),
+            ignore_dirs=sorted(self._ignore_dirs),
+            index_paths=sorted(self._index_paths) if self._index_paths else None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=_MAX_INDEX_FILES,
+            embedder_id=str(embedder_id),
+            embedding_dims=embedding_dims,
+        )
 
     @property
     def is_indexed(self) -> bool:
-        """Check if the codebase_chunks table already exists."""
-        tables = self._lance_db.list_tables()
-        # LanceDB >= 0.20 returns ListTablesResponse; older returns list
-        table_list = getattr(tables, "tables", tables)
-        return _CODEBASE_TABLE in table_list
+        """Check if the index exists AND matches current repo state + config."""
+        if not self._vector_db.exists():
+            return False
+        return self._is_cache_valid()
 
-    def build(self) -> int:
-        """Walk, chunk, embed, and store source files. Returns chunk count."""
-        if self._index_paths:
-            roots = [self._repo_root / p for p in self._index_paths]
-        else:
-            roots = [self._repo_root]
+    def _is_cache_valid(self) -> bool:
+        """Check manifest against current state. Returns False if rebuild needed."""
+        manifest = _read_manifest(self._manifest_path)
+        if manifest is None:
+            log.info("Cache miss: no manifest found")
+            return False
+        if manifest.get("schema_version") != _SCHEMA_VERSION:
+            log.info("Cache miss: schema version changed")
+            return False
+        if manifest.get("repo_dirty", False):
+            log.info("Cache miss: previous build was dirty")
+            return False
+        if manifest.get("config_fingerprint") != self._current_config_fingerprint():
+            log.info("Cache miss: config fingerprint changed")
+            return False
+        sha, dirty = _get_repo_state(self._repo_root)
+        if dirty:
+            log.info("Cache miss: working tree is dirty")
+            return False
+        if manifest.get("repo_sha") != sha:
+            log.info(
+                "Cache miss: repo SHA changed (%s → %s)", manifest.get("repo_sha", "?")[:8], sha[:8]
+            )
+            return False
+        return True
+
+    def build(self, *, force: bool = False) -> int:
+        """Walk, chunk, embed, and store source files. Returns chunk count.
+
+        Uses manifest-based caching: skips rebuild when repo SHA + config match.
+        Drops stale table + rebuilds when state changes or force=True.
+        Returns 0 when skipped (cache hit).
+        """
+        # Check cache (unless forced)
+        if not force and self._vector_db.exists() and self._is_cache_valid():
+            sha, _ = _get_repo_state(self._repo_root)
+            log.info("Index up-to-date (SHA=%s), skipping rebuild", sha[:8])
+            return 0
+
+        # Collect chunks
+        roots = (
+            [self._repo_root / p for p in self._index_paths]
+            if self._index_paths
+            else [self._repo_root]
+        )
 
         all_chunks: list[dict[str, Any]] = []
         for root in roots:
             if not root.exists():
                 continue
             if root.is_file():
-                file_chunks = chunk_file(root, relative_to=self._repo_root)
-                all_chunks.extend(file_chunks)
+                all_chunks.extend(chunk_file(root, relative_to=self._repo_root))
             else:
                 files = walk_source_files(root, self._extensions, self._ignore_dirs)
                 if len(files) > _MAX_INDEX_FILES:
@@ -295,44 +476,169 @@ class CodebaseIndex:
                     )
                     files = files[:_MAX_INDEX_FILES]
                 for f in files:
-                    file_chunks = chunk_file(f, relative_to=self._repo_root)
-                    all_chunks.extend(file_chunks)
+                    all_chunks.extend(chunk_file(f, relative_to=self._repo_root))
 
         if not all_chunks:
             log.warning("No files found to index")
             return 0
 
-        # Embed in batches
+        # Batch embed
         texts = [c["text"] for c in all_chunks]
         if isinstance(self._embedder, BatchEmbedder):
             vectors = self._embedder.get_embedding_batch(texts)
         else:
             vectors = [self._embedder.get_embedding(t) for t in texts]
 
+        # Map to Documents with pre-set embeddings + location-based IDs
+        documents: list[Document] = []
         for chunk, vec in zip(all_chunks, vectors, strict=True):
-            chunk["vector"] = vec
+            documents.append(
+                Document(
+                    id=_chunk_id(chunk["file_path"], chunk["start_line"], chunk["end_line"]),
+                    name=chunk["file_path"],
+                    content=chunk["text"],
+                    embedding=vec,
+                    meta_data={
+                        "file_path": chunk["file_path"],
+                        "chunk_index": chunk["chunk_index"],
+                        "start_line": chunk["start_line"],
+                        "end_line": chunk["end_line"],
+                    },
+                )
+            )
 
-        # Store — overwrite old table if exists
-        self._table = self._lance_db.create_table(
-            _CODEBASE_TABLE, data=all_chunks, mode="overwrite"
+        # Drop stale table -> create fresh -> insert
+        if self._vector_db.exists():
+            self._vector_db.drop()
+        self._vector_db.create()
+        self._vector_db.insert(content_hash=_DATASET_ID, documents=documents)
+
+        # Write manifest
+        sha, dirty = _get_repo_state(self._repo_root)
+        _write_manifest(
+            self._manifest_path,
+            repo_sha=sha,
+            repo_dirty=dirty,
+            config_fingerprint=self._current_config_fingerprint(),
         )
-        log.info("Indexed %d chunks from codebase", len(all_chunks))
-        return len(all_chunks)
+
+        log.info(
+            "Indexed %d chunks from codebase (SHA=%s, dirty=%s)",
+            len(documents),
+            sha[:8],
+            dirty,
+        )
+        return len(documents)
+
+    @staticmethod
+    def _parse_results_static(
+        raw_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Parse raw LanceDB results into chunk dicts.
+
+        Tolerates: payload as string or dict, missing payload, missing
+        meta_data, malformed JSON. Skips unparseable rows.
+        """
+        results: list[dict[str, Any]] = []
+        for row in raw_results:
+            try:
+                payload = row.get("payload")
+                if payload is None:
+                    continue
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                if not isinstance(payload, dict):
+                    continue
+                meta = payload.get("meta_data") or {}
+                results.append(
+                    {
+                        "file_path": meta.get("file_path", payload.get("name", "unknown")),
+                        "chunk_index": meta.get("chunk_index", 0),
+                        "start_line": meta.get("start_line", 0),
+                        "end_line": meta.get("end_line", 0),
+                        "text": payload.get("content", ""),
+                    }
+                )
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
+                continue
+        return results
+
+    def _parse_results(self, raw_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Instance method wrapper for _parse_results_static."""
+        return self._parse_results_static(raw_results)
+
+    def _ensure_fts_index(self) -> bool:
+        """Create FTS index if missing. Returns True if FTS is available."""
+        table = self._vector_db.table
+        if table is None:
+            return False
+        if getattr(self, "_fts_available", None) is not None:
+            return self._fts_available  # type: ignore[return-value]
+        try:
+            indices = table.list_indices() if hasattr(table, "list_indices") else []
+            has_fts = any(
+                getattr(idx, "index_type", "") == "FTS" or getattr(idx, "type", "") == "FTS"
+                for idx in indices
+            )
+            if not has_fts:
+                table.create_fts_index("payload", use_tantivy=False, replace=False)
+            self._fts_available: bool | None = True
+        except Exception:
+            log.warning(
+                "FTS index creation failed — hybrid search unavailable",
+                exc_info=True,
+            )
+            self._fts_available = False
+        return self._fts_available
 
     def search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        """Vector similarity search over indexed chunks."""
-        if self._table is None:
-            if self.is_indexed:
-                self._table = self._lance_db.open_table(_CODEBASE_TABLE)
-            else:
-                return []
+        """Hybrid search (vector + keyword + RRF) with vector-only fallback.
+
+        Returns list of dicts: {file_path, chunk_index, start_line, end_line, text}.
+        Returns empty list on failure — never crashes the review.
+        """
+        if not self._vector_db.exists():
+            return []
+        try:
+            return self._hybrid_search(query, k)
+        except Exception:
+            log.warning("Hybrid search failed, falling back to vector-only", exc_info=True)
+        try:
+            return self._vector_search(query, k)
+        except Exception:
+            log.warning("Vector search also failed", exc_info=True)
+            return []
+
+    def _hybrid_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        """Hybrid search via raw LanceDB table with RRF reranker."""
+        from lancedb.rerankers import RRFReranker  # type: ignore[import-untyped]
+
+        table = self._vector_db.table
+        if table is None:
+            return []
+        if not self._ensure_fts_index():
+            raise RuntimeError("FTS not available")
 
         query_vec = self._embedder.get_embedding(query)
-        arrow_result = self._table.search(query_vec).limit(k).to_arrow()
-        columns = arrow_result.column_names
-        arrays = {col: arrow_result.column(col).to_pylist() for col in columns}
-        n_rows = arrow_result.num_rows
-        return [{col: arrays[col][i] for col in columns} for i in range(n_rows)]
+        raw = (
+            table.search(query_type="hybrid")
+            .vector(query_vec)
+            .text(query)
+            .rerank(RRFReranker())
+            .limit(k)
+            .to_list()
+        )
+        return self._parse_results(raw)
+
+    def _vector_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        """Pure vector search fallback."""
+        table = self._vector_db.table
+        if table is None:
+            return []
+
+        query_vec = self._embedder.get_embedding(query)
+        raw = table.search(query_vec).limit(k).to_list()
+        return self._parse_results(raw)
 
 
 # --- Tool functions ---
@@ -342,16 +648,15 @@ def _make_search_code(index: CodebaseIndex) -> Any:
     """Create a search_code tool function bound to an index."""
 
     def search_code(query: str, k: int = 5) -> str:
-        """Search the codebase by semantic similarity.
+        """Search the codebase by semantic similarity + keyword matching.
 
+        Uses hybrid search (vector + keyword) with RRF reranking.
         Use this to find definitions, patterns, or implementations
         across the full codebase — not just the diff.
 
         :param query: natural language description of what to find
         :param k: number of results to return (default 5)
         """
-        if not index.is_indexed:
-            return "Codebase not indexed — proceed with diff-only analysis."
         results = index.search(query, k=k)
         if not results:
             return "No results found."
