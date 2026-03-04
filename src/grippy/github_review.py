@@ -554,9 +554,11 @@ def resolve_threads(
     pr_number: int,
     thread_ids: list[str],
 ) -> int:
-    """Auto-resolve GitHub review threads via GraphQL.
+    """Auto-resolve GitHub review threads via a single batched GraphQL mutation.
 
-    Uses ``gh api graphql`` subprocess for authentication simplicity.
+    Uses aliased mutations to resolve all threads in one ``gh api graphql``
+    subprocess call. Each thread ID gets an alias (t0, t1, ...) so individual
+    failures don't block the batch.
 
     Args:
         repo: Repository full name (owner/repo).
@@ -566,33 +568,40 @@ def resolve_threads(
     Returns:
         Number of threads successfully resolved.
     """
-    _resolve_mutation = (
-        "mutation ResolveThread($threadId: ID!) { "
-        "resolveReviewThread(input: {threadId: $threadId}) { "
-        "thread { id isResolved } } }"
-    )
-    resolved = 0
-    for thread_id in thread_ids:
-        try:
-            result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    "graphql",
-                    "-f",
-                    f"query={_resolve_mutation}",
-                    "-f",
-                    f"threadId={thread_id}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            if result.returncode == 0:
+    if not thread_ids:
+        return 0
+
+    import json
+
+    # Build aliased mutation: t0: resolveReviewThread(...) { ... }
+    aliases = []
+    for i, tid in enumerate(thread_ids):
+        escaped_tid = tid.replace("\\", "\\\\").replace('"', '\\"')
+        aliases.append(
+            f't{i}: resolveReviewThread(input: {{threadId: "{escaped_tid}"}}) '
+            f"{{ thread {{ id isResolved }} }}"
+        )
+    mutation = "mutation BatchResolve { " + " ".join(aliases) + " }"
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", "graphql", "-f", f"query={mutation}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"::warning::Batch thread resolution failed: {result.stderr}")
+            return 0
+
+        data = json.loads(result.stdout)
+        resolved = 0
+        for i in range(len(thread_ids)):
+            alias_result = data.get("data", {}).get(f"t{i}")
+            if alias_result and alias_result.get("thread", {}).get("isResolved"):
                 resolved += 1
-            else:
-                print(f"::warning::Failed to resolve thread {thread_id}: {result.stderr}")
-        except Exception as exc:
-            print(f"::warning::Exception resolving thread {thread_id}: {exc}")
-    return resolved
+        return resolved
+    except Exception as exc:
+        print(f"::warning::Exception in batch thread resolution: {exc}")
+        return 0

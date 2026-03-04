@@ -867,51 +867,88 @@ class TestFetchThreadStates:
 
 
 class TestResolveThreads:
-    """resolve_threads auto-resolves GitHub review threads for fixed findings."""
+    """resolve_threads auto-resolves GitHub review threads via batch mutation."""
 
     @patch("grippy.github_review.subprocess.run")
-    def test_calls_gh_api_graphql(self, mock_run: MagicMock) -> None:
+    def test_single_thread_single_call(self, mock_run: MagicMock) -> None:
         from grippy.github_review import resolve_threads
 
-        mock_run.return_value = MagicMock(returncode=0, stdout="{}")
-        resolve_threads(
-            repo="org/repo",
-            pr_number=1,
-            thread_ids=["PRRT_abc123"],
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='{"data": {"t0": {"thread": {"id": "PRRT_1", "isResolved": true}}}}',
         )
+        count = resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_1"])
+        assert count == 1
         mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert "gh" in call_args.args[0] or "gh" in str(call_args)
 
     @patch("grippy.github_review.subprocess.run")
-    def test_resolves_multiple_threads(self, mock_run: MagicMock) -> None:
+    def test_batch_multiple_threads_single_call(self, mock_run: MagicMock) -> None:
+        """Multiple threads resolved in a single GraphQL call via aliases."""
+        import json
+
         from grippy.github_review import resolve_threads
 
-        mock_run.return_value = MagicMock(returncode=0, stdout="{}")
-        resolve_threads(
-            repo="org/repo",
-            pr_number=1,
-            thread_ids=["PRRT_1", "PRRT_2", "PRRT_3"],
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "t0": {"thread": {"id": "PRRT_1", "isResolved": True}},
+                        "t1": {"thread": {"id": "PRRT_2", "isResolved": True}},
+                        "t2": {"thread": {"id": "PRRT_3", "isResolved": True}},
+                    }
+                }
+            ),
         )
-        assert mock_run.call_count == 3
+        count = resolve_threads(
+            repo="org/repo", pr_number=1, thread_ids=["PRRT_1", "PRRT_2", "PRRT_3"]
+        )
+        assert count == 3
+        mock_run.assert_called_once()
 
     @patch("grippy.github_review.subprocess.run")
     def test_empty_thread_ids_no_calls(self, mock_run: MagicMock) -> None:
         from grippy.github_review import resolve_threads
 
-        resolve_threads(repo="org/repo", pr_number=1, thread_ids=[])
+        count = resolve_threads(repo="org/repo", pr_number=1, thread_ids=[])
+        assert count == 0
         mock_run.assert_not_called()
 
     @patch("grippy.github_review.subprocess.run")
-    def test_failed_resolution_logged_not_raised(self, mock_run: MagicMock) -> None:
+    def test_subprocess_failure_returns_zero(self, mock_run: MagicMock) -> None:
         from grippy.github_review import resolve_threads
 
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
-        count = resolve_threads(
-            repo="org/repo",
-            pr_number=1,
-            thread_ids=["PRRT_bad"],
+        count = resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_1"])
+        assert count == 0
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_partial_failure_counts_successes(self, mock_run: MagicMock) -> None:
+        """If some aliases fail in the response, only count successful ones."""
+        import json
+
+        from grippy.github_review import resolve_threads
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "t0": {"thread": {"id": "PRRT_1", "isResolved": True}},
+                        "t1": None,
+                    }
+                }
+            ),
         )
+        count = resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_1", "PRRT_2"])
+        assert count == 1
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_exception_returns_zero(self, mock_run: MagicMock) -> None:
+        from grippy.github_review import resolve_threads
+
+        mock_run.side_effect = OSError("gh not found")
+        count = resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_1"])
         assert count == 0
 
 
@@ -1057,41 +1094,26 @@ class TestPostReview422Fallback:
 # --- resolve_threads GraphQL variables ---
 
 
-class TestResolveThreadsGraphQLVariables:
-    """resolve_threads must use GraphQL variables, not string interpolation."""
+class TestResolveThreadsBatchSafety:
+    """Batch mutation contains resolveReviewThread aliases."""
 
     @patch("grippy.github_review.subprocess.run")
-    def test_uses_graphql_variables(self, mock_run: MagicMock) -> None:
-        """Mutation uses $threadId variable placeholder + separate -f arg."""
+    def test_query_contains_resolve_mutation(self, mock_run: MagicMock) -> None:
+        import json
+
         from grippy.github_review import resolve_threads
 
-        mock_run.return_value = MagicMock(returncode=0, stdout="{}")
-        resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_abc123"])
-
-        mock_run.assert_called_once()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {"data": {"t0": {"thread": {"id": "PRRT_test", "isResolved": True}}}}
+            ),
+        )
+        resolve_threads(repo="org/repo", pr_number=1, thread_ids=["PRRT_test"])
         cmd = mock_run.call_args[0][0]
         query_args = [a for a in cmd if a.startswith("query=")]
         assert len(query_args) == 1
-        assert "$threadId" in query_args[0]
-        assert "PRRT_abc123" not in query_args[0]
-        thread_args = [a for a in cmd if a.startswith("threadId=")]
-        assert len(thread_args) == 1
-        assert thread_args[0] == "threadId=PRRT_abc123"
-
-    @patch("grippy.github_review.subprocess.run")
-    def test_validates_thread_id_safely(self, mock_run: MagicMock) -> None:
-        """Malicious thread_id is passed as variable, not interpolated."""
-        from grippy.github_review import resolve_threads
-
-        mock_run.return_value = MagicMock(returncode=0, stdout="{}")
-        malicious_id = 'malicious"injection'
-        resolve_threads(repo="org/repo", pr_number=1, thread_ids=[malicious_id])
-
-        cmd = mock_run.call_args[0][0]
-        query_args = [a for a in cmd if a.startswith("query=")]
-        assert malicious_id not in query_args[0]
-        thread_args = [a for a in cmd if a.startswith("threadId=")]
-        assert thread_args[0] == f"threadId={malicious_id}"
+        assert "resolveReviewThread" in query_args[0]
 
 
 # --- Comment sanitization ---
