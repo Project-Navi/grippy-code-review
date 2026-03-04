@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import unquote
 
 import navi_sanitize
@@ -17,6 +17,14 @@ import nh3
 from github import Github, GithubException
 
 from grippy.schema import Finding
+
+
+class ThreadRef(NamedTuple):
+    """Lightweight reference to a review thread — replaces PyGithub comment objects."""
+
+    node_id: str
+    body: str
+
 
 # --- Diff parser ---
 
