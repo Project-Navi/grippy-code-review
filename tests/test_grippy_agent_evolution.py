@@ -43,6 +43,11 @@ class TestCreateReviewerBackwardCompat:
             agent = create_reviewer(prompts_dir=PROMPTS_DIR, mode=mode)
             assert agent.name == "grippy"
 
+    def test_structured_outputs_enabled(self) -> None:
+        """Agent uses native structured outputs for schema enforcement."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, mode="pr_review")
+        assert agent.structured_outputs is True
+
 
 # --- Session persistence ---
 

@@ -192,6 +192,7 @@ def create_reviewer(
             include_rule_findings=include_rule_findings,
         ),
         output_schema=GrippyReview,
+        structured_outputs=True,
         markdown=False,
         **kwargs,
     )
