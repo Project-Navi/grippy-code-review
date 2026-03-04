@@ -733,6 +733,7 @@ class TestMainWiring:
 class TestSanitizeToolHook:
     def test_sanitizes_and_limits_string_result(self) -> None:
         """Hook runs sanitization and truncation on string tool output."""
+
         def fake_tool(**kwargs: Any) -> str:
             return "<script>alert('xss')</script>"
 
@@ -753,6 +754,7 @@ class TestSanitizeToolHook:
 
     def test_passthrough_short_clean_output(self) -> None:
         """Hook passes through short, clean output unchanged."""
+
         def fake_tool(**kwargs: Any) -> str:
             return "clean output"
 
@@ -761,6 +763,7 @@ class TestSanitizeToolHook:
 
     def test_non_string_passthrough(self) -> None:
         """Hook passes through non-string results without sanitization."""
+
         def fake_tool(**kwargs: Any) -> int:
             return 42
 
@@ -769,6 +772,7 @@ class TestSanitizeToolHook:
 
     def test_passes_args_to_function(self) -> None:
         """Hook forwards kwargs to the wrapped function."""
+
         def fake_tool(query: str, k: int = 5) -> str:
             return f"{query}:{k}"
 

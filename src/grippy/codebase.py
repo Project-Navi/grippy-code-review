@@ -464,10 +464,7 @@ def _make_read_file(repo_root: Path) -> Any:
             end_idx = len(lines)
 
         selected = lines[start_idx:end_idx]
-        numbered = [
-            f"{start_idx + i + 1:4d} | {line}"
-            for i, line in enumerate(selected)
-        ]
+        numbered = [f"{start_idx + i + 1:4d} | {line}" for i, line in enumerate(selected)]
         result = f"# {path} (lines {start_idx + 1}-{start_idx + len(selected)})\n"
         result += "\n".join(numbered)
         return result
