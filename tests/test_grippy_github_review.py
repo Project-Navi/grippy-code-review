@@ -493,6 +493,9 @@ class TestFetchGrippyComments:
         assert ("a.py", "security", 10) in result
         assert ("b.py", "logic", 20) in result
         assert mock_run.call_count == 2
+        # Verify cursor from page 1 was forwarded to page 2 call
+        second_call_cmd = mock_run.call_args_list[1][0][0]
+        assert "cursor=cursor1" in second_call_cmd
 
 
 # --- post_review ---
