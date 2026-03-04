@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import navi_sanitize
+from agno.knowledge.document import Document
 from agno.tools.function import Function
 from agno.tools.toolkit import Toolkit
 
@@ -117,6 +118,7 @@ def sanitize_tool_hook(function_name: str, func: Any, args: dict[str, Any]) -> A
 # --- Repo state & cache infrastructure ---
 
 _SCHEMA_VERSION = 1
+_DATASET_ID = "grippy-codebase-v1"
 
 
 def _get_repo_state(repo_root: Path) -> tuple[str, bool]:
@@ -357,48 +359,96 @@ def chunk_file(
 
 
 class CodebaseIndex:
-    """Indexes source files into LanceDB for vector search."""
+    """Indexes source files into LanceDB for hybrid search."""
 
     def __init__(
         self,
         *,
         repo_root: Path,
-        lance_db: Any,
-        embedder: Embedder,
+        vector_db: Any,
+        embedder: Embedder | BatchEmbedder,
+        data_dir: Path,
         extensions: frozenset[str] = _DEFAULT_EXTENSIONS,
         ignore_dirs: frozenset[str] = _DEFAULT_IGNORE_DIRS,
         index_paths: list[str] | None = None,
     ) -> None:
         self._repo_root = repo_root
-        self._lance_db = lance_db
+        self._vector_db = vector_db
         self._embedder = embedder
+        self._data_dir = data_dir
         self._extensions = extensions
         self._ignore_dirs = ignore_dirs
         self._index_paths = index_paths
-        self._table: Any | None = None
+        self._manifest_path = data_dir / "codebase_index_manifest.json"
+
+    def _current_config_fingerprint(self) -> str:
+        """Compute config fingerprint for current settings."""
+        embedder_id = getattr(
+            self._embedder, "id", getattr(self._embedder, "model", "unknown")
+        )
+        embedding_dims = 0
+        if hasattr(self._embedder, "dimensions"):
+            embedding_dims = self._embedder.dimensions or 0
+        return _config_fingerprint(
+            extensions=sorted(self._extensions),
+            ignore_dirs=sorted(self._ignore_dirs),
+            index_paths=sorted(self._index_paths) if self._index_paths else None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=_MAX_INDEX_FILES,
+            embedder_id=str(embedder_id),
+            embedding_dims=embedding_dims,
+        )
 
     @property
     def is_indexed(self) -> bool:
-        """Check if the codebase_chunks table already exists."""
-        tables = self._lance_db.list_tables()
-        # LanceDB >= 0.20 returns ListTablesResponse; older returns list
-        table_list = getattr(tables, "tables", tables)
-        return _CODEBASE_TABLE in table_list
+        """Check if the index exists AND matches current repo state + config."""
+        if not self._vector_db.exists():
+            return False
+        return self._is_cache_valid()
 
-    def build(self) -> int:
-        """Walk, chunk, embed, and store source files. Returns chunk count."""
-        if self._index_paths:
-            roots = [self._repo_root / p for p in self._index_paths]
-        else:
-            roots = [self._repo_root]
+    def _is_cache_valid(self) -> bool:
+        """Check manifest against current state. Returns False if rebuild needed."""
+        manifest = _read_manifest(self._manifest_path)
+        if manifest is None:
+            return False
+        if manifest.get("schema_version") != _SCHEMA_VERSION:
+            return False
+        if manifest.get("repo_dirty", False):
+            return False  # dirty builds are always stale
+        if manifest.get("config_fingerprint") != self._current_config_fingerprint():
+            return False
+        sha, dirty = _get_repo_state(self._repo_root)
+        if dirty:
+            return False  # current working tree is dirty
+        return manifest.get("repo_sha") == sha
+
+    def build(self, *, force: bool = False) -> int:
+        """Walk, chunk, embed, and store source files. Returns chunk count.
+
+        Uses manifest-based caching: skips rebuild when repo SHA + config match.
+        Drops stale table + rebuilds when state changes or force=True.
+        Returns 0 when skipped (cache hit).
+        """
+        # Check cache (unless forced)
+        if not force and self._vector_db.exists() and self._is_cache_valid():
+            sha, _ = _get_repo_state(self._repo_root)
+            log.info("Index up-to-date (SHA=%s), skipping rebuild", sha[:8])
+            return 0
+
+        # Collect chunks
+        roots = (
+            [self._repo_root / p for p in self._index_paths]
+            if self._index_paths
+            else [self._repo_root]
+        )
 
         all_chunks: list[dict[str, Any]] = []
         for root in roots:
             if not root.exists():
                 continue
             if root.is_file():
-                file_chunks = chunk_file(root, relative_to=self._repo_root)
-                all_chunks.extend(file_chunks)
+                all_chunks.extend(chunk_file(root, relative_to=self._repo_root))
             else:
                 files = walk_source_files(root, self._extensions, self._ignore_dirs)
                 if len(files) > _MAX_INDEX_FILES:
@@ -409,40 +459,78 @@ class CodebaseIndex:
                     )
                     files = files[:_MAX_INDEX_FILES]
                 for f in files:
-                    file_chunks = chunk_file(f, relative_to=self._repo_root)
-                    all_chunks.extend(file_chunks)
+                    all_chunks.extend(chunk_file(f, relative_to=self._repo_root))
 
         if not all_chunks:
             log.warning("No files found to index")
             return 0
 
-        # Embed in batches
+        # Batch embed
         texts = [c["text"] for c in all_chunks]
         if isinstance(self._embedder, BatchEmbedder):
             vectors = self._embedder.get_embedding_batch(texts)
         else:
             vectors = [self._embedder.get_embedding(t) for t in texts]
 
+        # Map to Documents with pre-set embeddings + location-based IDs
+        documents: list[Document] = []
         for chunk, vec in zip(all_chunks, vectors, strict=True):
-            chunk["vector"] = vec
+            documents.append(
+                Document(
+                    id=_chunk_id(
+                        chunk["file_path"], chunk["start_line"], chunk["end_line"]
+                    ),
+                    name=chunk["file_path"],
+                    content=chunk["text"],
+                    embedding=vec,
+                    meta_data={
+                        "file_path": chunk["file_path"],
+                        "chunk_index": chunk["chunk_index"],
+                        "start_line": chunk["start_line"],
+                        "end_line": chunk["end_line"],
+                    },
+                )
+            )
 
-        # Store — overwrite old table if exists
-        self._table = self._lance_db.create_table(
-            _CODEBASE_TABLE, data=all_chunks, mode="overwrite"
+        # Drop stale table -> create fresh -> insert
+        if self._vector_db.exists():
+            self._vector_db.drop()
+        self._vector_db.create()
+        self._vector_db.insert(content_hash=_DATASET_ID, documents=documents)
+
+        # Write manifest
+        sha, dirty = _get_repo_state(self._repo_root)
+        _write_manifest(
+            self._manifest_path,
+            repo_sha=sha,
+            repo_dirty=dirty,
+            config_fingerprint=self._current_config_fingerprint(),
         )
-        log.info("Indexed %d chunks from codebase", len(all_chunks))
-        return len(all_chunks)
+
+        log.info(
+            "Indexed %d chunks from codebase (SHA=%s, dirty=%s)",
+            len(documents),
+            sha[:8],
+            dirty,
+        )
+        return len(documents)
 
     def search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        """Vector similarity search over indexed chunks."""
-        if self._table is None:
-            if self.is_indexed:
-                self._table = self._lance_db.open_table(_CODEBASE_TABLE)
-            else:
-                return []
+        """Vector similarity search over indexed chunks.
+
+        NOTE: This method will be replaced by hybrid search in Task 6.
+        Kept temporarily so existing tests and search_code tool still work.
+        """
+        if not self._vector_db.exists():
+            return []
 
         query_vec = self._embedder.get_embedding(query)
-        arrow_result = self._table.search(query_vec).limit(k).to_arrow()
+        try:
+            table = self._vector_db.table
+            arrow_result = table.search(query_vec).limit(k).to_arrow()
+        except Exception:
+            log.warning("Vector search failed", exc_info=True)
+            return []
         columns = arrow_result.column_names
         arrays = {col: arrow_result.column(col).to_pylist() for col in columns}
         n_rows = arrow_result.num_rows

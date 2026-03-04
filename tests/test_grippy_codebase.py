@@ -16,11 +16,14 @@ from grippy.codebase import (
     _MAX_RESULT_CHARS,
     CodebaseIndex,
     CodebaseToolkit,
+    _config_fingerprint,
+    _get_repo_state,
     _limit_result,
     _make_grep_code,
     _make_list_files,
     _make_read_file,
     _make_search_code,
+    _write_manifest,
     chunk_file,
     sanitize_tool_hook,
     walk_source_files,
@@ -965,3 +968,145 @@ class TestChunkId:
         from grippy.codebase import _chunk_id
 
         assert _chunk_id("src/a.py", 1, 10) != _chunk_id("src/a.py", 11, 20)
+
+
+# --- FakeBatchEmbedder ---
+
+
+class FakeBatchEmbedder:
+    """Test double that properly satisfies BatchEmbedder protocol.
+
+    Do NOT use MagicMock — it passes isinstance(mock, BatchEmbedder) by
+    accident via runtime_checkable Protocol + attribute presence.
+    """
+
+    def __init__(self, dim: int = 8) -> None:
+        self._dim = dim
+
+    def get_embedding(self, text: str) -> list[float]:
+        return [0.1] * self._dim
+
+    def get_embedding_batch(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1] * self._dim for _ in texts]
+
+
+# --- CodebaseIndex Agno migration tests ---
+
+
+class TestCodebaseIndexAgno:
+    """Tests for migrated CodebaseIndex with Agno LanceDb wrapper."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        embedder = overrides.pop("embedder", FakeBatchEmbedder())
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", False)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=embedder,
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_build_indexes_files(self, tmp_path: Path) -> None:
+        """build() indexes files and returns chunk count."""
+        (tmp_path / "hello.py").write_text("def hello():\n    return 'world'\n")
+        index, vdb = self._make_index(tmp_path)
+        count = index.build()
+        assert count == 1
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_skips_when_manifest_matches(self, tmp_path: Path) -> None:
+        """build() skips rebuild when manifest matches current state."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        # First build creates manifest
+        index.build()
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        # Second build should skip
+        count = index.build()
+        assert count == 0
+        vdb.insert.assert_not_called()
+
+    def test_build_force_bypasses_manifest(self, tmp_path: Path) -> None:
+        """build(force=True) rebuilds even when manifest matches."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()  # creates manifest
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        count = index.build(force=True)
+        assert count == 1
+        vdb.drop.assert_called_once()
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_drops_stale_on_sha_mismatch(self, tmp_path: Path) -> None:
+        """SHA change triggers drop -> create -> insert."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        # Write manifest with stale SHA
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha="stale-sha-from-yesterday",
+            repo_dirty=False,
+            config_fingerprint="whatever",
+        )
+        index.build()
+        vdb.drop.assert_called_once()
+        vdb.create.assert_called_once()
+        vdb.insert.assert_called_once()
+
+    def test_build_invalidates_on_config_fingerprint_change(self, tmp_path: Path) -> None:
+        """Config change (e.g. extensions) triggers rebuild."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        index.build()  # creates manifest with current config
+        vdb.reset_mock()
+        vdb.exists.return_value = True
+        # Create new index with different extensions (different config_fingerprint)
+        index2, vdb2 = self._make_index(
+            tmp_path,
+            table_exists=True,
+            extensions=frozenset({".py", ".rs"}),
+        )
+        count = index2.build()
+        assert count == 1  # rebuilt, not skipped
+
+    def test_build_batch_embeds_documents(self, tmp_path: Path) -> None:
+        """build() batch-embeds and sets Document.embedding before insert."""
+        (tmp_path / "a.py").write_text("line1\nline2\n")
+        index, vdb = self._make_index(tmp_path)
+        index.build()
+        docs = vdb.insert.call_args.kwargs["documents"]
+        for doc in docs:
+            assert doc.embedding is not None
+            assert len(doc.embedding) == 8
+
+    def test_build_sets_location_based_chunk_ids(self, tmp_path: Path) -> None:
+        """build() sets Document.id from file location."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path)
+        index.build()
+        docs = vdb.insert.call_args.kwargs["documents"]
+        for doc in docs:
+            assert doc.id is not None
+            assert len(doc.id) == 40  # SHA-1 hex
+
+    def test_build_dirty_repo_always_rebuilds(self, tmp_path: Path) -> None:
+        """If repo was dirty when manifest written, next build always rebuilds."""
+        (tmp_path / "a.py").write_text("x = 1\n")
+        index, vdb = self._make_index(tmp_path, table_exists=True)
+        # Write manifest with dirty=True
+        sha, _ = _get_repo_state(tmp_path)
+        _write_manifest(
+            tmp_path / "codebase_index_manifest.json",
+            repo_sha=sha,
+            repo_dirty=True,
+            config_fingerprint="fp",
+        )
+        count = index.build()
+        assert count >= 1  # rebuilt even though SHA matches
