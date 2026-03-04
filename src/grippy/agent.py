@@ -186,6 +186,13 @@ def create_reviewer(
     else:
         model = OpenAILike(id=model_id, api_key=api_key, base_url=base_url)
 
+    # Enable native structured outputs for OpenAI models — the API enforces
+    # the Pydantic schema at the wire level, eliminating most parse failures.
+    # Disabled for local transport: many local servers (LM Studio, vLLM) don't
+    # support the response_format json_schema parameter and may reject it.
+    # retry.py provides fallback validation regardless.
+    structured = resolved_transport == "openai"
+
     return Agent(
         name="grippy",
         model=model,
@@ -196,7 +203,7 @@ def create_reviewer(
             include_rule_findings=include_rule_findings,
         ),
         output_schema=GrippyReview,
-        structured_outputs=True,
+        structured_outputs=structured,
         markdown=False,
         **kwargs,
     )

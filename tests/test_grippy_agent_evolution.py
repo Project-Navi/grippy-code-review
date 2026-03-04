@@ -44,10 +44,16 @@ class TestCreateReviewerBackwardCompat:
             agent = create_reviewer(prompts_dir=PROMPTS_DIR, mode=mode)
             assert agent.name == "grippy"
 
-    def test_structured_outputs_enabled(self) -> None:
-        """Agent uses native structured outputs for schema enforcement."""
-        agent = create_reviewer(prompts_dir=PROMPTS_DIR, mode="pr_review")
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False)
+    def test_structured_outputs_enabled_for_openai(self) -> None:
+        """OpenAI transport enables native structured outputs."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, transport="openai")
         assert agent.structured_outputs is True
+
+    def test_structured_outputs_disabled_for_local(self) -> None:
+        """Local transport disables structured outputs (servers may not support it)."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, transport="local")
+        assert agent.structured_outputs is False
 
 
 # --- Session persistence ---
