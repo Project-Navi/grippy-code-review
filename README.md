@@ -3,8 +3,8 @@
 > Open-source AI code review agent. Your model, your infrastructure, your rules.
 
 [![Tests](https://github.com/Project-Navi/grippy-code-review/actions/workflows/tests.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/tests.yml)
-[![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/Project-Navi/grippy-code-review/graph/badge.svg)](https://codecov.io/gh/Project-Navi/grippy-code-review)
+[![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Project-Navi/grippy-code-review/badge)](https://scorecard.dev/viewer/?uri=github.com/Project-Navi/grippy-code-review)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://pypi.org/project/grippy-code-review/)

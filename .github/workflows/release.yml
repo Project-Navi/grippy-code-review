@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: grippy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
