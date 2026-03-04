@@ -306,6 +306,24 @@ class TestFormatSummary:
         assert "config.yaml" in result
         assert "Test finding" in result
 
+    def test_diff_truncated_notice(self) -> None:
+        """diff_truncated=True adds a truncation notice to the summary."""
+        from grippy.github_review import format_summary_comment
+
+        result = format_summary_comment(
+            score=85,
+            verdict="PASS",
+            finding_count=0,
+            new_count=0,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=7,
+            diff_truncated=True,
+        )
+        assert "truncated" in result.lower()
+        assert "Some files may not have been reviewed" in result
+
 
 # --- fetch_grippy_comments ---
 
@@ -496,6 +514,86 @@ class TestFetchGrippyComments:
         # Verify cursor from page 1 was forwarded to page 2 call
         second_call_cmd = mock_run.call_args_list[1][0][0]
         assert "cursor=cursor1" in second_call_cmd
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_null_nodes_skipped(self, mock_run: MagicMock) -> None:
+        """Null nodes in GraphQL response are skipped without error."""
+        import json
+
+        from grippy.github_review import fetch_grippy_comments
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                    "nodes": [
+                                        None,
+                                        {
+                                            "id": "PRRT_1",
+                                            "comments": {
+                                                "nodes": [
+                                                    {
+                                                        "body": "text\n<!-- grippy:a.py:security:1 -->"
+                                                    }
+                                                ]
+                                            },
+                                        },
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert len(result) == 1
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_empty_comments_skipped(self, mock_run: MagicMock) -> None:
+        """Threads with empty comments list are skipped."""
+        import json
+
+        from grippy.github_review import fetch_grippy_comments
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                    "nodes": [
+                                        {
+                                            "id": "PRRT_empty",
+                                            "comments": {"nodes": []},
+                                        },
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert len(result) == 0
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_graphql_exception_returns_partial(self, mock_run: MagicMock) -> None:
+        """Exception during GraphQL fetch returns results gathered so far."""
+        from grippy.github_review import fetch_grippy_comments
+
+        mock_run.side_effect = Exception("network error")
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert result == {}
 
 
 # --- post_review ---
@@ -1027,6 +1125,15 @@ class TestFetchThreadStates:
         query_args = [a for a in cmd if a.startswith("query=")]
         assert "$ids" in query_args[0]
         assert "PRRT_1" not in query_args[0]
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_exception_returns_empty(self, mock_run: MagicMock) -> None:
+        """Exception during fetch returns empty dict (non-fatal)."""
+        from grippy.github_review import fetch_thread_states
+
+        mock_run.side_effect = Exception("network failure")
+        result = fetch_thread_states(["PRRT_1"])
+        assert result == {}
 
 
 # --- resolve_threads ---
