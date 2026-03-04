@@ -9,11 +9,14 @@ codebase — not just the diff.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
+import json
 import logging
 import os
 import re
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -109,6 +112,117 @@ def sanitize_tool_hook(function_name: str, func: Any, args: dict[str, Any]) -> A
     if isinstance(result, str):
         return _limit_result(_sanitize_tool_output(result))
     return result
+
+
+# --- Repo state & cache infrastructure ---
+
+_SCHEMA_VERSION = 1
+
+
+def _get_repo_state(repo_root: Path) -> tuple[str, bool]:
+    """Get repo identity for cache invalidation.
+
+    Git path: HEAD SHA + dirtiness from ``git status --porcelain``.
+    Non-git fallback: SHA-256 of sorted (path, size, mtime_ns) tuples.
+
+    Returns:
+        (sha_or_hash, is_dirty). Non-git repos always return dirty=False.
+    """
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            check=True,
+        )
+        sha = head.stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            check=True,
+        )
+        dirty = bool(status.stdout.strip())
+        return sha, dirty
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # Non-git fallback: hash (path, size, mtime_ns) tuples
+    files = walk_source_files(repo_root)
+    parts: list[str] = []
+    for f in files:
+        try:
+            st = f.stat()
+            rel = str(f.relative_to(repo_root))
+            parts.append(f"{rel}:{st.st_size}:{st.st_mtime_ns}")
+        except OSError:
+            continue
+    content = "\n".join(sorted(parts))
+    return hashlib.sha256(content.encode()).hexdigest(), False
+
+
+def _config_fingerprint(
+    *,
+    extensions: list[str],
+    ignore_dirs: list[str],
+    index_paths: list[str] | None,
+    max_chunk_chars: int,
+    overlap: int,
+    max_index_files: int,
+    embedder_id: str,
+    embedding_dims: int,
+) -> str:
+    """Hash config params that affect index content. Change = cache miss."""
+    parts = json.dumps(
+        {
+            "extensions": sorted(extensions),
+            "ignore_dirs": sorted(ignore_dirs),
+            "index_paths": sorted(index_paths) if index_paths else None,
+            "max_chunk_chars": max_chunk_chars,
+            "overlap": overlap,
+            "max_index_files": max_index_files,
+            "embedder_id": embedder_id,
+            "embedding_dims": embedding_dims,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(parts.encode()).hexdigest()
+
+
+def _write_manifest(
+    path: Path,
+    *,
+    repo_sha: str,
+    repo_dirty: bool,
+    config_fingerprint: str,
+) -> None:
+    """Write index manifest for cache validation."""
+    manifest = {
+        "schema_version": _SCHEMA_VERSION,
+        "repo_sha": repo_sha,
+        "repo_dirty": repo_dirty,
+        "config_fingerprint": config_fingerprint,
+        "built_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path.write_text(json.dumps(manifest, indent=2))
+
+
+def _read_manifest(path: Path) -> dict[str, Any] | None:
+    """Read index manifest. Returns None if missing or corrupt."""
+    try:
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def _chunk_id(file_path: str, start_line: int, end_line: int) -> str:
+    """Deterministic chunk ID including location to avoid content collisions."""
+    return hashlib.sha1(f"{file_path}:{start_line}:{end_line}".encode()).hexdigest()
+
+
+# --- File discovery ---
 
 
 def walk_source_files(

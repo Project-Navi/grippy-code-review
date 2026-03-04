@@ -778,3 +778,190 @@ class TestSanitizeToolHook:
 
         result = sanitize_tool_hook("fake_tool", fake_tool, {"query": "test", "k": 3})
         assert result == "test:3"
+
+
+# --- Repo state detection ---
+
+
+class TestRepoState:
+    """_get_repo_state() detects git SHA + dirtiness or non-git file hash."""
+
+    def test_git_repo_returns_sha_and_clean(self, tmp_path: Path) -> None:
+        """Git repo returns HEAD SHA and dirty=False when clean."""
+        from grippy.codebase import _get_repo_state
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        (tmp_path / "a.py").write_text("x = 1\n")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-gpg-sign"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+        sha, dirty = _get_repo_state(tmp_path)
+        assert len(sha) == 40
+        assert dirty is False
+
+    def test_dirty_repo_detected(self, tmp_path: Path) -> None:
+        """Uncommitted changes set dirty=True."""
+        from grippy.codebase import _get_repo_state
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        (tmp_path / "a.py").write_text("x = 1\n")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-gpg-sign"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+        (tmp_path / "a.py").write_text("x = 2\n")
+        sha, dirty = _get_repo_state(tmp_path)
+        assert dirty is True
+
+    def test_non_git_dir_uses_file_hash(self, tmp_path: Path) -> None:
+        """Non-git directory hashes (path, size, mtime) tuples."""
+        from grippy.codebase import _get_repo_state
+
+        (tmp_path / "a.py").write_text("x = 1\n")
+        sha1, dirty1 = _get_repo_state(tmp_path)
+        assert len(sha1) == 64  # SHA-256 hex
+        assert dirty1 is False  # no dirtiness concept without git
+
+        sha2, _ = _get_repo_state(tmp_path)
+        assert sha1 == sha2
+
+    def test_non_git_detects_content_change_via_mtime(self, tmp_path: Path) -> None:
+        """File content change updates mtime → different hash."""
+        import time
+
+        from grippy.codebase import _get_repo_state
+
+        (tmp_path / "a.py").write_text("x = 1\n")
+        sha1, _ = _get_repo_state(tmp_path)
+        time.sleep(0.05)
+        (tmp_path / "a.py").write_text("x = 2\n")
+        sha2, _ = _get_repo_state(tmp_path)
+        assert sha1 != sha2
+
+
+# --- Manifest infrastructure ---
+
+
+class TestIndexManifest:
+    """Manifest read/write and config fingerprinting."""
+
+    def test_write_and_read_manifest(self, tmp_path: Path) -> None:
+        """Manifest round-trips all fields."""
+        from grippy.codebase import _read_manifest, _write_manifest
+
+        path = tmp_path / "manifest.json"
+        _write_manifest(
+            path,
+            repo_sha="abc123",
+            repo_dirty=False,
+            config_fingerprint="fp-hash",
+        )
+        m = _read_manifest(path)
+        assert m is not None
+        assert m["repo_sha"] == "abc123"
+        assert m["repo_dirty"] is False
+        assert m["config_fingerprint"] == "fp-hash"
+        assert "schema_version" in m
+        assert "built_at" in m
+
+    def test_read_missing_manifest(self, tmp_path: Path) -> None:
+        """Missing manifest returns None."""
+        from grippy.codebase import _read_manifest
+
+        assert _read_manifest(tmp_path / "missing.json") is None
+
+    def test_read_corrupt_manifest(self, tmp_path: Path) -> None:
+        """Corrupt manifest returns None (non-fatal)."""
+        from grippy.codebase import _read_manifest
+
+        bad = tmp_path / "bad.json"
+        bad.write_text("not json{{{")
+        assert _read_manifest(bad) is None
+
+    def test_config_fingerprint_changes_with_params(self) -> None:
+        """Different config params produce different fingerprints."""
+        from grippy.codebase import _config_fingerprint
+
+        fp1 = _config_fingerprint(
+            extensions=[".py"],
+            ignore_dirs=["__pycache__"],
+            index_paths=None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=5000,
+            embedder_id="model-a",
+            embedding_dims=1024,
+        )
+        fp2 = _config_fingerprint(
+            extensions=[".py", ".md"],
+            ignore_dirs=["__pycache__"],
+            index_paths=None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=5000,
+            embedder_id="model-a",
+            embedding_dims=1024,
+        )
+        assert fp1 != fp2
+
+    def test_config_fingerprint_stable(self) -> None:
+        """Same params always produce the same fingerprint."""
+        from grippy.codebase import _config_fingerprint
+
+        kwargs: dict[str, Any] = dict(
+            extensions=[".py"],
+            ignore_dirs=["__pycache__"],
+            index_paths=None,
+            max_chunk_chars=4000,
+            overlap=200,
+            max_index_files=5000,
+            embedder_id="model-a",
+            embedding_dims=1024,
+        )
+        assert _config_fingerprint(**kwargs) == _config_fingerprint(**kwargs)
+
+
+# --- Chunk ID ---
+
+
+class TestChunkId:
+    """_chunk_id() produces location-based IDs."""
+
+    def test_different_files_different_ids(self) -> None:
+        """Same content in different files gets different IDs."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) != _chunk_id("src/b.py", 1, 10)
+
+    def test_same_location_stable(self) -> None:
+        """Same file+range always produces the same ID."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) == _chunk_id("src/a.py", 1, 10)
+
+    def test_different_ranges_different_ids(self) -> None:
+        """Different line ranges in same file get different IDs."""
+        from grippy.codebase import _chunk_id
+
+        assert _chunk_id("src/a.py", 1, 10) != _chunk_id("src/a.py", 11, 20)
