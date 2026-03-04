@@ -21,7 +21,6 @@ jobs:
     permissions:
       security-events: write
       id-token: write
-      contents: write
       actions: read
     steps:
       - name: Harden runner
@@ -46,16 +45,33 @@ jobs:
         with:
           sarif_file: results.sarif
 
+  badge:
+    name: Update scorecard badge
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b  # v2.15.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
+
       - name: Run Scorecard (JSON for badge)
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
         with:
           repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
           results_file: results.json
           results_format: json
-          publish_results: true
+          publish_results: false
 
       - name: Generate scorecard badge
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           SCORE=$(python3 -c "import json; print(json.load(open('results.json'))['score'])")
           if python3 -c "exit(0 if float('$SCORE') >= 7.0 else 1)"; then COLOR="brightgreen";
@@ -67,7 +83,6 @@ jobs:
           echo "" >> .github/badges/scorecard.svg
 
       - name: Commit scorecard badge
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
