@@ -122,6 +122,7 @@ def create_reviewer(
     additional_context: str | None = None,
     tools: list[Any] | None = None,
     tool_call_limit: int | None = None,
+    tool_hooks: list[Any] | None = None,
     # Security rule engine
     include_rule_findings: bool = False,
 ) -> Agent:
@@ -145,6 +146,7 @@ def create_reviewer(
         additional_context: Extra context appended to the system message.
         tools: Optional list of Agno Toolkit instances for agent tool use.
         tool_call_limit: Max tool calls per run. None = unlimited.
+        tool_hooks: Optional list of Agno tool hook middleware functions.
 
     Returns:
         Configured Agno Agent with Grippy's prompt chain and structured output schema.
@@ -171,6 +173,8 @@ def create_reviewer(
         kwargs["tools"] = tools
     if tool_call_limit is not None:
         kwargs["tool_call_limit"] = tool_call_limit
+    if tool_hooks is not None:
+        kwargs["tool_hooks"] = tool_hooks
 
     # Resolve transport via three-tier priority
     resolved_transport, source = _resolve_transport(transport, model_id)

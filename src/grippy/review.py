@@ -440,6 +440,13 @@ def main(*, profile: str | None = None) -> None:
         print(f"  Diff truncated to {MAX_DIFF_CHARS} chars ({file_count} files in original)")
 
     # 3c. Create agent (after rule engine, so mode/rule_findings are resolved)
+    # Build tool hooks for codebase tool sanitization
+    tool_hooks_list: list[Any] | None = None
+    if codebase_tools:
+        from grippy.codebase import sanitize_tool_hook
+
+        tool_hooks_list = [sanitize_tool_hook]
+
     try:
         agent = create_reviewer(
             model_id=model_id,
@@ -451,6 +458,7 @@ def main(*, profile: str | None = None) -> None:
             session_id=f"pr-{pr_event['pr_number']}",
             tools=codebase_tools or None,
             tool_call_limit=10 if codebase_tools else None,
+            tool_hooks=tool_hooks_list,
             include_rule_findings=bool(rule_findings),
         )
     except ValueError as exc:
