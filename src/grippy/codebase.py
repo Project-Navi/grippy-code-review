@@ -99,6 +99,18 @@ def _limit_result(text: str, max_chars: int = _MAX_RESULT_CHARS) -> str:
     )
 
 
+def sanitize_tool_hook(function_name: str, func: Any, args: dict[str, Any]) -> Any:
+    """Agno tool_hooks middleware — sanitize and truncate all tool output.
+
+    Runs after every tool call. String results are sanitized (invisible chars,
+    XML-escaped) and truncated to budget. Non-string results pass through.
+    """
+    result = func(**args)
+    if isinstance(result, str):
+        return _limit_result(_sanitize_tool_output(result))
+    return result
+
+
 def walk_source_files(
     root: Path,
     extensions: frozenset[str] = _DEFAULT_EXTENSIONS,
