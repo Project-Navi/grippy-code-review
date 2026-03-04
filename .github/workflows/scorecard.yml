@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          token: ${{ secrets.BADGE_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Run Scorecard
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
@@ -39,7 +39,7 @@ jobs:
           repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
           results_file: results.sarif
           results_format: sarif
-          publish_results: false
+          publish_results: true
 
       - name: Upload SARIF to Security tab
         uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4.32.5
@@ -52,7 +52,7 @@ jobs:
           repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
           results_file: results.json
           results_format: json
-          publish_results: false
+          publish_results: true
 
       - name: Generate scorecard badge
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
