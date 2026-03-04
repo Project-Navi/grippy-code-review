@@ -359,9 +359,9 @@ def _make_search_code(index: CodebaseIndex) -> Any:
         for r in results:
             header = f"--- {r['file_path']} (lines {r['start_line']}-{r['end_line']}) ---"
             lines.append(header)
-            lines.append(_sanitize_tool_output(r["text"]))
+            lines.append(r["text"])
             lines.append("")
-        return _limit_result("\n".join(lines))
+        return "\n".join(lines)
 
     return search_code
 
@@ -409,7 +409,7 @@ def _make_grep_code(repo_root: Path) -> Any:
                 return "No matches found."
             if result.returncode != 0:
                 return f"Search failed: {result.stderr.strip()}"
-            return _limit_result(_sanitize_tool_output(result.stdout))
+            return result.stdout
         except subprocess.TimeoutExpired:
             return "Search timed out — try a more specific pattern."
         except FileNotFoundError:
@@ -465,12 +465,12 @@ def _make_read_file(repo_root: Path) -> Any:
 
         selected = lines[start_idx:end_idx]
         numbered = [
-            f"{start_idx + i + 1:4d} | {_sanitize_tool_output(line)}"
+            f"{start_idx + i + 1:4d} | {line}"
             for i, line in enumerate(selected)
         ]
         result = f"# {path} (lines {start_idx + 1}-{start_idx + len(selected)})\n"
         result += "\n".join(numbered)
-        return _limit_result(result)
+        return result
 
     return read_file
 
@@ -531,7 +531,7 @@ def _make_list_files(repo_root: Path) -> Any:
                 "refine glob_pattern for complete listing",
             )
 
-        return _limit_result("\n".join(lines))
+        return "\n".join(lines)
 
     return list_files
 
