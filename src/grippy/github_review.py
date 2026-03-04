@@ -354,9 +354,9 @@ def post_review(
 
     GitHub owns finding lifecycle:
     1. Fetch existing grippy comments from this PR
-    2. Compare new findings against existing — skip matches
+    2. Compare new findings against existing — skip matches (marker dedup)
     3. Post only genuinely new findings as inline comments
-    4. Resolve threads for findings no longer present
+    4. Query GitHub GraphQL for thread states — resolve only outdated threads
     5. Post/update summary with delta counts
 
     Args:
@@ -384,9 +384,18 @@ def post_review(
         if key not in existing:
             new_findings.append(finding)
 
-    # 3. Identify resolved: existing comments not in current findings
+    # 3. Identify stale: use GitHub's isOutdated tracking instead of marker-key diff.
+    #    A thread is stale if GitHub marked it outdated (line moved/removed) AND
+    #    its marker key is no longer in the current findings.
     current_keys = {(f.file, f.category.value, f.line_start) for f in findings}
-    resolved_comments = [comment for key, comment in existing.items() if key not in current_keys]
+    absent_comments = [comment for key, comment in existing.items() if key not in current_keys]
+    resolved_comments: list[Any] = []
+    if absent_comments:
+        thread_states = fetch_thread_states([c.node_id for c in absent_comments])
+        for comment in absent_comments:
+            state = thread_states.get(comment.node_id, {})
+            if state.get("isOutdated", False) and not state.get("isResolved", False):
+                resolved_comments.append(comment)
 
     # Detect fork PR — GITHUB_TOKEN is read-only for forks
     is_fork = (
@@ -470,6 +479,65 @@ def post_review(
 
 
 # --- Thread resolution ---
+
+
+def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
+    """Fetch isOutdated and isResolved state for review threads via GraphQL.
+
+    Uses ``gh api graphql`` subprocess with the ``nodes`` query to batch-fetch
+    thread metadata. GitHub marks threads as ``isOutdated`` when the underlying
+    diff line has moved or been removed — this is more reliable than comparing
+    marker keys across commits.
+
+    Args:
+        thread_ids: List of GitHub review thread node IDs (PRRT_...).
+
+    Returns:
+        Dict mapping thread_id to ``{"isOutdated": bool, "isResolved": bool}``.
+        Missing/failed IDs are omitted from the result.
+    """
+    import json
+
+    if not thread_ids:
+        return {}
+
+    _nodes_query = (
+        "query FetchThreadStates($ids: [ID!]!) { "
+        "nodes(ids: $ids) { "
+        "... on PullRequestReviewThread { id isOutdated isResolved } } }"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                "graphql",
+                "-f",
+                f"query={_nodes_query}",
+                "-f",
+                f"ids={json.dumps(thread_ids)}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"::warning::Failed to fetch thread states: {result.stderr}")
+            return {}
+
+        data = json.loads(result.stdout)
+        states: dict[str, dict[str, bool]] = {}
+        for node in data.get("data", {}).get("nodes", []):
+            if node and "id" in node:
+                states[node["id"]] = {
+                    "isOutdated": node.get("isOutdated", False),
+                    "isResolved": node.get("isResolved", False),
+                }
+        return states
+    except Exception as exc:
+        print(f"::warning::Exception fetching thread states: {exc}")
+        return {}
 
 
 def resolve_threads(

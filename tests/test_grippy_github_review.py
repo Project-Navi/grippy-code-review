@@ -550,11 +550,15 @@ class TestPostReview:
         assert mock_pr.create_review.call_args.kwargs["event"] == "APPROVE"
 
     @patch("grippy.github_review.resolve_threads")
+    @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
-    def test_resolves_absent_findings(
-        self, mock_github_cls: MagicMock, mock_resolve: MagicMock
+    def test_resolves_absent_outdated_findings(
+        self,
+        mock_github_cls: MagicMock,
+        mock_fetch_states: MagicMock,
+        mock_resolve: MagicMock,
     ) -> None:
-        """Existing comments not in current findings get their threads resolved."""
+        """Absent findings marked outdated by GitHub get their threads resolved."""
         from grippy.github_review import post_review
 
         mock_pr = MagicMock()
@@ -563,6 +567,9 @@ class TestPostReview:
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
         mock_resolve.return_value = 1
+        mock_fetch_states.return_value = {
+            "PRRT_old": {"isOutdated": True, "isResolved": False},
+        }
 
         # Existing comment for a finding that's no longer present
         old_comment = MagicMock()
@@ -570,7 +577,6 @@ class TestPostReview:
         old_comment.node_id = "PRRT_old"
         mock_pr.get_review_comments.return_value = [old_comment]
 
-        # Current findings don't include old.py:logic:5
         post_review(
             token="test-token",
             repo="org/repo",
@@ -585,6 +591,84 @@ class TestPostReview:
         mock_resolve.assert_called_once()
         call_kwargs = mock_resolve.call_args[1]
         assert "PRRT_old" in call_kwargs["thread_ids"]
+
+    @patch("grippy.github_review.resolve_threads")
+    @patch("grippy.github_review.fetch_thread_states")
+    @patch("grippy.github_review.Github")
+    def test_skips_absent_but_not_outdated(
+        self,
+        mock_github_cls: MagicMock,
+        mock_fetch_states: MagicMock,
+        mock_resolve: MagicMock,
+    ) -> None:
+        """Absent findings NOT marked outdated by GitHub are not resolved."""
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.head.repo.full_name = "org/repo"
+        mock_pr.base.repo.full_name = "org/repo"
+        mock_fetch_states.return_value = {
+            "PRRT_still_valid": {"isOutdated": False, "isResolved": False},
+        }
+
+        old_comment = MagicMock()
+        old_comment.body = "old\n<!-- grippy:old.py:logic:5 -->"
+        old_comment.node_id = "PRRT_still_valid"
+        mock_pr.get_review_comments.return_value = [old_comment]
+
+        post_review(
+            token="test-token",
+            repo="org/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc",
+            diff="",
+            score=90,
+            verdict="PASS",
+        )
+
+        mock_resolve.assert_not_called()
+
+    @patch("grippy.github_review.resolve_threads")
+    @patch("grippy.github_review.fetch_thread_states")
+    @patch("grippy.github_review.Github")
+    def test_skips_already_resolved_threads(
+        self,
+        mock_github_cls: MagicMock,
+        mock_fetch_states: MagicMock,
+        mock_resolve: MagicMock,
+    ) -> None:
+        """Threads already resolved by GitHub are not re-resolved."""
+        from grippy.github_review import post_review
+
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.head.repo.full_name = "org/repo"
+        mock_pr.base.repo.full_name = "org/repo"
+        mock_fetch_states.return_value = {
+            "PRRT_done": {"isOutdated": True, "isResolved": True},
+        }
+
+        old_comment = MagicMock()
+        old_comment.body = "old\n<!-- grippy:old.py:logic:5 -->"
+        old_comment.node_id = "PRRT_done"
+        mock_pr.get_review_comments.return_value = [old_comment]
+
+        post_review(
+            token="test-token",
+            repo="org/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc",
+            diff="",
+            score=90,
+            verdict="PASS",
+        )
+
+        mock_resolve.assert_not_called()
 
 
 # --- verdict review (APPROVE / REQUEST_CHANGES) ---
@@ -688,6 +772,95 @@ class TestVerdictReview:
         )
 
         mock_pr.create_issue_comment.assert_called_once()
+
+
+# --- fetch_thread_states ---
+
+
+class TestFetchThreadStates:
+    """fetch_thread_states queries GitHub GraphQL for thread metadata."""
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_returns_thread_states(self, mock_run: MagicMock) -> None:
+        import json
+
+        from grippy.github_review import fetch_thread_states
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "nodes": [
+                            {"id": "PRRT_1", "isOutdated": True, "isResolved": False},
+                            {"id": "PRRT_2", "isOutdated": False, "isResolved": True},
+                        ]
+                    }
+                }
+            ),
+        )
+        result = fetch_thread_states(["PRRT_1", "PRRT_2"])
+        assert result["PRRT_1"]["isOutdated"] is True
+        assert result["PRRT_1"]["isResolved"] is False
+        assert result["PRRT_2"]["isOutdated"] is False
+        assert result["PRRT_2"]["isResolved"] is True
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_empty_ids_no_call(self, mock_run: MagicMock) -> None:
+        from grippy.github_review import fetch_thread_states
+
+        result = fetch_thread_states([])
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_failure_returns_empty(self, mock_run: MagicMock) -> None:
+        from grippy.github_review import fetch_thread_states
+
+        mock_run.return_value = MagicMock(returncode=1, stderr="error")
+        result = fetch_thread_states(["PRRT_1"])
+        assert result == {}
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_null_nodes_skipped(self, mock_run: MagicMock) -> None:
+        """Null nodes (e.g. deleted threads) are skipped gracefully."""
+        import json
+
+        from grippy.github_review import fetch_thread_states
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "nodes": [
+                            None,
+                            {"id": "PRRT_2", "isOutdated": True, "isResolved": False},
+                        ]
+                    }
+                }
+            ),
+        )
+        result = fetch_thread_states(["PRRT_bad", "PRRT_2"])
+        assert "PRRT_bad" not in result
+        assert result["PRRT_2"]["isOutdated"] is True
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_uses_graphql_variables(self, mock_run: MagicMock) -> None:
+        """Thread IDs are passed as GraphQL variables, not interpolated."""
+        import json
+
+        from grippy.github_review import fetch_thread_states
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps({"data": {"nodes": []}}),
+        )
+        fetch_thread_states(["PRRT_1"])
+        cmd = mock_run.call_args[0][0]
+        query_args = [a for a in cmd if a.startswith("query=")]
+        assert "$ids" in query_args[0]
+        assert "PRRT_1" not in query_args[0]
 
 
 # --- resolve_threads ---

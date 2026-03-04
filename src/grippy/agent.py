@@ -209,6 +209,7 @@ def format_pr_context(
     governance_rules: str = "",
     learnings: str = "",
     rule_findings: str = "",
+    changed_since_last_review: str = "",
 ) -> str:
     """Format PR context as the user message, matching pr-review.md input format."""
     sections = [
@@ -239,6 +240,11 @@ def format_pr_context(
         f"Deletions: {deletions}\n"
         f"</pr_metadata>"
     )
+
+    if changed_since_last_review:
+        sections.append(
+            f"<review_context>\n{_escape_xml(changed_since_last_review)}\n</review_context>"
+        )
 
     sections.append(f"<diff>\n{_escape_xml(diff)}\n</diff>")
 

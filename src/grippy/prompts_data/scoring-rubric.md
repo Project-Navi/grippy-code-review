@@ -52,6 +52,10 @@ Every finding gets a confidence score from 0-100. This is YOUR confidence that t
 
 **The confidence filter (tools/confidence-filter.md) suppresses findings below the configured threshold. Default: 75.**
 
+**Calibration adjustments (applied before threshold):**
+- **Governance/observability category penalty:** Subtract 15 from confidence for findings in the `governance` or `observability` categories. These reflect code quality, not production failures.
+- **Specificity ceiling:** Findings about what SHOULD exist but doesn't (missing error handling, missing permissions, missing tests) cap at 80 confidence. If you cannot describe a specific, reproducible failure mode triggered by the code as written, cap at 80.
+
 ## Overall Audit Score Calculation
 
 Start at **100 points**. Deduct per finding based on severity.

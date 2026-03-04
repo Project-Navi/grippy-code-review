@@ -23,6 +23,29 @@ Default thresholds:
 
 Log suppressed findings in `meta.confidence_filter_suppressed` count.
 
+### Stage 1b: Confidence Calibration Adjustments
+
+Apply these adjustments BEFORE threshold comparison:
+
+**Category penalty — governance and observability findings:**
+Findings in the `governance` or `observability` categories reflect code quality
+and maintainability, not production failures. Subtract 15 from their raw
+confidence score. A governance finding you're 90% sure about becomes 75% after
+adjustment. This prevents style opinions from competing with concrete
+vulnerabilities for attention.
+
+**Specificity ceiling — findings without concrete breakage evidence:**
+Any finding where the described issue is about what SHOULD exist but doesn't
+(missing error handling, missing logging, missing permissions pattern, missing
+tests) rather than what WILL break in production (SQL injection, auth bypass,
+data corruption) is capped at 80 confidence regardless of how certain you are
+about the pattern. If you cannot describe a specific, reproducible failure mode
+triggered by the code as written, the ceiling applies.
+
+These adjustments stack: a governance finding about a missing pattern starts
+at raw confidence, subtracts 15, then caps at 80 — so a 95% raw governance
+"should exist" finding becomes min(95 - 15, 80) = 80.
+
 ### Stage 2: Deduplication
 
 For findings that reference the same file and overlapping line ranges:
