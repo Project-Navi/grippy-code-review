@@ -22,6 +22,7 @@ from grippy.codebase import (
     _make_read_file,
     _make_search_code,
     chunk_file,
+    sanitize_tool_hook,
     walk_source_files,
 )
 
@@ -724,3 +725,56 @@ class TestMainWiring:
                 main()
             except SystemExit:
                 pass  # main() calls sys.exit on certain paths
+
+
+# --- sanitize_tool_hook tests ---
+
+
+class TestSanitizeToolHook:
+    def test_sanitizes_and_limits_string_result(self) -> None:
+        """Hook runs sanitization and truncation on string tool output."""
+
+        def fake_tool(**kwargs: Any) -> str:
+            return "<script>alert('xss')</script>"
+
+        result = sanitize_tool_hook("fake_tool", fake_tool, {})
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
+
+    def test_truncates_long_output(self) -> None:
+        """Hook truncates output exceeding _MAX_RESULT_CHARS."""
+        long_text = "x" * (_MAX_RESULT_CHARS + 1000)
+
+        def fake_tool(**kwargs: Any) -> str:
+            return long_text
+
+        result = sanitize_tool_hook("fake_tool", fake_tool, {})
+        assert len(result) <= _MAX_RESULT_CHARS + 200  # truncation message overhead
+        assert "truncated" in result
+
+    def test_passthrough_short_clean_output(self) -> None:
+        """Hook passes through short, clean output unchanged."""
+
+        def fake_tool(**kwargs: Any) -> str:
+            return "clean output"
+
+        result = sanitize_tool_hook("fake_tool", fake_tool, {})
+        assert result == "clean output"
+
+    def test_non_string_passthrough(self) -> None:
+        """Hook passes through non-string results without sanitization."""
+
+        def fake_tool(**kwargs: Any) -> int:
+            return 42
+
+        result = sanitize_tool_hook("fake_tool", fake_tool, {})
+        assert result == 42
+
+    def test_passes_args_to_function(self) -> None:
+        """Hook forwards kwargs to the wrapped function."""
+
+        def fake_tool(query: str, k: int = 5) -> str:
+            return f"{query}:{k}"
+
+        result = sanitize_tool_hook("fake_tool", fake_tool, {"query": "test", "k": 3})
+        assert result == "test:3"

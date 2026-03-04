@@ -122,6 +122,7 @@ def create_reviewer(
     additional_context: str | None = None,
     tools: list[Any] | None = None,
     tool_call_limit: int | None = None,
+    tool_hooks: list[Any] | None = None,
     # Security rule engine
     include_rule_findings: bool = False,
 ) -> Agent:
@@ -145,6 +146,7 @@ def create_reviewer(
         additional_context: Extra context appended to the system message.
         tools: Optional list of Agno Toolkit instances for agent tool use.
         tool_call_limit: Max tool calls per run. None = unlimited.
+        tool_hooks: Optional list of Agno tool hook middleware functions.
 
     Returns:
         Configured Agno Agent with Grippy's prompt chain and structured output schema.
@@ -171,6 +173,8 @@ def create_reviewer(
         kwargs["tools"] = tools
     if tool_call_limit is not None:
         kwargs["tool_call_limit"] = tool_call_limit
+    if tool_hooks is not None:
+        kwargs["tool_hooks"] = tool_hooks
 
     # Resolve transport via three-tier priority
     resolved_transport, source = _resolve_transport(transport, model_id)
@@ -182,6 +186,13 @@ def create_reviewer(
     else:
         model = OpenAILike(id=model_id, api_key=api_key, base_url=base_url)
 
+    # Enable native structured outputs for OpenAI models — the API enforces
+    # the Pydantic schema at the wire level, eliminating most parse failures.
+    # Disabled for local transport: many local servers (LM Studio, vLLM) don't
+    # support the response_format json_schema parameter and may reject it.
+    # retry.py provides fallback validation regardless.
+    structured = resolved_transport == "openai"
+
     return Agent(
         name="grippy",
         model=model,
@@ -192,6 +203,7 @@ def create_reviewer(
             include_rule_findings=include_rule_findings,
         ),
         output_schema=GrippyReview,
+        structured_outputs=structured,
         markdown=False,
         **kwargs,
     )
@@ -209,6 +221,7 @@ def format_pr_context(
     governance_rules: str = "",
     learnings: str = "",
     rule_findings: str = "",
+    changed_since_last_review: str = "",
 ) -> str:
     """Format PR context as the user message, matching pr-review.md input format."""
     sections = [
@@ -239,6 +252,11 @@ def format_pr_context(
         f"Deletions: {deletions}\n"
         f"</pr_metadata>"
     )
+
+    if changed_since_last_review:
+        sections.append(
+            f"<review_context>\n{_escape_xml(changed_since_last_review)}\n</review_context>"
+        )
 
     sections.append(f"<diff>\n{_escape_xml(diff)}\n</diff>")
 

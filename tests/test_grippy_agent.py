@@ -206,6 +206,34 @@ class TestFormatPrContext:
         assert "<governance_rules>" not in result
         assert "<file_context>" not in result
         assert "<learnings>" not in result
+        assert "<review_context>" not in result
+
+    def test_changed_since_last_review_included(self) -> None:
+        """Re-review annotation appears in review_context section before diff."""
+        result = format_pr_context(
+            title="test",
+            author="dev",
+            branch="a -> b",
+            diff=SAMPLE_DIFF,
+            changed_since_last_review="This is a RE-REVIEW. Files: src/app.py",
+        )
+        assert "<review_context>" in result
+        assert "RE-REVIEW" in result
+        assert "</review_context>" in result
+        # review_context appears before diff
+        ctx_pos = result.index("<review_context>")
+        diff_pos = result.index("<diff>")
+        assert ctx_pos < diff_pos
+
+    def test_changed_since_last_review_omitted_when_empty(self) -> None:
+        result = format_pr_context(
+            title="test",
+            author="dev",
+            branch="a -> b",
+            diff=SAMPLE_DIFF,
+            changed_since_last_review="",
+        )
+        assert "<review_context>" not in result
 
     def test_xml_delimiters_escaped_in_pr_metadata(self) -> None:
         """XML delimiters in PR metadata fields are escaped to prevent prompt injection."""

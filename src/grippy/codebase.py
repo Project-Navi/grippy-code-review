@@ -99,6 +99,18 @@ def _limit_result(text: str, max_chars: int = _MAX_RESULT_CHARS) -> str:
     )
 
 
+def sanitize_tool_hook(function_name: str, func: Any, args: dict[str, Any]) -> Any:
+    """Agno tool_hooks middleware — sanitize and truncate all tool output.
+
+    Runs after every tool call. String results are sanitized (invisible chars,
+    XML-escaped) and truncated to budget. Non-string results pass through.
+    """
+    result = func(**args)
+    if isinstance(result, str):
+        return _limit_result(_sanitize_tool_output(result))
+    return result
+
+
 def walk_source_files(
     root: Path,
     extensions: frozenset[str] = _DEFAULT_EXTENSIONS,
@@ -347,9 +359,9 @@ def _make_search_code(index: CodebaseIndex) -> Any:
         for r in results:
             header = f"--- {r['file_path']} (lines {r['start_line']}-{r['end_line']}) ---"
             lines.append(header)
-            lines.append(_sanitize_tool_output(r["text"]))
+            lines.append(r["text"])
             lines.append("")
-        return _limit_result("\n".join(lines))
+        return "\n".join(lines)
 
     return search_code
 
@@ -397,7 +409,7 @@ def _make_grep_code(repo_root: Path) -> Any:
                 return "No matches found."
             if result.returncode != 0:
                 return f"Search failed: {result.stderr.strip()}"
-            return _limit_result(_sanitize_tool_output(result.stdout))
+            return result.stdout
         except subprocess.TimeoutExpired:
             return "Search timed out — try a more specific pattern."
         except FileNotFoundError:
@@ -452,13 +464,10 @@ def _make_read_file(repo_root: Path) -> Any:
             end_idx = len(lines)
 
         selected = lines[start_idx:end_idx]
-        numbered = [
-            f"{start_idx + i + 1:4d} | {_sanitize_tool_output(line)}"
-            for i, line in enumerate(selected)
-        ]
+        numbered = [f"{start_idx + i + 1:4d} | {line}" for i, line in enumerate(selected)]
         result = f"# {path} (lines {start_idx + 1}-{start_idx + len(selected)})\n"
         result += "\n".join(numbered)
-        return _limit_result(result)
+        return result
 
     return read_file
 
@@ -519,7 +528,7 @@ def _make_list_files(repo_root: Path) -> Any:
                 "refine glob_pattern for complete listing",
             )
 
-        return _limit_result("\n".join(lines))
+        return "\n".join(lines)
 
     return list_files
 

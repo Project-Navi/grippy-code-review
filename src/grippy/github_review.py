@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import unquote
 
 import navi_sanitize
@@ -17,6 +17,14 @@ import nh3
 from github import Github, GithubException
 
 from grippy.schema import Finding
+
+
+class ThreadRef(NamedTuple):
+    """Lightweight reference to a review thread — replaces PyGithub comment objects."""
+
+    node_id: str
+    body: str
+
 
 # --- Diff parser ---
 
@@ -224,24 +232,97 @@ def _parse_marker(body: str) -> tuple[str, str, int] | None:
 
 
 def fetch_grippy_comments(
-    pr: Any,
-) -> dict[tuple[str, str, int], Any]:
-    """Fetch existing Grippy review comments from a PR.
+    *,
+    repo: str,
+    pr_number: int,
+) -> dict[tuple[str, str, int], ThreadRef]:
+    """Fetch existing Grippy review threads from a PR via GraphQL.
 
-    Scans all review comments for grippy markers and returns them keyed
-    by (file, category, line) for O(1) dedup lookups.
+    Queries the ``reviewThreads`` connection on the pull request, extracting
+    grippy markers from the first comment of each thread. Uses cursor
+    pagination (100 threads per page, max 20 pages / 2000 threads).
 
     Args:
-        pr: PyGithub PullRequest object.
+        repo: Repository full name (owner/repo).
+        pr_number: Pull request number.
 
     Returns:
-        Dict mapping (file, category, line) to the comment object.
+        Dict mapping (file, category, line) to a ThreadRef with thread
+        node_id and first comment body.
     """
-    result: dict[tuple[str, str, int], Any] = {}
-    for comment in pr.get_review_comments():
-        key = _parse_marker(comment.body)
-        if key is not None:
-            result[key] = comment
+    import json
+
+    owner, name = repo.split("/", 1)
+
+    _fetch_threads_query = (
+        "query FetchThreads($owner: String!, $name: String!, $pr: Int!, $cursor: String) {"
+        " repository(owner: $owner, name: $name) {"
+        " pullRequest(number: $pr) {"
+        " reviewThreads(first: 100, after: $cursor) {"
+        " pageInfo { hasNextPage endCursor }"
+        " nodes { id comments(first: 1) { nodes { body } } }"
+        " } } } }"
+    )
+
+    result: dict[tuple[str, str, int], ThreadRef] = {}
+    cursor: str | None = None
+
+    for _page in range(20):  # safety limit: max 20 pages
+        cmd = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={_fetch_threads_query}",
+            "-f",
+            f"owner={owner}",
+            "-f",
+            f"name={name}",
+            "-F",
+            f"pr={pr_number}",
+        ]
+        if cursor is not None:
+            cmd.extend(["-f", f"cursor={cursor}"])
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if proc.returncode != 0:
+                print(f"::warning::Failed to fetch review threads: {proc.stderr}")
+                return result
+
+            data = json.loads(proc.stdout)
+            threads_conn = (
+                data.get("data", {})
+                .get("repository", {})
+                .get("pullRequest", {})
+                .get("reviewThreads", {})
+            )
+            for node in threads_conn.get("nodes", []):
+                if not node:
+                    continue
+                thread_id = node.get("id", "")
+                comments = node.get("comments", {}).get("nodes", [])
+                if not comments:
+                    continue
+                body = comments[0].get("body", "")
+                key = _parse_marker(body)
+                if key is not None:
+                    result[key] = ThreadRef(node_id=thread_id, body=body)
+
+            page_info = threads_conn.get("pageInfo", {})
+            if not page_info.get("hasNextPage", False):
+                break
+            cursor = page_info.get("endCursor")
+        except Exception as exc:
+            print(f"::warning::Exception fetching review threads: {exc}")
+            return result
+
     return result
 
 
@@ -354,9 +435,9 @@ def post_review(
 
     GitHub owns finding lifecycle:
     1. Fetch existing grippy comments from this PR
-    2. Compare new findings against existing — skip matches
+    2. Compare new findings against existing — skip matches (marker dedup)
     3. Post only genuinely new findings as inline comments
-    4. Resolve threads for findings no longer present
+    4. Query GitHub GraphQL for thread states — resolve only outdated threads
     5. Post/update summary with delta counts
 
     Args:
@@ -375,7 +456,7 @@ def post_review(
     pr = repository.get_pull(pr_number)
 
     # 1. Fetch existing grippy comments
-    existing = fetch_grippy_comments(pr)
+    existing = fetch_grippy_comments(repo=repo, pr_number=pr_number)
 
     # 2. Classify: which current findings already have comments?
     new_findings: list[Finding] = []
@@ -384,9 +465,18 @@ def post_review(
         if key not in existing:
             new_findings.append(finding)
 
-    # 3. Identify resolved: existing comments not in current findings
+    # 3. Identify stale: use GitHub's isOutdated tracking instead of marker-key diff.
+    #    A thread is stale if GitHub marked it outdated (line moved/removed) AND
+    #    its marker key is no longer in the current findings.
     current_keys = {(f.file, f.category.value, f.line_start) for f in findings}
-    resolved_comments = [comment for key, comment in existing.items() if key not in current_keys]
+    absent_comments = [comment for key, comment in existing.items() if key not in current_keys]
+    resolved_comments: list[Any] = []
+    if absent_comments:
+        thread_states = fetch_thread_states([c.node_id for c in absent_comments])
+        for comment in absent_comments:
+            state = thread_states.get(comment.node_id, {})
+            if state.get("isOutdated", False) and not state.get("isResolved", False):
+                resolved_comments.append(comment)
 
     # Detect fork PR — GITHUB_TOKEN is read-only for forks
     is_fork = (
@@ -461,9 +551,9 @@ def post_review(
 
     # Upsert: edit existing summary or create new
     marker = f"<!-- grippy-summary-{pr_number} -->"
-    for comment in pr.get_issue_comments():
-        if marker in comment.body:
-            comment.edit(summary)
+    for issue_comment in pr.get_issue_comments():
+        if marker in issue_comment.body:
+            issue_comment.edit(summary)
             return
 
     pr.create_issue_comment(summary)
@@ -472,15 +562,76 @@ def post_review(
 # --- Thread resolution ---
 
 
+def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
+    """Fetch isOutdated and isResolved state for review threads via GraphQL.
+
+    Uses ``gh api graphql`` subprocess with the ``nodes`` query to batch-fetch
+    thread metadata. GitHub marks threads as ``isOutdated`` when the underlying
+    diff line has moved or been removed — this is more reliable than comparing
+    marker keys across commits.
+
+    Args:
+        thread_ids: List of GitHub review thread node IDs (PRRT_...).
+
+    Returns:
+        Dict mapping thread_id to ``{"isOutdated": bool, "isResolved": bool}``.
+        Missing/failed IDs are omitted from the result.
+    """
+    import json
+
+    if not thread_ids:
+        return {}
+
+    _nodes_query = (
+        "query FetchThreadStates($ids: [ID!]!) { "
+        "nodes(ids: $ids) { "
+        "... on PullRequestReviewThread { id isOutdated isResolved } } }"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                "graphql",
+                "-f",
+                f"query={_nodes_query}",
+                "-f",
+                f"ids={json.dumps(thread_ids)}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"::warning::Failed to fetch thread states: {result.stderr}")
+            return {}
+
+        data = json.loads(result.stdout)
+        states: dict[str, dict[str, bool]] = {}
+        for node in data.get("data", {}).get("nodes", []):
+            if node and "id" in node:
+                states[node["id"]] = {
+                    "isOutdated": node.get("isOutdated", False),
+                    "isResolved": node.get("isResolved", False),
+                }
+        return states
+    except Exception as exc:
+        print(f"::warning::Exception fetching thread states: {exc}")
+        return {}
+
+
 def resolve_threads(
     *,
     repo: str,
     pr_number: int,
     thread_ids: list[str],
 ) -> int:
-    """Auto-resolve GitHub review threads via GraphQL.
+    """Auto-resolve GitHub review threads via a single batched GraphQL mutation.
 
-    Uses ``gh api graphql`` subprocess for authentication simplicity.
+    Uses aliased mutations to resolve all threads in one ``gh api graphql``
+    subprocess call. Each thread ID gets an alias (t0, t1, ...) so individual
+    failures don't block the batch.
 
     Args:
         repo: Repository full name (owner/repo).
@@ -490,33 +641,43 @@ def resolve_threads(
     Returns:
         Number of threads successfully resolved.
     """
-    _resolve_mutation = (
-        "mutation ResolveThread($threadId: ID!) { "
-        "resolveReviewThread(input: {threadId: $threadId}) { "
-        "thread { id isResolved } } }"
-    )
-    resolved = 0
-    for thread_id in thread_ids:
-        try:
-            result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    "graphql",
-                    "-f",
-                    f"query={_resolve_mutation}",
-                    "-f",
-                    f"threadId={thread_id}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            if result.returncode == 0:
+    if not thread_ids:
+        return 0
+
+    import json
+
+    # Build aliased mutation with proper GraphQL variables ($id0, $id1, ...)
+    # to prevent injection — aligns with fetch_thread_states() pattern.
+    var_decls = ", ".join(f"$id{i}: ID!" for i in range(len(thread_ids)))
+    aliases = [
+        f"t{i}: resolveReviewThread(input: {{threadId: $id{i}}}) {{ thread {{ id isResolved }} }}"
+        for i in range(len(thread_ids))
+    ]
+    mutation = f"mutation BatchResolve({var_decls}) {{ {' '.join(aliases)} }}"
+
+    cmd = ["gh", "api", "graphql", "-f", f"query={mutation}"]
+    for i, tid in enumerate(thread_ids):
+        cmd.extend(["-f", f"id{i}={tid}"])
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"::warning::Batch thread resolution failed: {result.stderr}")
+            return 0
+
+        data = json.loads(result.stdout)
+        resolved = 0
+        for i in range(len(thread_ids)):
+            alias_result = data.get("data", {}).get(f"t{i}")
+            if alias_result and alias_result.get("thread", {}).get("isResolved"):
                 resolved += 1
-            else:
-                print(f"::warning::Failed to resolve thread {thread_id}: {result.stderr}")
-        except Exception as exc:
-            print(f"::warning::Exception resolving thread {thread_id}: {exc}")
-    return resolved
+        return resolved
+    except Exception as exc:
+        print(f"::warning::Exception in batch thread resolution: {exc}")
+        return 0

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -42,6 +43,17 @@ class TestCreateReviewerBackwardCompat:
         ):
             agent = create_reviewer(prompts_dir=PROMPTS_DIR, mode=mode)
             assert agent.name == "grippy"
+
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}, clear=False)
+    def test_structured_outputs_enabled_for_openai(self) -> None:
+        """OpenAI transport enables native structured outputs."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, transport="openai")
+        assert agent.structured_outputs is True
+
+    def test_structured_outputs_disabled_for_local(self) -> None:
+        """Local transport disables structured outputs (servers may not support it)."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, transport="local")
+        assert agent.structured_outputs is False
 
 
 # --- Session persistence ---
@@ -114,6 +126,31 @@ class TestContextInjection:
         """Without additional_context, agent has None."""
         agent = create_reviewer(prompts_dir=PROMPTS_DIR)
         assert agent.additional_context is None
+
+
+# --- Tool hooks ---
+
+
+class TestToolHooks:
+    def test_tool_hooks_passed_to_agent(self) -> None:
+        """tool_hooks parameter is forwarded to the Agent."""
+
+        def dummy_hook(name: str, func: Any, args: dict) -> Any:  # type: ignore[type-arg]
+            return func(**args)
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
+            agent = create_reviewer(
+                transport="openai",
+                model_id="gpt-4o-mini",
+                tool_hooks=[dummy_hook],
+            )
+        assert agent.tool_hooks is not None
+        assert len(agent.tool_hooks) == 1
+
+    def test_no_tool_hooks_by_default(self) -> None:
+        """Without tool_hooks, agent has None."""
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR)
+        assert agent.tool_hooks is None
 
 
 # --- format_pr_context backward compat ---

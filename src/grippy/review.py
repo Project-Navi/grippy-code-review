@@ -89,6 +89,7 @@ def load_pr_event(event_path: Path) -> dict[str, Any]:
         "head_sha": pr["head"].get("sha", ""),
         "base_ref": pr["base"]["ref"],
         "description": pr.get("body") or "",
+        "before_sha": data.get("before", ""),
     }
 
 
@@ -138,6 +139,38 @@ def fetch_pr_diff(token: str, repo: str, pr_number: int) -> str:
     response = requests.get(url, headers=headers, timeout=60)
     response.raise_for_status()
     return response.text
+
+
+def fetch_changed_since(token: str, repo: str, before: str, after: str) -> list[str]:
+    """Fetch file paths changed between two commits via GitHub compare API.
+
+    Used to annotate re-reviews with which files changed since the last review.
+    Non-fatal — returns empty list on any error.
+
+    Args:
+        token: GitHub API token.
+        repo: Repository full name (owner/repo).
+        before: Previous HEAD SHA (from synchronize event ``before`` field).
+        after: Current HEAD SHA.
+
+    Returns:
+        List of file paths that changed between the two commits.
+    """
+    import requests
+
+    url = f"https://api.github.com/repos/{repo}/compare/{before}...{after}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return [f["filename"] for f in data.get("files", [])]
+    except Exception as exc:
+        print(f"::warning::Failed to fetch changed files since last review: {exc}")
+        return []
 
 
 def post_comment(token: str, repo: str, pr_number: int, body: str) -> None:
@@ -407,6 +440,13 @@ def main(*, profile: str | None = None) -> None:
         print(f"  Diff truncated to {MAX_DIFF_CHARS} chars ({file_count} files in original)")
 
     # 3c. Create agent (after rule engine, so mode/rule_findings are resolved)
+    # Build tool hooks for codebase tool sanitization
+    tool_hooks_list: list[Any] | None = None
+    if codebase_tools:
+        from grippy.codebase import sanitize_tool_hook
+
+        tool_hooks_list = [sanitize_tool_hook]
+
     try:
         agent = create_reviewer(
             model_id=model_id,
@@ -418,6 +458,7 @@ def main(*, profile: str | None = None) -> None:
             session_id=f"pr-{pr_event['pr_number']}",
             tools=codebase_tools or None,
             tool_call_limit=10 if codebase_tools else None,
+            tool_hooks=tool_hooks_list,
             include_rule_findings=bool(rule_findings),
         )
     except ValueError as exc:
@@ -445,6 +486,22 @@ def main(*, profile: str | None = None) -> None:
         except Exception as exc:
             print(f"::warning::Graph context query failed (non-fatal): {exc}")
 
+    # 3e. Detect re-review: annotate files changed since last review (non-fatal)
+    changed_since_text = ""
+    before_sha = pr_event.get("before_sha", "")
+    head_sha = pr_event.get("head_sha", "")
+    if before_sha and head_sha and before_sha != head_sha:
+        changed_files = fetch_changed_since(token, pr_event["repo"], before_sha, head_sha)
+        if changed_files:
+            changed_since_text = (
+                f"This is a RE-REVIEW. The following {len(changed_files)} file(s) changed "
+                f"since the last review (commit {before_sha[:7]}):\n"
+                + "\n".join(f"  - {f}" for f in changed_files)
+                + "\n\nPrioritize reviewing changes in these files. "
+                "The rest of the diff was already reviewed in a prior run."
+            )
+            print(f"  Re-review: {len(changed_files)} files changed since {before_sha[:7]}")
+
     # 4. Format context
     description = pr_event["description"]
     if graph_context_text:
@@ -457,6 +514,7 @@ def main(*, profile: str | None = None) -> None:
         description=description,
         diff=diff,
         rule_findings=rule_findings_text,
+        changed_since_last_review=changed_since_text,
     )
 
     # 5. Run review with retry + validation (replaces agent.run + parse_review_response)

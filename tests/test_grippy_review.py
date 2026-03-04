@@ -180,6 +180,93 @@ class TestLoadPrEvent:
         result = load_pr_event(event_path)
         assert result["description"] == ""
 
+    def test_extracts_before_sha_from_synchronize(self, tmp_path: Path) -> None:
+        """Extracts before SHA from synchronize event for re-review detection."""
+        event = {
+            "action": "synchronize",
+            "before": "abc1234",
+            "after": "def5678",
+            "pull_request": {
+                "number": 10,
+                "title": "feat: stuff",
+                "user": {"login": "dev"},
+                "head": {"ref": "feat", "sha": "def5678"},
+                "base": {"ref": "main"},
+                "body": "",
+            },
+            "repository": {"full_name": "org/repo"},
+        }
+        event_path = tmp_path / "event.json"
+        event_path.write_text(json.dumps(event))
+
+        result = load_pr_event(event_path)
+        assert result["before_sha"] == "abc1234"
+
+    def test_before_sha_empty_on_opened(self, tmp_path: Path) -> None:
+        """before_sha is empty string when event lacks before field (opened)."""
+        event = {
+            "action": "opened",
+            "pull_request": {
+                "number": 1,
+                "title": "feat: new",
+                "user": {"login": "dev"},
+                "head": {"ref": "feat"},
+                "base": {"ref": "main"},
+                "body": "",
+            },
+            "repository": {"full_name": "org/repo"},
+        }
+        event_path = tmp_path / "event.json"
+        event_path.write_text(json.dumps(event))
+
+        result = load_pr_event(event_path)
+        assert result["before_sha"] == ""
+
+
+# --- fetch_changed_since ---
+
+
+class TestFetchChangedSince:
+    """fetch_changed_since uses GitHub compare API to identify re-review delta."""
+
+    @patch("requests.get")
+    def test_returns_changed_filenames(self, mock_get: MagicMock) -> None:
+        from grippy.review import fetch_changed_since
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "files": [
+                {"filename": "src/app.py"},
+                {"filename": "tests/test_app.py"},
+            ]
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = fetch_changed_since("token", "org/repo", "abc", "def")
+        assert result == ["src/app.py", "tests/test_app.py"]
+        assert "compare/abc...def" in mock_get.call_args[0][0]
+
+    @patch("requests.get")
+    def test_empty_on_api_failure(self, mock_get: MagicMock) -> None:
+        from grippy.review import fetch_changed_since
+
+        mock_get.side_effect = Exception("API error")
+        result = fetch_changed_since("token", "org/repo", "abc", "def")
+        assert result == []
+
+    @patch("requests.get")
+    def test_empty_on_no_files(self, mock_get: MagicMock) -> None:
+        from grippy.review import fetch_changed_since
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"files": []}
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = fetch_changed_since("token", "org/repo", "abc", "def")
+        assert result == []
+
 
 # --- C1: fetch_pr_diff uses raw diff API, not paginated compare ---
 

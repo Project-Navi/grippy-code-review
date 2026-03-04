@@ -66,8 +66,8 @@ PR event (GITHUB_EVENT_PATH) → load PR metadata
 ### Key Modules
 
 - **review.py** — Orchestration entry point. Loads PR event, coordinates the full review pipeline, sets GitHub Actions outputs.
-- **agent.py** — `create_reviewer()` factory. Resolves transport (OpenAI vs local), composes the prompt chain, attaches tools and structured output schema.
-- **codebase.py** — `CodebaseIndex` (LanceDB vector index) and `CodebaseToolkit` (Agno toolkit with `read_file`, `grep_code`, `list_files`). Has security-critical path traversal and symlink protections.
+- **agent.py** — `create_reviewer()` factory. Resolves transport (OpenAI vs local), composes the prompt chain, attaches tools, structured output schema, and `tool_hooks` middleware. Enables `structured_outputs=True` for OpenAI transport (wire-level schema enforcement).
+- **codebase.py** — `CodebaseIndex` (LanceDB vector index), `CodebaseToolkit` (Agno toolkit with `read_file`, `grep_code`, `list_files`), and `sanitize_tool_hook` (Agno `tool_hooks` middleware for centralized output sanitization). Has security-critical path traversal and symlink protections.
 - **github_review.py** — GitHub API integration. Parses unified diffs to map findings to addressable lines, posts inline comments, resolves stale threads.
 - **schema.py** — Pydantic models for the full structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`.
 - **graph.py** — Graph data model (`ReviewGraph`, `Node`, `Edge`) that transforms flat reviews into typed entity-relationship structures.
@@ -125,7 +125,7 @@ The codebase tools in `codebase.py` are security-sensitive since they accept LLM
 - `grep_code` does not follow symlinks (`-S` flag)
 - `list_files` enforces repo boundary checks with 5-second glob timeout (`time.monotonic()`)
 - Result limits: 5,000 files indexed, 500 glob results, 12,000 char per tool response
-- Tool outputs are sanitized with `navi_sanitize.clean()` and XML-escaped before reaching the LLM — prevents indirect prompt injection through crafted file contents
+- Tool outputs are sanitized via Agno's `tool_hooks` middleware (`sanitize_tool_hook` in codebase.py) — `navi_sanitize.clean()` + XML-escape + 12K char truncation applied centrally to all tool string results before reaching the LLM. Prevents indirect prompt injection through crafted file contents
 
 The prompt construction pipeline (`agent.py`) has multi-layer injection defense:
 - `_escape_xml()` applies navi-sanitize (Unicode normalization), NL injection pattern neutralization (7 compiled regexes replacing scoring directives, confidence manipulation, system overrides with `[BLOCKED]`), and XML entity escaping — in that order
