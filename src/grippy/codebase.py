@@ -584,25 +584,55 @@ class CodebaseIndex:
         return self._fts_available
 
     def search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
-        """Vector similarity search over indexed chunks.
+        """Hybrid search (vector + keyword + RRF) with vector-only fallback.
 
-        NOTE: This method will be replaced by hybrid search in Task 6.
-        Kept temporarily so existing tests and search_code tool still work.
+        Returns list of dicts: {file_path, chunk_index, start_line, end_line, text}.
+        Returns empty list on failure — never crashes the review.
         """
         if not self._vector_db.exists():
             return []
+        try:
+            return self._hybrid_search(query, k)
+        except Exception:
+            log.warning(
+                "Hybrid search failed, falling back to vector-only", exc_info=True
+            )
+        try:
+            return self._vector_search(query, k)
+        except Exception:
+            log.warning("Vector search also failed", exc_info=True)
+            return []
+
+    def _hybrid_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        """Hybrid search via raw LanceDB table with RRF reranker."""
+        from lancedb.rerankers import RRFReranker
+
+        table = self._vector_db.table
+        if table is None:
+            return []
+        if not self._ensure_fts_index():
+            raise RuntimeError("FTS not available")
 
         query_vec = self._embedder.get_embedding(query)
-        try:
-            table = self._vector_db.table
-            arrow_result = table.search(query_vec).limit(k).to_arrow()
-        except Exception:
-            log.warning("Vector search failed", exc_info=True)
+        raw = (
+            table.search(query_type="hybrid")
+            .vector(query_vec)
+            .text(query)
+            .rerank(RRFReranker())
+            .limit(k)
+            .to_list()
+        )
+        return self._parse_results(raw)
+
+    def _vector_search(self, query: str, k: int) -> list[dict[str, Any]]:
+        """Pure vector search fallback."""
+        table = self._vector_db.table
+        if table is None:
             return []
-        columns = arrow_result.column_names
-        arrays = {col: arrow_result.column(col).to_pylist() for col in columns}
-        n_rows = arrow_result.num_rows
-        return [{col: arrays[col][i] for col in columns} for i in range(n_rows)]
+
+        query_vec = self._embedder.get_embedding(query)
+        raw = table.search(query_vec).limit(k).to_list()
+        return self._parse_results(raw)
 
 
 # --- Tool functions ---

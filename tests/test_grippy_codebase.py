@@ -1175,3 +1175,99 @@ class TestParseResults:
         results = CodebaseIndex._parse_results_static([row])
         assert results[0]["file_path"] == "fallback.py"
         assert results[0]["start_line"] == 0
+
+
+# --- Hybrid search ---
+
+
+class TestCodebaseSearch:
+    """search() uses hybrid with RRF, falls back to vector-only."""
+
+    def _make_index(self, tmp_path: Path, **overrides: Any) -> tuple[CodebaseIndex, MagicMock]:
+        embedder = overrides.pop("embedder", FakeBatchEmbedder())
+        vector_db = overrides.pop("vector_db", MagicMock())
+        vector_db.exists.return_value = overrides.pop("table_exists", True)
+        index = CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vector_db,
+            embedder=embedder,
+            data_dir=tmp_path,
+            **overrides,
+        )
+        return index, vector_db
+
+    def test_hybrid_search_returns_parsed_results(self, tmp_path: Path) -> None:
+        """Hybrid search returns parsed chunk dicts from payload."""
+        index, vdb = self._make_index(tmp_path)
+        table_mock = MagicMock()
+        vdb.table = table_mock
+        # Simulate FTS index exists
+        table_mock.list_indices.return_value = [MagicMock(index_type="FTS")]
+        # Simulate hybrid search chain
+        payload = json.dumps(
+            {
+                "content": "def hello(): pass",
+                "name": "src/app.py",
+                "meta_data": {
+                    "file_path": "src/app.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        )
+        chain = MagicMock()
+        table_mock.search.return_value = chain
+        chain.vector.return_value = chain
+        chain.text.return_value = chain
+        chain.rerank.return_value = chain
+        chain.limit.return_value = chain
+        chain.to_list.return_value = [{"payload": payload}]
+
+        results = index.search("hello")
+        assert len(results) == 1
+        assert results[0]["file_path"] == "src/app.py"
+        assert results[0]["text"] == "def hello(): pass"
+
+    def test_fallback_to_vector_on_fts_failure(self, tmp_path: Path) -> None:
+        """If FTS unavailable, falls back to vector-only search."""
+        index, vdb = self._make_index(tmp_path)
+        table_mock = MagicMock()
+        vdb.table = table_mock
+        # FTS creation fails
+        table_mock.list_indices.return_value = []
+        table_mock.create_fts_index.side_effect = Exception("FTS failed")
+        # Vector search returns results
+        payload = json.dumps(
+            {
+                "content": "x = 1",
+                "name": "a.py",
+                "meta_data": {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        )
+        vec_chain = MagicMock()
+        table_mock.search.return_value = vec_chain
+        vec_chain.limit.return_value = vec_chain
+        vec_chain.to_list.return_value = [{"payload": payload}]
+
+        results = index.search("test query")
+        assert len(results) == 1
+        assert results[0]["file_path"] == "a.py"
+
+    def test_total_failure_returns_empty(self, tmp_path: Path) -> None:
+        """If both hybrid and vector fail, returns empty list."""
+        index, vdb = self._make_index(tmp_path)
+        vdb.table = None
+        results = index.search("anything")
+        assert results == []
+
+    def test_search_not_indexed_returns_empty(self, tmp_path: Path) -> None:
+        """Search on non-existent table returns empty."""
+        index, vdb = self._make_index(tmp_path, table_exists=False)
+        results = index.search("anything")
+        assert results == []
