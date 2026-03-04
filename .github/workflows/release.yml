@@ -4,67 +4,21 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: grippy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
   build:
-    name: Build distribution
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    uses: ./.github/workflows/_build-reusable.yml
+    with:
+      tag_name: ${{ github.event.release.tag_name }}
     permissions:
-      contents: read
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b  # v2.15.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
-        with:
-          enable-cache: true
-
-      - name: Build sdist and wheel
-        run: uv build
-
-      - name: Generate SBOM (CycloneDX)
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11  # v0.23.0
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: sbom/sbom.cdx.json
-          upload-artifact: false
-          upload-release-assets: false
-
-      - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11  # v0.23.0
-        with:
-          path: .
-          format: spdx-json
-          output-file: sbom/sbom.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
-
-      - name: Upload distribution artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
-        with:
-          name: dist
-          path: dist/
-          retention-days: 5
-
-      - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7
-        with:
-          name: sbom
-          path: sbom/
-          retention-days: 5
+      contents: write
+      id-token: write
+      attestations: write
 
   publish:
     name: Publish to PyPI
