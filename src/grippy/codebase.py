@@ -515,6 +515,74 @@ class CodebaseIndex:
         )
         return len(documents)
 
+    @staticmethod
+    def _parse_results_static(
+        raw_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Parse raw LanceDB results into chunk dicts.
+
+        Tolerates: payload as string or dict, missing payload, missing
+        meta_data, malformed JSON. Skips unparseable rows.
+        """
+        results: list[dict[str, Any]] = []
+        for row in raw_results:
+            try:
+                payload = row.get("payload")
+                if payload is None:
+                    continue
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                if not isinstance(payload, dict):
+                    continue
+                meta = payload.get("meta_data") or {}
+                results.append(
+                    {
+                        "file_path": meta.get(
+                            "file_path", payload.get("name", "unknown")
+                        ),
+                        "chunk_index": meta.get("chunk_index", 0),
+                        "start_line": meta.get("start_line", 0),
+                        "end_line": meta.get("end_line", 0),
+                        "text": payload.get("content", ""),
+                    }
+                )
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
+                continue
+        return results
+
+    def _parse_results(
+        self, raw_results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Instance method wrapper for _parse_results_static."""
+        return self._parse_results_static(raw_results)
+
+    def _ensure_fts_index(self) -> bool:
+        """Create FTS index if missing. Returns True if FTS is available."""
+        table = self._vector_db.table
+        if table is None:
+            return False
+        if getattr(self, "_fts_available", None) is not None:
+            return self._fts_available  # type: ignore[return-value]
+        try:
+            indices = (
+                table.list_indices() if hasattr(table, "list_indices") else []
+            )
+            has_fts = any(
+                getattr(idx, "index_type", "") == "FTS"
+                or getattr(idx, "type", "") == "FTS"
+                for idx in indices
+            )
+            if not has_fts:
+                table.create_fts_index("payload", use_tantivy=False, replace=False)
+            self._fts_available: bool | None = True
+        except Exception:
+            log.warning(
+                "FTS index creation failed — hybrid search unavailable",
+                exc_info=True,
+            )
+            self._fts_available = False
+        return self._fts_available
+
     def search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
         """Vector similarity search over indexed chunks.
 

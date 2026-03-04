@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -1110,3 +1111,67 @@ class TestCodebaseIndexAgno:
         )
         count = index.build()
         assert count >= 1  # rebuilt even though SHA matches
+
+
+# --- Result parsing ---
+
+
+class TestParseResults:
+    """_parse_results_static() handles various LanceDB payload formats."""
+
+    def test_payload_as_json_string(self) -> None:
+        """Normal case: payload is a JSON string."""
+        row = {
+            "payload": json.dumps(
+                {
+                    "content": "def hello(): pass",
+                    "name": "src/app.py",
+                    "meta_data": {
+                        "file_path": "src/app.py",
+                        "start_line": 1,
+                        "end_line": 1,
+                        "chunk_index": 0,
+                    },
+                }
+            )
+        }
+        results = CodebaseIndex._parse_results_static([row])
+        assert len(results) == 1
+        assert results[0]["file_path"] == "src/app.py"
+        assert results[0]["text"] == "def hello(): pass"
+        assert results[0]["start_line"] == 1
+
+    def test_payload_as_dict(self) -> None:
+        """Some LanceDB versions may return payload as already-parsed dict."""
+        row = {
+            "payload": {
+                "content": "x = 1",
+                "name": "a.py",
+                "meta_data": {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "chunk_index": 0,
+                },
+            }
+        }
+        results = CodebaseIndex._parse_results_static([row])
+        assert len(results) == 1
+        assert results[0]["text"] == "x = 1"
+
+    def test_payload_missing(self) -> None:
+        """Missing payload -> row skipped."""
+        results = CodebaseIndex._parse_results_static([{"id": "abc", "vector": []}])
+        assert results == []
+
+    def test_payload_malformed_json(self) -> None:
+        """Malformed JSON -> row skipped, no crash."""
+        results = CodebaseIndex._parse_results_static([{"payload": "not{json"}])
+        assert results == []
+
+    def test_meta_data_missing(self) -> None:
+        """Missing meta_data -> uses name as file_path, defaults for lines."""
+        row = {"payload": json.dumps({"content": "x", "name": "fallback.py"})}
+        results = CodebaseIndex._parse_results_static([row])
+        assert results[0]["file_path"] == "fallback.py"
+        assert results[0]["start_line"] == 0
