@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from grippy.github_review import ThreadRef
 from grippy.schema import Finding
 
 # --- Helpers ---
@@ -310,59 +311,188 @@ class TestFormatSummary:
 
 
 class TestFetchGrippyComments:
-    """fetch_grippy_comments scans PR review comments for grippy markers."""
+    """fetch_grippy_comments queries GraphQL reviewThreads for grippy markers."""
 
-    def test_parses_grippy_markers(self) -> None:
+    @patch("grippy.github_review.subprocess.run")
+    def test_parses_markers_from_thread_bodies(self, mock_run: MagicMock) -> None:
+        import json
+
         from grippy.github_review import fetch_grippy_comments
 
-        comment = MagicMock()
-        comment.body = "text\n<!-- grippy:src/app.py:security:10 -->"
-        comment.node_id = "PRRT_1"
-
-        pr = MagicMock()
-        pr.get_review_comments.return_value = [comment]
-
-        result = fetch_grippy_comments(pr)
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                    "nodes": [
+                                        {
+                                            "id": "PRRT_1",
+                                            "comments": {
+                                                "nodes": [
+                                                    {
+                                                        "body": "text\n<!-- grippy:src/app.py:security:10 -->"
+                                                    }
+                                                ]
+                                            },
+                                        },
+                                        {
+                                            "id": "PRRT_2",
+                                            "comments": {
+                                                "nodes": [
+                                                    {
+                                                        "body": "text\n<!-- grippy:lib/utils.py:logic:20 -->"
+                                                    }
+                                                ]
+                                            },
+                                        },
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert len(result) == 2
         assert ("src/app.py", "security", 10) in result
+        assert ("lib/utils.py", "logic", 20) in result
+        ref1 = result[("src/app.py", "security", 10)]
+        assert isinstance(ref1, ThreadRef)
+        assert ref1.node_id == "PRRT_1"
 
-    def test_ignores_non_grippy_comments(self) -> None:
+    @patch("grippy.github_review.subprocess.run")
+    def test_ignores_non_grippy_threads(self, mock_run: MagicMock) -> None:
+        import json
+
         from grippy.github_review import fetch_grippy_comments
 
-        comment = MagicMock()
-        comment.body = "Just a regular comment."
-
-        pr = MagicMock()
-        pr.get_review_comments.return_value = [comment]
-
-        result = fetch_grippy_comments(pr)
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                    "nodes": [
+                                        {
+                                            "id": "PRRT_other",
+                                            "comments": {
+                                                "nodes": [{"body": "Just a regular comment."}]
+                                            },
+                                        }
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 0
 
-    def test_multiple_comments(self) -> None:
+    @patch("grippy.github_review.subprocess.run")
+    def test_empty_threads_returns_empty(self, mock_run: MagicMock) -> None:
+        import json
+
         from grippy.github_review import fetch_grippy_comments
 
-        c1 = MagicMock()
-        c1.body = "text\n<!-- grippy:a.py:security:10 -->"
-        c1.node_id = "PRRT_1"
-        c2 = MagicMock()
-        c2.body = "text\n<!-- grippy:b.py:logic:20 -->"
-        c2.node_id = "PRRT_2"
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                    "nodes": [],
+                                }
+                            }
+                        }
+                    }
+                }
+            ),
+        )
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert len(result) == 0
 
-        pr = MagicMock()
-        pr.get_review_comments.return_value = [c1, c2]
+    @patch("grippy.github_review.subprocess.run")
+    def test_subprocess_failure_returns_empty(self, mock_run: MagicMock) -> None:
+        from grippy.github_review import fetch_grippy_comments
 
-        result = fetch_grippy_comments(pr)
+        mock_run.return_value = MagicMock(returncode=1, stderr="error")
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
+        assert len(result) == 0
+
+    @patch("grippy.github_review.subprocess.run")
+    def test_paginates_when_has_next_page(self, mock_run: MagicMock) -> None:
+        import json
+
+        from grippy.github_review import fetch_grippy_comments
+
+        page1 = json.dumps(
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "pageInfo": {"hasNextPage": True, "endCursor": "cursor1"},
+                                "nodes": [
+                                    {
+                                        "id": "PRRT_1",
+                                        "comments": {
+                                            "nodes": [
+                                                {"body": "text\n<!-- grippy:a.py:security:10 -->"}
+                                            ]
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        page2 = json.dumps(
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                "nodes": [
+                                    {
+                                        "id": "PRRT_2",
+                                        "comments": {
+                                            "nodes": [
+                                                {"body": "text\n<!-- grippy:b.py:logic:20 -->"}
+                                            ]
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=page1),
+            MagicMock(returncode=0, stdout=page2),
+        ]
+        result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 2
         assert ("a.py", "security", 10) in result
         assert ("b.py", "logic", 20) in result
-
-    def test_empty_comments(self) -> None:
-        from grippy.github_review import fetch_grippy_comments
-
-        pr = MagicMock()
-        pr.get_review_comments.return_value = []
-
-        result = fetch_grippy_comments(pr)
-        assert len(result) == 0
+        assert mock_run.call_count == 2
 
 
 # --- post_review ---
@@ -372,13 +502,16 @@ class TestPostReview:
     """post_review creates PR review with inline comments + summary."""
 
     @patch("grippy.github_review.Github")
-    def test_creates_review_with_inline_comments(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_creates_review_with_inline_comments(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []  # no existing grippy comments
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
 
@@ -414,13 +547,16 @@ class TestPostReview:
         assert second_call.kwargs["event"] == "APPROVE"
 
     @patch("grippy.github_review.Github")
-    def test_off_diff_findings_in_summary_only(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_off_diff_findings_in_summary_only(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
 
@@ -450,12 +586,15 @@ class TestPostReview:
         assert "Off-diff findings" in body
 
     @patch("grippy.github_review.Github")
-    def test_summary_comment_upserted(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_summary_comment_upserted(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
-        mock_pr.get_review_comments.return_value = []
 
         existing_comment = MagicMock()
         existing_comment.body = "old stuff\n<!-- grippy-summary-1 -->"
@@ -476,14 +615,17 @@ class TestPostReview:
         mock_pr.create_issue_comment.assert_not_called()
 
     @patch("grippy.github_review.Github")
-    def test_fork_pr_skips_inline_comments(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_fork_pr_skips_inline_comments(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         """Fork PRs put all findings in summary, no inline review."""
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
         mock_pr.head.repo.full_name = "forker/repo"
         mock_pr.base.repo.full_name = "org/repo"
 
@@ -511,21 +653,24 @@ class TestPostReview:
         mock_pr.create_issue_comment.assert_called_once()
 
     @patch("grippy.github_review.Github")
-    def test_skips_existing_comment_matching_finding(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_skips_existing_comment_matching_finding(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         """Findings matching existing grippy comments are not re-posted."""
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {
+            ("src/app.py", "security", 9): ThreadRef(
+                node_id="PRRT_1",
+                body="old\n<!-- grippy:src/app.py:security:9 -->",
+            ),
+        }
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
-
-        # Existing comment matches our finding
-        existing = MagicMock()
-        existing.body = "old\n<!-- grippy:src/app.py:security:9 -->"
-        existing.node_id = "PRRT_1"
-        mock_pr.get_review_comments.return_value = [existing]
 
         diff = (
             "diff --git a/src/app.py b/src/app.py\n"
@@ -552,8 +697,10 @@ class TestPostReview:
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
+    @patch("grippy.github_review.fetch_grippy_comments")
     def test_resolves_absent_outdated_findings(
         self,
+        mock_fetch: MagicMock,
         mock_github_cls: MagicMock,
         mock_fetch_states: MagicMock,
         mock_resolve: MagicMock,
@@ -561,6 +708,12 @@ class TestPostReview:
         """Absent findings marked outdated by GitHub get their threads resolved."""
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {
+            ("old.py", "logic", 5): ThreadRef(
+                node_id="PRRT_old",
+                body="old\n<!-- grippy:old.py:logic:5 -->",
+            ),
+        }
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
@@ -570,12 +723,6 @@ class TestPostReview:
         mock_fetch_states.return_value = {
             "PRRT_old": {"isOutdated": True, "isResolved": False},
         }
-
-        # Existing comment for a finding that's no longer present
-        old_comment = MagicMock()
-        old_comment.body = "old\n<!-- grippy:old.py:logic:5 -->"
-        old_comment.node_id = "PRRT_old"
-        mock_pr.get_review_comments.return_value = [old_comment]
 
         post_review(
             token="test-token",
@@ -595,8 +742,10 @@ class TestPostReview:
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
+    @patch("grippy.github_review.fetch_grippy_comments")
     def test_skips_absent_but_not_outdated(
         self,
+        mock_fetch: MagicMock,
         mock_github_cls: MagicMock,
         mock_fetch_states: MagicMock,
         mock_resolve: MagicMock,
@@ -604,6 +753,12 @@ class TestPostReview:
         """Absent findings NOT marked outdated by GitHub are not resolved."""
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {
+            ("old.py", "logic", 5): ThreadRef(
+                node_id="PRRT_still_valid",
+                body="old\n<!-- grippy:old.py:logic:5 -->",
+            ),
+        }
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
@@ -612,11 +767,6 @@ class TestPostReview:
         mock_fetch_states.return_value = {
             "PRRT_still_valid": {"isOutdated": False, "isResolved": False},
         }
-
-        old_comment = MagicMock()
-        old_comment.body = "old\n<!-- grippy:old.py:logic:5 -->"
-        old_comment.node_id = "PRRT_still_valid"
-        mock_pr.get_review_comments.return_value = [old_comment]
 
         post_review(
             token="test-token",
@@ -634,8 +784,10 @@ class TestPostReview:
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
+    @patch("grippy.github_review.fetch_grippy_comments")
     def test_skips_already_resolved_threads(
         self,
+        mock_fetch: MagicMock,
         mock_github_cls: MagicMock,
         mock_fetch_states: MagicMock,
         mock_resolve: MagicMock,
@@ -643,6 +795,12 @@ class TestPostReview:
         """Threads already resolved by GitHub are not re-resolved."""
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {
+            ("old.py", "logic", 5): ThreadRef(
+                node_id="PRRT_done",
+                body="old\n<!-- grippy:old.py:logic:5 -->",
+            ),
+        }
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
@@ -651,11 +809,6 @@ class TestPostReview:
         mock_fetch_states.return_value = {
             "PRRT_done": {"isOutdated": True, "isResolved": True},
         }
-
-        old_comment = MagicMock()
-        old_comment.body = "old\n<!-- grippy:old.py:logic:5 -->"
-        old_comment.node_id = "PRRT_done"
-        mock_pr.get_review_comments.return_value = [old_comment]
 
         post_review(
             token="test-token",
@@ -678,13 +831,14 @@ class TestVerdictReview:
     """post_review submits APPROVE on PASS, REQUEST_CHANGES on FAIL."""
 
     @patch("grippy.github_review.Github")
-    def test_pass_submits_approve(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_pass_submits_approve(self, mock_fetch: MagicMock, mock_github_cls: MagicMock) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
 
         post_review(
             token="t",
@@ -702,13 +856,16 @@ class TestVerdictReview:
         assert "92/100" in mock_pr.create_review.call_args.kwargs["body"]
 
     @patch("grippy.github_review.Github")
-    def test_fail_submits_request_changes(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_fail_submits_request_changes(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
 
         post_review(
             token="t",
@@ -726,13 +883,16 @@ class TestVerdictReview:
         assert "45/100" in mock_pr.create_review.call_args.kwargs["body"]
 
     @patch("grippy.github_review.Github")
-    def test_provisional_skips_verdict_review(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_provisional_skips_verdict_review(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
 
         post_review(
             token="t",
@@ -748,15 +908,18 @@ class TestVerdictReview:
         mock_pr.create_review.assert_not_called()
 
     @patch("grippy.github_review.Github")
-    def test_verdict_review_failure_is_non_fatal(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_verdict_review_failure_is_non_fatal(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         from github import GithubException
 
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
         mock_pr.create_review.side_effect = GithubException(403, {"message": "Forbidden"}, None)
 
         # Should NOT raise — verdict review is non-fatal
@@ -1014,16 +1177,19 @@ class TestPostReview422Fallback:
     """post_review handles GitHub 422 errors by moving findings to summary."""
 
     @patch("grippy.github_review.Github")
-    def test_422_fallback_to_summary(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_422_fallback_to_summary(
+        self, mock_fetch: MagicMock, mock_github_cls: MagicMock
+    ) -> None:
         """422 on create_review moves findings to off-diff in summary, no crash."""
         from github import GithubException
 
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
         mock_pr.create_review.side_effect = GithubException(
@@ -1055,16 +1221,17 @@ class TestPostReview422Fallback:
         assert "Off-diff findings" in body
 
     @patch("grippy.github_review.Github")
-    def test_non_422_propagates(self, mock_github_cls: MagicMock) -> None:
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_non_422_propagates(self, mock_fetch: MagicMock, mock_github_cls: MagicMock) -> None:
         """GithubException(500) is re-raised, not swallowed."""
         from github import GithubException
 
         from grippy.github_review import post_review
 
+        mock_fetch.return_value = {}
         mock_pr = MagicMock()
         mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
         mock_pr.get_issue_comments.return_value = []
-        mock_pr.get_review_comments.return_value = []
         mock_pr.head.repo.full_name = "org/repo"
         mock_pr.base.repo.full_name = "org/repo"
         mock_pr.create_review.side_effect = GithubException(
@@ -1133,9 +1300,7 @@ class TestResolveThreadsBatchSafety:
         malicious = 'PRRT_abc"}}mutation BadActor{}'
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps(
-                {"data": {"t0": {"thread": {"id": malicious, "isResolved": True}}}}
-            ),
+            stdout=json.dumps({"data": {"t0": {"thread": {"id": malicious, "isResolved": True}}}}),
         )
         resolve_threads(repo="org/repo", pr_number=1, thread_ids=[malicious])
         cmd = mock_run.call_args[0][0]

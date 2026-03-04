@@ -232,24 +232,97 @@ def _parse_marker(body: str) -> tuple[str, str, int] | None:
 
 
 def fetch_grippy_comments(
-    pr: Any,
-) -> dict[tuple[str, str, int], Any]:
-    """Fetch existing Grippy review comments from a PR.
+    *,
+    repo: str,
+    pr_number: int,
+) -> dict[tuple[str, str, int], ThreadRef]:
+    """Fetch existing Grippy review threads from a PR via GraphQL.
 
-    Scans all review comments for grippy markers and returns them keyed
-    by (file, category, line) for O(1) dedup lookups.
+    Queries the ``reviewThreads`` connection on the pull request, extracting
+    grippy markers from the first comment of each thread. Uses cursor
+    pagination (100 threads per page, max 20 pages / 2000 threads).
 
     Args:
-        pr: PyGithub PullRequest object.
+        repo: Repository full name (owner/repo).
+        pr_number: Pull request number.
 
     Returns:
-        Dict mapping (file, category, line) to the comment object.
+        Dict mapping (file, category, line) to a ThreadRef with thread
+        node_id and first comment body.
     """
-    result: dict[tuple[str, str, int], Any] = {}
-    for comment in pr.get_review_comments():
-        key = _parse_marker(comment.body)
-        if key is not None:
-            result[key] = comment
+    import json
+
+    owner, name = repo.split("/", 1)
+
+    _fetch_threads_query = (
+        "query FetchThreads($owner: String!, $name: String!, $pr: Int!, $cursor: String) {"
+        " repository(owner: $owner, name: $name) {"
+        " pullRequest(number: $pr) {"
+        " reviewThreads(first: 100, after: $cursor) {"
+        " pageInfo { hasNextPage endCursor }"
+        " nodes { id comments(first: 1) { nodes { body } } }"
+        " } } } }"
+    )
+
+    result: dict[tuple[str, str, int], ThreadRef] = {}
+    cursor: str | None = None
+
+    for _page in range(20):  # safety limit: max 20 pages
+        cmd = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={_fetch_threads_query}",
+            "-f",
+            f"owner={owner}",
+            "-f",
+            f"name={name}",
+            "-F",
+            f"pr={pr_number}",
+        ]
+        if cursor is not None:
+            cmd.extend(["-f", f"cursor={cursor}"])
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if proc.returncode != 0:
+                print(f"::warning::Failed to fetch review threads: {proc.stderr}")
+                return result
+
+            data = json.loads(proc.stdout)
+            threads_conn = (
+                data.get("data", {})
+                .get("repository", {})
+                .get("pullRequest", {})
+                .get("reviewThreads", {})
+            )
+            for node in threads_conn.get("nodes", []):
+                if not node:
+                    continue
+                thread_id = node.get("id", "")
+                comments = node.get("comments", {}).get("nodes", [])
+                if not comments:
+                    continue
+                body = comments[0].get("body", "")
+                key = _parse_marker(body)
+                if key is not None:
+                    result[key] = ThreadRef(node_id=thread_id, body=body)
+
+            page_info = threads_conn.get("pageInfo", {})
+            if not page_info.get("hasNextPage", False):
+                break
+            cursor = page_info.get("endCursor")
+        except Exception as exc:
+            print(f"::warning::Exception fetching review threads: {exc}")
+            return result
+
     return result
 
 
@@ -383,7 +456,7 @@ def post_review(
     pr = repository.get_pull(pr_number)
 
     # 1. Fetch existing grippy comments
-    existing = fetch_grippy_comments(pr)
+    existing = fetch_grippy_comments(repo=repo, pr_number=pr_number)
 
     # 2. Classify: which current findings already have comments?
     new_findings: list[Finding] = []
@@ -577,8 +650,7 @@ def resolve_threads(
     # to prevent injection — aligns with fetch_thread_states() pattern.
     var_decls = ", ".join(f"$id{i}: ID!" for i in range(len(thread_ids)))
     aliases = [
-        f"t{i}: resolveReviewThread(input: {{threadId: $id{i}}}) "
-        f"{{ thread {{ id isResolved }} }}"
+        f"t{i}: resolveReviewThread(input: {{threadId: $id{i}}}) {{ thread {{ id isResolved }} }}"
         for i in range(len(thread_ids))
     ]
     mutation = f"mutation BatchResolve({var_decls}) {{ {' '.join(aliases)} }}"
