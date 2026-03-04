@@ -307,10 +307,10 @@ def main(*, profile: str | None = None) -> None:
     workspace = os.environ.get("GITHUB_WORKSPACE", "")
     if workspace:
         try:
-            from grippy.codebase import CodebaseIndex, CodebaseToolkit
-
             from agno.vectordb.lancedb import LanceDb
             from agno.vectordb.search import SearchType
+
+            from grippy.codebase import CodebaseIndex, CodebaseToolkit
 
             cb_embedder = create_embedder(
                 transport=transport or "local",
@@ -336,9 +336,11 @@ def main(*, profile: str | None = None) -> None:
                 embedder=cb_embedder,
                 data_dir=data_dir,
             )
-            force_reindex = os.environ.get(
-                "GRIPPY_FORCE_REINDEX", ""
-            ).lower() in ("1", "true", "yes")
+            force_reindex = os.environ.get("GRIPPY_FORCE_REINDEX", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
             chunk_count = cb_index.build(force=force_reindex)
             if chunk_count > 0:
                 print(f"  Indexed {chunk_count} chunks")

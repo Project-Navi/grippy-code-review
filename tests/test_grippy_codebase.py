@@ -17,7 +17,6 @@ from grippy.codebase import (
     _MAX_RESULT_CHARS,
     CodebaseIndex,
     CodebaseToolkit,
-    _config_fingerprint,
     _get_repo_state,
     _limit_result,
     _make_grep_code,
@@ -746,7 +745,7 @@ class TestRepoState:
             },
         )
         (tmp_path / "a.py").write_text("x = 2\n")
-        sha, dirty = _get_repo_state(tmp_path)
+        _sha, dirty = _get_repo_state(tmp_path)
         assert dirty is True
 
     def test_non_git_dir_uses_file_hash(self, tmp_path: Path) -> None:
@@ -844,16 +843,16 @@ class TestIndexManifest:
         """Same params always produce the same fingerprint."""
         from grippy.codebase import _config_fingerprint
 
-        kwargs: dict[str, Any] = dict(
-            extensions=[".py"],
-            ignore_dirs=["__pycache__"],
-            index_paths=None,
-            max_chunk_chars=4000,
-            overlap=200,
-            max_index_files=5000,
-            embedder_id="model-a",
-            embedding_dims=1024,
-        )
+        kwargs: dict[str, Any] = {
+            "extensions": [".py"],
+            "ignore_dirs": ["__pycache__"],
+            "index_paths": None,
+            "max_chunk_chars": 4000,
+            "overlap": 200,
+            "max_index_files": 5000,
+            "embedder_id": "model-a",
+            "embedding_dims": 1024,
+        }
         assert _config_fingerprint(**kwargs) == _config_fingerprint(**kwargs)
 
 
@@ -980,7 +979,7 @@ class TestCodebaseIndexAgno:
         vdb.reset_mock()
         vdb.exists.return_value = True
         # Create new index with different extensions (different config_fingerprint)
-        index2, vdb2 = self._make_index(
+        index2, _vdb2 = self._make_index(
             tmp_path,
             table_exists=True,
             extensions=frozenset({".py", ".rs"}),
@@ -1011,7 +1010,7 @@ class TestCodebaseIndexAgno:
     def test_build_dirty_repo_always_rebuilds(self, tmp_path: Path) -> None:
         """If repo was dirty when manifest written, next build always rebuilds."""
         (tmp_path / "a.py").write_text("x = 1\n")
-        index, vdb = self._make_index(tmp_path, table_exists=True)
+        index, _vdb = self._make_index(tmp_path, table_exists=True)
         # Write manifest with dirty=True
         sha, _ = _get_repo_state(tmp_path)
         _write_manifest(
@@ -1179,6 +1178,6 @@ class TestCodebaseSearch:
 
     def test_search_not_indexed_returns_empty(self, tmp_path: Path) -> None:
         """Search on non-existent table returns empty."""
-        index, vdb = self._make_index(tmp_path, table_exists=False)
+        index, _vdb = self._make_index(tmp_path, table_exists=False)
         results = index.search("anything")
         assert results == []

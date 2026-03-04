@@ -16,7 +16,7 @@ import os
 import re
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -206,7 +206,7 @@ def _write_manifest(
         "repo_sha": repo_sha,
         "repo_dirty": repo_dirty,
         "config_fingerprint": config_fingerprint,
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(UTC).isoformat(),
     }
     path.write_text(json.dumps(manifest, indent=2))
 
@@ -214,7 +214,7 @@ def _write_manifest(
 def _read_manifest(path: Path) -> dict[str, Any] | None:
     """Read index manifest. Returns None if missing or corrupt."""
     try:
-        return json.loads(path.read_text())  # type: ignore[no-any-return]
+        return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError, ValueError):
         return None
 
@@ -383,9 +383,7 @@ class CodebaseIndex:
 
     def _current_config_fingerprint(self) -> str:
         """Compute config fingerprint for current settings."""
-        embedder_id = getattr(
-            self._embedder, "id", getattr(self._embedder, "model", "unknown")
-        )
+        embedder_id = getattr(self._embedder, "id", getattr(self._embedder, "model", "unknown"))
         embedding_dims = 0
         if hasattr(self._embedder, "dimensions"):
             embedding_dims = self._embedder.dimensions or 0
@@ -477,9 +475,7 @@ class CodebaseIndex:
         for chunk, vec in zip(all_chunks, vectors, strict=True):
             documents.append(
                 Document(
-                    id=_chunk_id(
-                        chunk["file_path"], chunk["start_line"], chunk["end_line"]
-                    ),
+                    id=_chunk_id(chunk["file_path"], chunk["start_line"], chunk["end_line"]),
                     name=chunk["file_path"],
                     content=chunk["text"],
                     embedding=vec,
@@ -537,9 +533,7 @@ class CodebaseIndex:
                 meta = payload.get("meta_data") or {}
                 results.append(
                     {
-                        "file_path": meta.get(
-                            "file_path", payload.get("name", "unknown")
-                        ),
+                        "file_path": meta.get("file_path", payload.get("name", "unknown")),
                         "chunk_index": meta.get("chunk_index", 0),
                         "start_line": meta.get("start_line", 0),
                         "end_line": meta.get("end_line", 0),
@@ -550,9 +544,7 @@ class CodebaseIndex:
                 continue
         return results
 
-    def _parse_results(
-        self, raw_results: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def _parse_results(self, raw_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Instance method wrapper for _parse_results_static."""
         return self._parse_results_static(raw_results)
 
@@ -564,12 +556,9 @@ class CodebaseIndex:
         if getattr(self, "_fts_available", None) is not None:
             return self._fts_available  # type: ignore[return-value]
         try:
-            indices = (
-                table.list_indices() if hasattr(table, "list_indices") else []
-            )
+            indices = table.list_indices() if hasattr(table, "list_indices") else []
             has_fts = any(
-                getattr(idx, "index_type", "") == "FTS"
-                or getattr(idx, "type", "") == "FTS"
+                getattr(idx, "index_type", "") == "FTS" or getattr(idx, "type", "") == "FTS"
                 for idx in indices
             )
             if not has_fts:
@@ -594,9 +583,7 @@ class CodebaseIndex:
         try:
             return self._hybrid_search(query, k)
         except Exception:
-            log.warning(
-                "Hybrid search failed, falling back to vector-only", exc_info=True
-            )
+            log.warning("Hybrid search failed, falling back to vector-only", exc_info=True)
         try:
             return self._vector_search(query, k)
         except Exception:
@@ -605,7 +592,7 @@ class CodebaseIndex:
 
     def _hybrid_search(self, query: str, k: int) -> list[dict[str, Any]]:
         """Hybrid search via raw LanceDB table with RRF reranker."""
-        from lancedb.rerankers import RRFReranker
+        from lancedb.rerankers import RRFReranker  # type: ignore[import-untyped]
 
         table = self._vector_db.table
         if table is None:
