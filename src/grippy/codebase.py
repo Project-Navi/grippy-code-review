@@ -642,16 +642,15 @@ def _make_search_code(index: CodebaseIndex) -> Any:
     """Create a search_code tool function bound to an index."""
 
     def search_code(query: str, k: int = 5) -> str:
-        """Search the codebase by semantic similarity.
+        """Search the codebase by semantic similarity + keyword matching.
 
+        Uses hybrid search (vector + keyword) with RRF reranking.
         Use this to find definitions, patterns, or implementations
         across the full codebase — not just the diff.
 
         :param query: natural language description of what to find
         :param k: number of results to return (default 5)
         """
-        if not index.is_indexed:
-            return "Codebase not indexed — proceed with diff-only analysis."
         results = index.search(query, k=k)
         if not results:
             return "No results found."
