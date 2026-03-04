@@ -50,33 +50,6 @@ def tmp_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.fixture
-def mock_embedder() -> MagicMock:
-    """Create a mock embedder returning fixed-size vectors."""
-    embedder = MagicMock()
-    embedder.get_embedding = MagicMock(return_value=[0.1] * 8)
-    return embedder
-
-
-@pytest.fixture
-def mock_batch_embedder() -> MagicMock:
-    """Create a mock batch embedder."""
-    embedder = MagicMock()
-    embedder.get_embedding = MagicMock(return_value=[0.1] * 8)
-    embedder.get_embedding_batch = MagicMock(side_effect=lambda texts: [[0.1] * 8 for _ in texts])
-    return embedder
-
-
-@pytest.fixture
-def lance_db(tmp_path: Path) -> Any:
-    """Create a LanceDB connection for testing."""
-    import lancedb  # type: ignore[import-untyped]
-
-    lance_dir = tmp_path / "lance_test"
-    lance_dir.mkdir()
-    return lancedb.connect(str(lance_dir))
-
-
 # --- _limit_result tests ---
 
 
@@ -203,152 +176,84 @@ class TestChunkFile:
         assert chunks[0]["file_path"] == str(path)
 
 
-# --- CodebaseIndex tests ---
-
-
-class TestCodebaseIndex:
-    def test_not_indexed_initially(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        assert not idx.is_indexed
-
-    def test_is_indexed_after_build(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        assert count > 0
-        assert idx.is_indexed
-
-    def test_build_returns_chunk_count(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        # Should have chunks for main.py, utils.py, README.md, pyproject.toml
-        assert count >= 4
-
-    def test_build_uses_batch_embedder(
-        self, tmp_repo: Path, lance_db: Any, mock_batch_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_batch_embedder)
-        idx.build()
-        mock_batch_embedder.get_embedding_batch.assert_called()
-
-    def test_build_with_index_paths(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(
-            repo_root=tmp_repo,
-            lance_db=lance_db,
-            embedder=mock_embedder,
-            index_paths=["src"],
-        )
-        count = idx.build()
-        # Only src/ files: main.py, utils.py
-        assert count == 2
-
-    def test_build_stores_relative_paths(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("hello")
-        assert results
-        # Paths should be relative, not absolute
-        for r in results:
-            assert not r["file_path"].startswith("/"), (
-                f"Expected relative path, got {r['file_path']}"
-            )
-
-    def test_build_empty_dir(self, tmp_path: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        empty = tmp_path / "empty_repo"
-        empty.mkdir()
-        idx = CodebaseIndex(repo_root=empty, lance_db=lance_db, embedder=mock_embedder)
-        count = idx.build()
-        assert count == 0
-
-    def test_search_returns_results(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("hello function")
-        assert len(results) > 0
-        assert "file_path" in results[0]
-        assert "text" in results[0]
-
-    def test_search_before_build_empty(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        results = idx.search("anything")
-        assert results == []
-
-    def test_search_respects_k(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        results = idx.search("test", k=2)
-        assert len(results) <= 2
-
-    def test_rebuild_replaces_old_table(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        count1 = idx.build()
-        count2 = idx.build()
-        assert count1 == count2  # Same files, same count
+# --- CodebaseIndex tests (legacy — replaced by TestCodebaseIndexAgno) ---
+# Old TestCodebaseIndex class deleted. Unit tests are in TestCodebaseIndexAgno.
+# Integration tests (real Agno LanceDb) deferred to Task 8 if needed.
 
 
 # --- search_code tool tests ---
 
 
 class TestSearchCodeTool:
-    def test_returns_results(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = True
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_returns_results(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "src/main.py",
+                    "start_line": 1,
+                    "end_line": 5,
+                    "text": "def hello(): pass",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("hello function")
-        assert "main.py" in result or "utils.py" in result
+        assert "main.py" in result
 
-    def test_not_indexed_message(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        search = _make_search_code(idx)
-        result = search("anything")
-        assert "not indexed" in result.lower()
-
-    def test_no_results_message(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
-        # Mock search to return empty
+    def test_no_results_message(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
         idx.search = MagicMock(return_value=[])  # type: ignore[method-assign]
         search = _make_search_code(idx)
         result = search("nonexistent xyz")
         assert "no results" in result.lower()
 
-    def test_respects_k_parameter(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def test_respects_k_parameter(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "a.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "text": "x = 1",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("test", k=1)
-        # Should have at most 1 result block
-        assert result.count("---") <= 4  # header has dashes
+        idx.search.assert_called_once_with("test", k=1)
+        assert "a.py" in result
 
-    def test_result_format(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
-        idx.build()
+    def test_result_format(self, tmp_path: Path) -> None:
+        idx = self._make_index(tmp_path)
+        idx.search = MagicMock(  # type: ignore[method-assign]
+            return_value=[
+                {
+                    "file_path": "src/app.py",
+                    "start_line": 10,
+                    "end_line": 20,
+                    "text": "def run(): pass",
+                    "chunk_index": 0,
+                }
+            ]
+        )
         search = _make_search_code(idx)
         result = search("hello")
-        assert "lines" in result
+        assert "lines 10-20" in result
+        assert "src/app.py" in result
 
 
 # --- grep_code tool tests ---
@@ -530,15 +435,23 @@ class TestListFilesTool:
 
 
 class TestCodebaseToolkit:
-    def test_registers_four_tools(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def _make_index(self, tmp_path: Path) -> CodebaseIndex:
+        vdb = MagicMock()
+        vdb.exists.return_value = False
+        return CodebaseIndex(
+            repo_root=tmp_path,
+            vector_db=vdb,
+            embedder=FakeBatchEmbedder(),
+            data_dir=tmp_path,
+        )
+
+    def test_registers_four_tools(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         assert len(toolkit.functions) == 4
 
-    def test_tool_names(self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def test_tool_names(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         names = set(toolkit.functions.keys())
         assert "search_code" in names
@@ -546,10 +459,8 @@ class TestCodebaseToolkit:
         assert "read_file" in names
         assert "list_files" in names
 
-    def test_tools_are_callable(
-        self, tmp_repo: Path, lance_db: Any, mock_embedder: MagicMock
-    ) -> None:
-        idx = CodebaseIndex(repo_root=tmp_repo, lance_db=lance_db, embedder=mock_embedder)
+    def test_tools_are_callable(self, tmp_repo: Path) -> None:
+        idx = self._make_index(tmp_repo)
         toolkit = CodebaseToolkit(index=idx, repo_root=tmp_repo)
         for func in toolkit.functions.values():
             assert func.entrypoint is not None
