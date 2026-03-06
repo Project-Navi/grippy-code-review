@@ -52,3 +52,40 @@ class TestFormatSearchTable:
         assert "vector" in table
         assert "CosQA" in table
         assert "NDCG" in table
+
+
+from unittest.mock import MagicMock
+
+from benchmarks.search.adapter import GrippyRetriever
+
+
+class TestGrippyRetriever:
+    def test_encode_queries_returns_embeddings(self) -> None:
+        """Adapter encodes queries via the embedder."""
+        embedder = MagicMock()
+        embedder.get_embedding.return_value = [0.1, 0.2, 0.3]
+        retriever = GrippyRetriever(embedder=embedder)
+        result = retriever.encode_queries(["hello world", "test query"])
+        assert result.shape == (2, 3)
+        assert embedder.get_embedding.call_count == 2
+
+    def test_encode_corpus_returns_embeddings(self) -> None:
+        """Adapter encodes corpus documents via the embedder."""
+        embedder = MagicMock()
+        embedder.get_embedding.return_value = [0.1, 0.2, 0.3]
+        retriever = GrippyRetriever(embedder=embedder)
+        corpus = [
+            {"title": "func", "text": "def hello(): pass"},
+            {"title": "var", "text": "x = 1"},
+        ]
+        result = retriever.encode_corpus(corpus)
+        assert result.shape == (2, 3)
+
+    def test_uses_batch_embedder_when_available(self) -> None:
+        """Adapter uses get_embedding_batch when embedder supports it."""
+        embedder = MagicMock()
+        embedder.get_embedding_batch.return_value = [[0.1, 0.2], [0.3, 0.4]]
+        retriever = GrippyRetriever(embedder=embedder, use_batch=True)
+        result = retriever.encode_queries(["q1", "q2"])
+        assert result.shape == (2, 2)
+        embedder.get_embedding_batch.assert_called_once()
