@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from benchmarks.graph.ground_truth import GroundTruthQuery, load_ground_truth
 from benchmarks.results import BenchmarkRun, GraphMetrics, GraphQueryResult

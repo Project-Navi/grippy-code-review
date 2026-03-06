@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from unittest.mock import patch as mock_patch
 
+from benchmarks.cli import main
 from benchmarks.graph.ground_truth import GroundTruthQuery, load_ground_truth
 from benchmarks.graph.runner import GraphBenchmark
 from grippy.graph_store import SQLiteGraphStore
@@ -168,3 +171,21 @@ class TestGraphBenchmark:
         bench = GraphBenchmark(store=store, ground_truth_path=fixture_path, output_dir=out)
         bench.run()
         assert len(list(out.glob("graph_*.json"))) == 1
+
+
+class TestCli:
+    def test_help_exits_zero(self) -> None:
+        """CLI --help exits without error."""
+        with mock_patch.object(sys, "argv", ["benchmarks", "--help"]):
+            try:
+                main()
+            except SystemExit as e:
+                assert e.code == 0
+
+    def test_invalid_suite_rejected(self) -> None:
+        """Invalid suite name exits with error."""
+        with mock_patch.object(sys, "argv", ["benchmarks", "invalid"]):
+            try:
+                main()
+            except SystemExit as e:
+                assert e.code == 2
