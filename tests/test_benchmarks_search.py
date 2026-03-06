@@ -89,3 +89,65 @@ class TestGrippyRetriever:
         result = retriever.encode_queries(["q1", "q2"])
         assert result.shape == (2, 2)
         embedder.get_embedding_batch.assert_called_once()
+
+
+from pathlib import Path
+from unittest.mock import patch
+
+from benchmarks.search.runner import SearchBenchmark
+
+
+class TestSearchBenchmark:
+    def _make_fake_embedder(self, dim: int = 8) -> MagicMock:
+        embedder = MagicMock()
+        embedder.get_embedding.return_value = [0.1] * dim
+        return embedder
+
+    def test_run_returns_results_for_each_mode(self, tmp_path: Path) -> None:
+        """Runner produces results for both hybrid and vector modes."""
+        embedder = self._make_fake_embedder()
+        bench = SearchBenchmark(
+            embedder=embedder,
+            datasets=["test-dataset"],
+            k=5,
+            output_dir=tmp_path,
+        )
+        fake_queries = {"q1": "find hello function", "q2": "path traversal"}
+        fake_corpus = {
+            "d1": {"title": "hello", "text": "def hello(): pass"},
+            "d2": {"title": "traversal", "text": "os.path.join(user_input)"},
+        }
+        fake_qrels = {"q1": {"d1": 1}, "q2": {"d2": 1}}
+
+        with patch.object(
+            bench, "_load_dataset", return_value=(fake_queries, fake_corpus, fake_qrels)
+        ):
+            results = bench.run()
+
+        assert len(results) >= 1
+        modes = {r.mode for r in results}
+        assert "vector" in modes
+        for r in results:
+            assert r.dataset == "test-dataset"
+            assert r.query_count == 2
+
+    def test_writes_json_output(self, tmp_path: Path) -> None:
+        """Runner writes results JSON to output directory."""
+        embedder = self._make_fake_embedder()
+        bench = SearchBenchmark(
+            embedder=embedder,
+            datasets=["test-dataset"],
+            k=5,
+            output_dir=tmp_path,
+        )
+        fake_queries = {"q1": "test"}
+        fake_corpus = {"d1": {"title": "t", "text": "x = 1"}}
+        fake_qrels = {"q1": {"d1": 1}}
+
+        with patch.object(
+            bench, "_load_dataset", return_value=(fake_queries, fake_corpus, fake_qrels)
+        ):
+            bench.run()
+
+        json_files = list(tmp_path.glob("search_*.json"))
+        assert len(json_files) == 1
