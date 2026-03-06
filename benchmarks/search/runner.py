@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -127,8 +126,7 @@ class SearchBenchmark:
         qrels: {query_id: {doc_id: relevance_score}}
         """
         try:
-            import coir
-            from coir.data_loader import get_tasks
+            from coir.data_loader import get_tasks  # type: ignore[import-not-found]
 
             tasks = get_tasks(tasks=[dataset_name])
             task = tasks[0]
@@ -139,10 +137,11 @@ class SearchBenchmark:
 
     def _write_results(self, results: list[SearchModeResult]) -> None:
         """Write results to JSON file."""
-        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        now = datetime.now(UTC)
+        ts = now.strftime("%Y%m%d_%H%M%S")
         run = BenchmarkRun(
             suite="search",
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=now.isoformat(),
             config={
                 "k": self._k,
                 "datasets": self._datasets,

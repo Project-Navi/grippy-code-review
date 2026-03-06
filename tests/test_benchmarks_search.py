@@ -3,8 +3,13 @@
 
 from __future__ import annotations
 
-from benchmarks.results import SearchMetrics
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from benchmarks.results import SearchMetrics, SearchModeResult
+from benchmarks.search.adapter import GrippyRetriever
 from benchmarks.search.metrics import aggregate_metrics, format_search_table
+from benchmarks.search.runner import SearchBenchmark
 
 
 class TestAggregateMetrics:
@@ -31,8 +36,6 @@ class TestAggregateMetrics:
 
 class TestFormatSearchTable:
     def test_produces_readable_table(self) -> None:
-        from benchmarks.results import SearchModeResult
-
         results = [
             SearchModeResult(
                 mode="hybrid",
@@ -52,11 +55,6 @@ class TestFormatSearchTable:
         assert "vector" in table
         assert "CosQA" in table
         assert "NDCG" in table
-
-
-from unittest.mock import MagicMock
-
-from benchmarks.search.adapter import GrippyRetriever
 
 
 class TestGrippyRetriever:
@@ -89,12 +87,6 @@ class TestGrippyRetriever:
         result = retriever.encode_queries(["q1", "q2"])
         assert result.shape == (2, 2)
         embedder.get_embedding_batch.assert_called_once()
-
-
-from pathlib import Path
-from unittest.mock import patch
-
-from benchmarks.search.runner import SearchBenchmark
 
 
 class TestSearchBenchmark:

@@ -20,3 +20,4 @@ nboot-spec.json
 .hypothesis/
 .worktrees/
 benchmarks/output/
+!benchmarks/output/.gitkeep

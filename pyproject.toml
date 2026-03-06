@@ -71,6 +71,11 @@ check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
+[[tool.mypy.overrides]]
+module = ["grippy.*", "coir.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
+
 [tool.bandit]
 targets = ["src/grippy"]
 exclude_dirs = ["tests"]

@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 from benchmarks.graph.ground_truth import GroundTruthQuery, load_ground_truth
-from benchmarks.results import GraphMetrics
 
 
 class TestGroundTruthLoading:
