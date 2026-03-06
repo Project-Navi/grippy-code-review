@@ -33,6 +33,9 @@ dependencies = [
 persistence = [
     "lancedb>=0.20.0",
 ]
+benchmarks = [
+    "coir-eval>=0.1.0",
+]
 
 [dependency-groups]
 dev = [

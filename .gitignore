@@ -19,3 +19,4 @@ docs/plans/
 nboot-spec.json
 .hypothesis/
 .worktrees/
+benchmarks/output/
