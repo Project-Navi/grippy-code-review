@@ -18,3 +18,4 @@ docs/internal/
 docs/plans/
 nboot-spec.json
 .hypothesis/
+.worktrees/
