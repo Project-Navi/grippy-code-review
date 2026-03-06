@@ -1,0 +1,28 @@
+[
+    {
+        "id": "blast-codebase",
+        "description": "Files that import from codebase.py (direct dependents)",
+        "query_type": "walk",
+        "params": {
+            "start_files": ["src/grippy/codebase.py"],
+            "direction": "incoming",
+            "rel_allow": ["IMPORTS"],
+            "max_depth": 1
+        },
+        "expected_files": ["src/grippy/review.py"],
+        "tags": ["blast_radius", "depth_1"]
+    },
+    {
+        "id": "deps-review",
+        "description": "What does review.py import from grippy?",
+        "query_type": "walk",
+        "params": {
+            "start_files": ["src/grippy/review.py"],
+            "direction": "outgoing",
+            "rel_allow": ["IMPORTS"],
+            "max_depth": 1
+        },
+        "expected_files": [],
+        "tags": ["dependencies", "depth_1"]
+    }
+]
