@@ -11,7 +11,7 @@ Environment variables:
     GRIPPY_BASE_URL         — API endpoint (default: http://localhost:1234/v1)
     GRIPPY_MODEL_ID         — model identifier (default: devstral-small-2-24b-instruct-2512)
     GRIPPY_EMBEDDING_MODEL  — embedding model (default: text-embedding-qwen3-embedding-4b)
-    GRIPPY_TRANSPORT        — "openai" or "local" (default: infer from OPENAI_API_KEY)
+    GRIPPY_TRANSPORT        — API transport (default: infer from OPENAI_API_KEY)
     GRIPPY_API_KEY          — API key for non-OpenAI endpoints (embedding auth fallback)
     GRIPPY_DATA_DIR         — persistent directory for graph DB + LanceDB
     GRIPPY_TIMEOUT          — seconds before review is killed (0 = no timeout)
@@ -46,7 +46,7 @@ MAX_DIFF_CHARS = 500_000
 
 
 _ERROR_HINTS: dict[str, str] = {
-    "CONFIG ERROR": "Valid `GRIPPY_TRANSPORT` values: `openai`, `local`.",
+    "CONFIG ERROR": "Valid `GRIPPY_TRANSPORT` values: `openai`, `anthropic`, `google`, `groq`, `mistral`, `local`.",
     "TIMEOUT": "Increase `GRIPPY_TIMEOUT` or reduce PR diff size.",
 }
 
