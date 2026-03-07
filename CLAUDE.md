@@ -1,190 +1,198 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-Grippy is an AI code review agent with personality, built on the [Agno](https://github.com/agno-agi/agno) framework and deployed as a GitHub Actions workflow. It reviews PRs, scores them against a rubric, posts inline findings, and resolves stale threads — all as a grumpy security auditor character.
+**Grippy** is a security-focused AI code review agent with personality, published as [`grippy-mcp`](https://pypi.org/project/grippy-mcp/) on PyPI. Built on the [Agno](https://github.com/agno-agi/agno) framework.
+
+Two deployment modes:
+- **MCP server** — `uvx grippy-mcp serve` for local git diff auditing via any MCP client
+- **GitHub Actions** — CI workflow that reviews PRs, posts inline findings, and gates merges
+
+Two MCP tools: `scan_diff` (fast deterministic security rules, no LLM) and `audit_diff` (full AI-powered review with structured findings).
 
 ## Commands
 
 ```bash
-# Install dependencies
-uv sync
+# ── Dependencies ──────────────────────────────────────────────────────
+uv sync                                          # install all deps
 
-# Run all tests
-uv run pytest tests/ -v
-
-# Run a single test file
-uv run pytest tests/test_grippy_codebase.py -v
-
-# Run a single test
+# ── Tests ─────────────────────────────────────────────────────────────
+uv run pytest tests/ -v                           # full suite
+uv run pytest tests/test_grippy_codebase.py -v    # single file
 uv run pytest tests/test_grippy_codebase.py::TestCodebaseToolkit::test_read_file_traversal -v
+uv run pytest tests/ -v --cov=src/grippy --cov-report=term-missing  # with coverage
+uv run pytest -m e2e -v                           # e2e tests (auto-skipped otherwise)
 
-# Tests with coverage
-uv run pytest tests/ -v --cov=src/grippy --cov-report=term-missing
+# ── Quality ───────────────────────────────────────────────────────────
+uv run ruff check src/grippy/ tests/              # lint
+uv run ruff format --check src/grippy/ tests/     # format check
+uv run mypy src/grippy/                           # type check
 
-# Lint
-uv run ruff check src/grippy/ tests/
+# ── MCP Server ────────────────────────────────────────────────────────
+uvx grippy-mcp serve                              # zero-install (PyPI)
+grippy serve                                      # after pip install grippy-mcp
+python -m grippy serve                            # backwards compat
 
-# Format check (add --fix to ruff check or omit --check to format)
-uv run ruff format --check src/grippy/ tests/
+# ── MCP Installer ─────────────────────────────────────────────────────
+grippy install-mcp                                # registers uvx grippy-mcp in client configs
+grippy install-mcp --dev                          # dev mode: uses uv run --directory
 
-# Type check
-uv run mypy src/grippy/
-
-# Run rule engine tests only
-uv run pytest tests/test_grippy_rules_engine.py tests/test_grippy_rules_config.py tests/test_grippy_rules_context.py -v
-
-# Run a single rule's tests
-uv run pytest tests/test_grippy_rule_secrets.py -v
-
-# Run review locally (python -m grippy still works; grippy alias requires pip install grippy-mcp)
-OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -m grippy
+# ── CI Review (legacy) ────────────────────────────────────────────────
 OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json grippy
-
-# Run review with security profile
-OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -m grippy --profile security
-OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json grippy --profile security
-
-# Start MCP server (stdio transport)
-python -m grippy serve
-
-# Install Grippy as MCP server in Claude Code/Desktop/Cursor
-python -m grippy install-mcp
-
-# Run MCP-specific tests
-uv run pytest tests/test_grippy_mcp_server.py tests/test_grippy_mcp_config.py tests/test_grippy_mcp_response.py tests/test_grippy_local_diff.py tests/test_grippy_cli_mcp.py -v
-
-# Run e2e tests (requires API keys in env)
-OPENAI_API_KEY=sk-... uv run pytest -m e2e -v
-
-# Run e2e tests for a specific provider
-ANTHROPIC_API_KEY=... uv run pytest -m e2e tests/test_e2e_llm_smoke.py -k anthropic -v
-
-# Run MCP stdio e2e tests (no API key needed for scan_diff)
-uv run pytest -m e2e tests/test_e2e_mcp_stdio.py -v
-
-# Console scripts (after pip install grippy-mcp)
-grippy serve              # Start MCP server
-grippy install-mcp        # Interactive MCP client installer
-grippy --profile security # Legacy CI review
-
-# Zero-install via uvx
-uvx grippy-mcp serve
+grippy --profile security                         # with security profile
 ```
 
 ## Architecture
 
-The main flow runs in CI via `python -m grippy` (`__main__.py` → `review.main()`):
+### CI Pipeline (`grippy` / `python -m grippy`)
 
 ```
-PR event (GITHUB_EVENT_PATH) → load PR metadata
-  → CodebaseIndex.build() (codebase.py) — embed repo into LanceDB [non-fatal]
-  → fetch_pr_diff() — full raw diff from GitHub API
-  → run_rules() (rules/) — deterministic rule engine on FULL diff (when profile != general)
-  → truncate_diff() — cap to 500K chars AFTER rule engine
-  → create_reviewer() (agent.py) — Agno agent with prompt chain + tools
-  → format_pr_context() (agent.py) — build LLM user message with rule findings
-  → run_review() (retry.py) — run agent with structured output validation + retry
-  → post_review() (github_review.py) — inline comments + summary + resolve stale threads
-  → set GitHub Actions outputs (score, verdict, rule-gate-failed, profile, …)
+PR event → load metadata → CodebaseIndex.build() [LanceDB, non-fatal]
+  → fetch_pr_diff() → run_rules() on FULL diff → truncate_diff() to 500K
+  → create_reviewer() [Agno agent + prompt chain + tools]
+  → format_pr_context() [rule findings + data-fence boundary]
+  → run_review() [structured output validation + retry]
+  → post_review() [inline comments + summary + resolve stale threads]
+  → set GitHub Actions outputs
 ```
 
-MCP server flow (`python -m grippy serve`):
+### MCP Server (`grippy serve`)
 
 ```
-MCP client request → scan_diff or audit_diff tool
-  → parse_scope() + get_local_diff() (local_diff.py) — git diff via subprocess
-  → scan_diff: run_rules() → serialize_scan() → JSON response
-  → audit_diff: run_rules() + truncate_diff() + create_reviewer() + run_review()
-    → serialize_audit() (strips personality) → JSON response
+MCP client → scan_diff or audit_diff tool
+  → get_local_diff() [git subprocess, scope parsing]
+  → scan_diff: run_rules() → serialize_scan() → JSON
+  → audit_diff: run_rules() + create_reviewer() + run_review()
+    → serialize_audit() [dense JSON, no personality] → response
 ```
 
-### Key Modules
+### Module Map
 
-- **review.py** — Orchestration entry point. Loads PR event, coordinates the full review pipeline, sets GitHub Actions outputs.
-- **agent.py** — `create_reviewer()` factory. Resolves transport via `_PROVIDERS` registry (OpenAI, Anthropic, Google, Groq, Mistral) or `local` for OpenAI-compatible endpoints. Composes the prompt chain, attaches tools, structured output schema, and `tool_hooks` middleware. Enables `structured_outputs=True` for OpenAI transport (wire-level schema enforcement).
-- **codebase.py** — `CodebaseIndex` (LanceDB vector index), `CodebaseToolkit` (Agno toolkit with `read_file`, `grep_code`, `list_files`), and `sanitize_tool_hook` (Agno `tool_hooks` middleware for centralized output sanitization). Has security-critical path traversal and symlink protections.
-- **github_review.py** — GitHub API integration. Parses unified diffs to map findings to addressable lines, posts inline comments, resolves stale threads.
-- **schema.py** — Pydantic models for the full structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`.
-- **graph_types.py** — Data model types: `NodeType`, `EdgeType` enums and `MissingNodeError`. Used by the graph store and context builder.
-- **graph.py** — Backward-compat stub re-exporting from `graph_types.py`.
-- **graph_store.py** — `SQLiteGraphStore`: manages the codebase knowledge graph in SQLite. Stores nodes and typed edges (imports, calls, defines). Includes migration support.
-- **graph_context.py** — Pre-review context builder. `build_context_pack()` traverses the import graph to gather relevant context files, `format_context_for_llm()` renders them for the prompt.
-- **imports.py** — Python import extraction via AST (`extract_imports()`). Builds dependency graph edges for the knowledge graph.
-- **retry.py** — `run_review()` wraps agent execution with JSON parsing (raw, dict, markdown-fenced) and Pydantic validation, retrying on failure with error feedback.
-- **prompts.py** — Loads and composes 20 markdown prompt files from `prompts_data/`. Chain: identity (CONSTITUTION + PERSONA) → mode-specific instructions → shared quality gates → suffix (rubric + output schema).
-- **rules/** — Deterministic security rule engine. 6 rules scan diffs for secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, and CI script risks. Feature-flagged via `GRIPPY_PROFILE` env var / `--profile` CLI flag. Profiles: `general` (rules off), `security` (fail on ERROR+), `strict-security` (fail on WARN+).
-  - **rules/base.py** — `Rule` protocol, `RuleResult` dataclass, `RuleSeverity` enum (`CRITICAL`, `ERROR`, `WARN`, `INFO`).
-  - **rules/context.py** — Diff parsing: `parse_diff()` → `ChangedFile` / `DiffHunk` / `DiffLine`. `RuleContext` holds parsed diff + profile.
-  - **rules/engine.py** — `RuleEngine`: runs all registered rules, `check_gate()` compares severities against profile threshold.
-  - **rules/config.py** — `ProfileConfig`, `load_profile()` (CLI > `GRIPPY_PROFILE` env > `general` default), `PROFILES` dict.
-  - **rules/registry.py** — `RULE_REGISTRY`: explicit list of all `Rule` classes.
-- **embedder.py** — Embedder factory for OpenAI-compatible embedding models.
-- **mcp_server.py** — FastMCP server exposing `scan_diff` (rules-only, no LLM) and `audit_diff` (full LLM review) as MCP tools over stdio transport.
-- **mcp_config.py** — MCP client detection and registration. Supports Claude Code, Claude Desktop, Cursor. Used by the `install-mcp` CLI.
-- **mcp_response.py** — AI-facing response serializers. Strips personality fields and outputs dense structured JSON for MCP tool callers.
-- **local_diff.py** — Local git diff acquisition. Parses scope strings (`staged`, `commit:<ref>`, `range:<base>..<head>`), validates refs against injection, runs git subprocess with timeout.
+| Module | Purpose |
+|--------|---------|
+| `__main__.py` | CLI dispatch: `serve`, `install-mcp`, legacy CI. `main()` entry point for console scripts. |
+| `review.py` | CI orchestration. Loads PR event, coordinates pipeline, sets Actions outputs. |
+| `agent.py` | `create_reviewer()` factory. `_PROVIDERS` registry (OpenAI, Anthropic, Google, Groq, Mistral, local). Prompt chain composition, tool hooks, structured output. |
+| `codebase.py` | `CodebaseIndex` (LanceDB hybrid search), `CodebaseToolkit` (read_file, grep_code, list_files), `sanitize_tool_hook` (tool_hooks middleware). Security-critical. |
+| `github_review.py` | GitHub API. Diff parsing → line mapping, inline comments, stale thread resolution, 5-stage output sanitization. |
+| `schema.py` | Pydantic structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`. |
+| `retry.py` | `run_review()` — JSON parsing (raw/dict/markdown-fenced) + Pydantic validation + retry with error feedback. |
+| `prompts.py` | Loads 20 markdown prompt files. Chain: identity → mode-specific → shared quality gates → suffix. |
+| `mcp_server.py` | FastMCP server. `scan_diff` + `audit_diff` tools with `readOnlyHint` annotations. |
+| `mcp_config.py` | Client detection (Claude Code/Desktop/Cursor), server entry generation (uvx or dev mode). |
+| `mcp_response.py` | AI-facing serializers. Strips personality, outputs dense structured JSON. |
+| `local_diff.py` | Git diff acquisition. Scope parsing, ref validation, subprocess with timeout. |
+| `graph_store.py` | `SQLiteGraphStore` — codebase knowledge graph (nodes, typed edges, migrations). |
+| `graph_context.py` | `build_context_pack()` — traverses import graph for pre-review context. |
+| `imports.py` | Python AST import extraction for knowledge graph edges. |
+| `embedder.py` | Embedder factory for OpenAI-compatible embedding models. |
+| `rules/` | Deterministic security rule engine. 6 rules, 3 profiles, diff parsing. |
+
+### Rules Engine
+
+6 rules scan diffs before the LLM: secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks. Feature-flagged via `GRIPPY_PROFILE`:
+- `general` — rules off
+- `security` — gate fails on ERROR+
+- `strict-security` — gate fails on WARN+
 
 ### Prompt System
 
-Prompts live in `src/grippy/prompts_data/` as markdown files. The composition is:
-1. **Identity** (agent description): `CONSTITUTION.md` + `PERSONA.md`
-2. **Instructions** (user message): mode prefix (`pr-review.md`, `security-audit.md`, etc.) + shared prompts (tone calibration, confidence filter, escalation, context builder, catchphrases, disguises, ascii art, all-clear) + suffix (`scoring-rubric.md`, `output-schema.md`)
+20 markdown files in `src/grippy/prompts_data/`. Composition:
+1. **Identity** (Agno `description`): CONSTITUTION.md + PERSONA.md
+2. **Instructions** (Agno `instructions`): system-core.md + mode prefix + 8 shared prompts + scoring-rubric.md + output-schema.md
 
-Review modes: `pr_review`, `security_audit`, `governance_check`, `surprise_audit`, `cli`, `github_app`.
+6 review modes: `pr_review`, `security_audit`, `governance_check`, `surprise_audit`, `cli`, `github_app`.
 
 ## Code Conventions
 
-- **Python 3.12+**, package managed with **uv**
-- **Ruff** for linting and formatting, line length 100, rules: E, F, I, N, W, UP, B, RUF, C4 (E501 ignored)
-- **MyPy** strict mode: `disallow_untyped_defs`, `check_untyped_defs`
-- **SPDX license header** required on all `.py` files: `# SPDX-License-Identifier: MIT` in the first 3 lines
-- **Pre-commit hooks**: trailing whitespace, end-of-file fixer, YAML check, large file check (1MB), merge conflict check, license header, ruff lint+format, secret detection (detect-secrets)
-- **GitHub Actions** are SHA-pinned (not tag-pinned) for supply chain security
-- Error messages posted to PR comments must be sanitized — never leak internal paths or stack traces
-- **`nh3`** is the HTML sanitizer for PR comment content (`github_review.py`). Use `nh3.clean()` for any code rendering PR-origin text into GitHub comments.
+- **Python 3.12+**, managed with **uv**, published as **grippy-mcp** on PyPI
+- **Ruff** — line length 100, rules: `E, F, I, N, W, UP, B, RUF, C4` (E501 ignored)
+- **MyPy** strict — `disallow_untyped_defs`, `check_untyped_defs`
+- **SPDX header** — `# SPDX-License-Identifier: MIT` in first 3 lines of every `.py` file
+- **Pre-commit** — trailing whitespace, EOF fixer, YAML/TOML/AST checks, large file (1MB), merge conflict, license header, ruff lint+format, bandit, detect-secrets
+- **GitHub Actions SHA-pinned** — no tag-pinned actions, supply chain security
+- **Commit messages** — imperative, lowercase, prefixed: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, `style:`. Always `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+- **PR comments** — never leak internal paths or stack traces. Use `nh3.clean()` for any PR-origin text.
+- **Test files** — mirror source structure: `src/grippy/foo.py` → `tests/test_grippy_foo.py`. 50 LOC minimum enforced by parity check.
+- **detect-secrets** — test diffs with fake credentials need `# pragma: allowlist secret` + regenerate `.secrets.baseline`
 
 ## Environment Variables
 
 | Variable | Purpose | Default |
-|---|---|---|
-| `GRIPPY_TRANSPORT` | `"openai"`, `"anthropic"`, `"google"`, `"groq"`, `"mistral"`, or `"local"` | `"local"` |
+|----------|---------|---------|
+| `GRIPPY_TRANSPORT` | Provider: `openai`, `anthropic`, `google`, `groq`, `mistral`, `local` | `local` |
 | `GRIPPY_MODEL_ID` | Model identifier | `devstral-small-2-24b-instruct-2512` |
 | `GRIPPY_BASE_URL` | API endpoint for local transport | `http://localhost:1234/v1` |
 | `GRIPPY_EMBEDDING_MODEL` | Embedding model name | `text-embedding-qwen3-embedding-4b` |
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` |
 | `GRIPPY_DATA_DIR` | Persistence directory | `./grippy-data` |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
-| `GRIPPY_PROFILE` | Security profile: `general`, `security`, `strict-security` | `general` |
+| `GRIPPY_PROFILE` | Security profile | `general` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
 | `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | — |
-| `OPENAI_API_KEY` | OpenAI API key (when transport=openai) | — |
+| `OPENAI_API_KEY` | OpenAI API key (sets transport to openai) | — |
+| `ANTHROPIC_API_KEY` | Anthropic API key (when transport=anthropic) | — |
+| `GOOGLE_API_KEY` | Google API key (when transport=google) | — |
+| `GROQ_API_KEY` | Groq API key (when transport=groq) | — |
+| `MISTRAL_API_KEY` | Mistral API key (when transport=mistral) | — |
 | `GITHUB_TOKEN` | GitHub API access for PR operations | — |
 | `GITHUB_EVENT_PATH` | Path to PR event JSON (set by Actions) | — |
 
-## Security Considerations
+## Security Model
 
-The codebase tools in `codebase.py` are security-sensitive since they accept LLM-generated input:
-- Path traversal protection uses `Path.is_relative_to()` (not `startswith`)
-- `grep_code` does not follow symlinks (`-S` flag)
-- `list_files` enforces repo boundary checks with 5-second glob timeout (`time.monotonic()`)
-- Result limits: 5,000 files indexed, 500 glob results, 12,000 char per tool response
-- Tool outputs are sanitized via Agno's `tool_hooks` middleware (`sanitize_tool_hook` in codebase.py) — `navi_sanitize.clean()` + XML-escape + 12K char truncation applied centrally to all tool string results before reaching the LLM. Prevents indirect prompt injection through crafted file contents
+### Codebase Tools (`codebase.py`) — LLM-facing, security-critical
 
-The prompt construction pipeline (`agent.py`) has multi-layer injection defense:
-- `_escape_xml()` applies navi-sanitize (Unicode normalization), NL injection pattern neutralization (7 compiled regexes replacing scoring directives, confidence manipulation, system overrides with `[BLOCKED]`), and XML entity escaping — in that order
-- `format_pr_context()` prepends a data-fence boundary instructing the LLM to treat all subsequent content as data, not instructions
-- `_escape_rule_field()` in `review.py` XML-escapes filenames, messages, and evidence before inserting rule findings into the `<rule_findings>` context
+- Path traversal: `Path.is_relative_to()` (not `startswith`)
+- Symlink: `grep_code` uses `-S` flag (no follow)
+- Glob timeout: 5-second `time.monotonic()` deadline
+- Result caps: 5,000 files indexed, 500 glob results, 12,000 chars per tool response
+- Sanitization: `tool_hooks` middleware applies `navi_sanitize.clean()` + XML-escape + 12K truncation to all tool outputs before LLM sees them
 
-The output pipeline (`github_review.py`) runs 5 stages on all LLM text before posting:
-- navi-sanitize → nh3 HTML stripping → markdown image removal (tracking pixels) → markdown link rewriting (phishing) → dangerous URI scheme filter
+### Prompt Injection Defense (`agent.py`)
 
-Session history (`add_history_to_context`) is disabled — prior LLM responses may contain attacker-controlled PR content echoed by the model, enabling history poisoning.
+- `_escape_xml()`: navi-sanitize → 7 compiled regex patterns neutralize scoring/confidence/system-override injections → XML entity escape
+- `format_pr_context()`: data-fence boundary before all PR content
+- `_escape_rule_field()`: XML-escapes filenames, messages, evidence in rule findings
 
-The retry path (`retry.py`) has two mitigations:
-- `_safe_error_summary()` strips raw field values from `ValidationError` before echoing into retry prompts
-- `_validate_rule_coverage()` cross-references rule findings against both expected counts AND expected file sets — prevents dummy/hallucinated findings that pass count checks alone
+### Output Sanitization (`github_review.py`)
 
-The adversarial test suite (`tests/test_hostile_environment.py`) exercises 44 attack scenarios across 9 domains. All pass.
+5-stage pipeline on all LLM text before posting to GitHub:
+1. `navi_sanitize.clean()` — Unicode normalization
+2. `nh3.clean()` — HTML stripping
+3. Markdown image removal — tracking pixel defense
+4. Markdown link rewriting — phishing prevention
+5. Dangerous URI scheme filter
+
+### Retry Safety (`retry.py`)
+
+- `_safe_error_summary()`: strips raw field values from ValidationError before retry prompts
+- `_validate_rule_coverage()`: cross-references rule findings against expected counts AND file sets — prevents hallucinated findings
+
+### Session History
+
+Disabled (`add_history_to_context = False`). Prior LLM responses may contain attacker-controlled PR content, enabling history poisoning.
+
+### Adversarial Test Suite
+
+`tests/test_hostile_environment.py` — 44 attack scenarios across 9 domains: Unicode input, prompt injection, tool output injection, output sanitization, codebase tool exploitation, information leakage, schema validation, session history poisoning, PR target advice.
+
+## CI / Quality Gates
+
+| Workflow | Purpose |
+|----------|---------|
+| `tests.yml` | pytest (3.12 + 3.13), coverage (≥80%), lint, format, typecheck, bandit, semgrep, quality gate, test parity |
+| `pre-commit.yml` | Pre-commit hook validation |
+| `grippy-review.yml` | Grippy self-review on PRs |
+| `codeql.yml` | CodeQL SAST |
+| `scorecard.yml` | OpenSSF Scorecard + badge |
+| `release.yml` | PyPI publish via OIDC trusted publisher (SLSA L3) |
+| `_build-reusable.yml` | Reusable build with attestations + SBOM |
+
+Quality gate (`.github/quality-gate.json`): auto-bumped on main push. Enforces test count floor, coverage floor, and parity violation ceiling.
+
+## Dependencies of Note
+
+- **`agno[openai]`** must stay in core deps — `OpenAILike` (local transport) requires the `openai` SDK
+- **`sqlalchemy`** must stay in core deps — not imported by grippy directly, but agno's sqlite session storage depends on it
+- **`lancedb`** — codebase vector index, in core deps (moved from optional `[persistence]` extra)
+- **Provider extras** — `pip install grippy-mcp[anthropic]` etc. pull `agno[anthropic]>=1.1.0`
