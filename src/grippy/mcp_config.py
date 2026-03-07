@@ -63,15 +63,27 @@ def get_available_clients() -> list[MCPClient]:
     return available
 
 
-def generate_server_entry(project_root: Path, env: dict[str, str]) -> dict[str, Any]:
+def generate_server_entry(
+    project_root: Path | None, env: dict[str, str]
+) -> dict[str, Any]:
     """Generate a grippy MCP server entry for client config files.
+
+    If *project_root* is provided, generates a dev-mode entry using
+    ``uv run --directory``.  If *project_root* is None, generates a
+    published-package entry using ``uvx grippy-mcp``.
 
     Returns:
         Dict with command, args, and env suitable for mcpServers config.
     """
+    if project_root is not None:
+        return {
+            "command": "uv",
+            "args": ["run", "--directory", str(project_root), "grippy", "serve"],
+            "env": env,
+        }
     return {
-        "command": "uv",
-        "args": ["run", "--directory", str(project_root), "grippy", "serve"],
+        "command": "uvx",
+        "args": ["grippy-mcp", "serve"],
         "env": env,
     }
 

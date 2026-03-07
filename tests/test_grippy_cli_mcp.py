@@ -228,6 +228,33 @@ class TestInstallMcpInProcess:
 
 
 # ---------------------------------------------------------------------------
+# generate_server_entry uvx tests
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateServerEntryUvx:
+    """Tests for uvx-based server entry generation."""
+
+    def test_generate_entry_uses_uvx(self) -> None:
+        """Published install generates uvx grippy-mcp command."""
+        from grippy.mcp_config import generate_server_entry
+
+        entry = generate_server_entry(project_root=None, env={"GRIPPY_TRANSPORT": "local"})
+        assert entry["command"] == "uvx"
+        assert entry["args"] == ["grippy-mcp", "serve"]
+        assert entry["env"] == {"GRIPPY_TRANSPORT": "local"}
+
+    def test_generate_entry_dev_mode(self) -> None:
+        """Dev install with project_root uses uv run --directory."""
+        from grippy.mcp_config import generate_server_entry
+
+        entry = generate_server_entry(project_root=Path("/some/path"), env={})
+        assert entry["command"] == "uv"
+        assert "--directory" in entry["args"]
+        assert "/some/path" in entry["args"]
+
+
+# ---------------------------------------------------------------------------
 # _ci_review tests (in-process)
 # ---------------------------------------------------------------------------
 

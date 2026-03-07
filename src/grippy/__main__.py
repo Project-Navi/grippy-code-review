@@ -87,6 +87,12 @@ def _install_mcp(argv: list[str]) -> None:
         default="security",
         help="Security profile (default: security)",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        default=False,
+        help="Use dev-mode entry (uv run --directory) instead of uvx",
+    )
     args = parser.parse_args(argv)
 
     from grippy.mcp_config import (
@@ -164,7 +170,8 @@ def _install_mcp(argv: list[str]) -> None:
             selected_clients = [available[i - 1] for i in indices]
 
     # -- Generate and install --
-    entry = generate_server_entry(_PROJECT_ROOT, env)
+    root = _PROJECT_ROOT if args.dev else None
+    entry = generate_server_entry(root, env)
 
     for client in selected_clients:
         ok = add_to_client(client, entry)
