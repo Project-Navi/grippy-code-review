@@ -26,7 +26,7 @@ Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, 
 
 - **Security-first, not security-added.** Grippy is a security auditor that also reviews code, not the other way around. Dedicated audit modes go deeper than a general-purpose linter.
 
-- **Deterministic rules, not just LLM guesses.** A built-in rule engine runs 6 security rules against every diff before the LLM sees it. Findings are guaranteed — not hallucinated — and the profile gate can fail CI on critical severity hits, independent of model output.
+- **Deterministic rules, not just LLM guesses.** A built-in rule engine runs 10 security rules against every diff before the LLM sees it. Findings are guaranteed — not hallucinated — and the profile gate can fail CI on critical severity hits, independent of model output.
 
 - **MCP server** — use Grippy as a local diff auditor from Claude Code, Cursor, or Claude Desktop via the Model Context Protocol.
 
@@ -203,7 +203,7 @@ If your codebase is co-developed with an AI coding assistant, **we strongly reco
 
 ## Security profiles
 
-Grippy ships with the deterministic rule engine **on by default** (`security` profile). Six rules scan every diff for secrets, dangerous sinks, workflow permission escalation, path traversal, unsanitized LLM output, and risky CI scripts — before the LLM sees anything. These findings are guaranteed, not hallucinated.
+Grippy ships with the deterministic rule engine **on by default** (`security` profile). Ten rules scan every diff for secrets, dangerous sinks, workflow permission escalation, path traversal, unsanitized LLM output, risky CI scripts, SQL injection, weak cryptography, hardcoded credentials, and insecure deserialization — before the LLM sees anything. These findings are guaranteed, not hallucinated.
 
 Switch profiles via `GRIPPY_PROFILE` env var or `--profile` CLI flag (CLI takes priority).
 
@@ -224,7 +224,7 @@ grippy --profile strict-security
 GRIPPY_PROFILE=general grippy
 ```
 
-The 6 deterministic rules:
+The 10 deterministic rules:
 
 | Rule ID | Detects | Severity |
 |---|---|---|
@@ -234,6 +234,10 @@ The 6 deterministic rules:
 | `path-traversal-risk` | tainted path variables, `../` patterns | WARN |
 | `llm-output-unsanitized` | model output piped to sinks without sanitizer | ERROR |
 | `ci-script-execution-risk` | risky CI script patterns, sudo in CI | CRITICAL / WARN |
+| `sql-injection-risk` | SQL queries built from interpolated input | ERROR |
+| `weak-crypto` | MD5, SHA1, DES, ECB mode, insecure RNG | WARN |
+| `hardcoded-credentials` | passwords, connection strings, auth headers | ERROR |
+| `insecure-deserialization` | unsafe deserialization sinks (shelve, dill, etc.) | ERROR |
 
 Rule findings are injected into the LLM context as confirmed facts for explanation.
 

@@ -86,11 +86,11 @@ MCP client → scan_diff or audit_diff tool
 | `graph_context.py` | `build_context_pack()` — traverses import graph for pre-review context. |
 | `imports.py` | Python AST import extraction for knowledge graph edges. |
 | `embedder.py` | Embedder factory for OpenAI-compatible embedding models. |
-| `rules/` | Deterministic security rule engine. 6 rules, 3 profiles, diff parsing. |
+| `rules/` | Deterministic security rule engine. 10 rules, 3 profiles, diff parsing. |
 
 ### Rules Engine
 
-6 rules scan diffs before the LLM: secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks. Controlled by `GRIPPY_PROFILE`:
+10 rules scan diffs before the LLM: secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks, SQL injection, weak crypto, hardcoded credentials, insecure deserialization. Controlled by `GRIPPY_PROFILE`:
 - `security` (default) — gate fails on ERROR+
 - `strict-security` — gate fails on WARN+
 - `general` — rules off, LLM-only review

@@ -125,7 +125,7 @@ class TestRuleEngine:
     def test_default_registry_loads(self) -> None:
         """Verify default engine loads all rules from the registry."""
         engine = RuleEngine()
-        assert len(engine._rules) == 6
+        assert len(engine._rules) == 10
 
 
 # --- Convenience wrappers from grippy.rules.__init__ ---

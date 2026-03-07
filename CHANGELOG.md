@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Retrieval quality benchmarks** — `python -m benchmarks search` and `python -m benchmarks graph` for validating search and graph retrieval quality
 - **Hybrid search** — migrated CodebaseIndex from pure vector search to LanceDB hybrid search (vector + full-text + RRF reranking) with vector-only fallback
 - **LanceDB in core deps** — moved from optional `[persistence]` extra to always-available
+- **4 new OWASP security rules** — expands deterministic rule engine from 6 to 10 rules:
+  - `sql-injection-risk` — SQL queries built via f-strings, %-formatting, or concatenation (A03)
+  - `weak-crypto` — MD5, SHA1, DES, ECB mode, and `random` for security contexts (A02)
+  - `hardcoded-credentials` — hardcoded passwords, DB connection strings, auth headers (A07)
+  - `insecure-deserialization` — unsafe deserialization sinks: shelve, dill, yaml.load, torch.load (A08)
 
 ### Changed
 
