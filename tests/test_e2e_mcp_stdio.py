@@ -295,7 +295,7 @@ def _audit_server_params() -> StdioServerParameters:
             "GRIPPY_TRANSPORT": "local",
             "GRIPPY_BASE_URL": f"http://{_HOMELAB_HOST}:{_HOMELAB_PORT}/v1",
             "GRIPPY_MODEL_ID": "devstral-small-2-24b-instruct-2512",
-            "GRIPPY_API_KEY": "lm-studio",
+            "GRIPPY_API_KEY": "lm-studio",  # pragma: allowlist secret
         }
     )
     return StdioServerParameters(

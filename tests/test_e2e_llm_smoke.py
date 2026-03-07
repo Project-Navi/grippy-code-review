@@ -239,7 +239,7 @@ index 0000000..b2c3d4e
 +import os
 +import sqlite3
 +
-+DB_PASSWORD = "admin123"
++DB_PASSWORD = "admin123"  # pragma: allowlist secret
 +
 +
 +def authenticate(username: str, password: str) -> bool:
@@ -255,7 +255,7 @@ index 0000000..b2c3d4e
 +    return hashlib.md5(pw.encode()).hexdigest()
 +
 +
-+API_KEY = "sk-proj-AAAAAAAAAAAAAAAA"
++API_KEY = "sk-proj-AAAAAAAAAAAAAAAA"  # pragma: allowlist secret
 diff --git a/api/views.py b/api/views.py
 new file mode 100644
 index 0000000..c3d4e5f
@@ -293,8 +293,8 @@ index 0000000..d4e5f6a
 +import sqlite3
 +import hashlib
 +
-+STRIPE_SECRET_KEY = "sk_test_FAKE_KEY_FOR_TESTING_1234567890"
-+DB_CONN_STRING = "postgresql://admin:password123@prod-db:5432/payments"
++STRIPE_SECRET_KEY = "sk_test_FAKE_KEY_FOR_TESTING_1234567890"  # pragma: allowlist secret
++DB_CONN_STRING = "postgresql://admin:password123@prod-db:5432/payments"  # pragma: allowlist secret
 +
 +
 +def process_payment(card_number: str, amount: float, merchant_id: str) -> dict:
