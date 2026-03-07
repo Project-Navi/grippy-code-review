@@ -1,0 +1,635 @@
+[
+  {
+    "id": "blast-graph_types-d1",
+    "description": "Direct dependents of graph_types.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph_types.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/graph.py",
+      "src/grippy/graph_context.py",
+      "src/grippy/graph_store.py",
+      "src/grippy/review.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-schema-d1",
+    "description": "Direct dependents of schema.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/schema.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/agent.py",
+      "src/grippy/github_review.py",
+      "src/grippy/retry.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-review-d1",
+    "description": "Direct dependents of review.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/review.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/__main__.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-codebase-d1",
+    "description": "Direct dependents of codebase.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/codebase.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/review.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-agent-d1",
+    "description": "Direct dependents of agent.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/agent.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/review.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-base-d1",
+    "description": "Direct dependents of base.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/base.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/rules/__init__.py",
+      "src/grippy/rules/ci_script_risk.py",
+      "src/grippy/rules/config.py",
+      "src/grippy/rules/dangerous_sinks.py",
+      "src/grippy/rules/engine.py",
+      "src/grippy/rules/llm_output_sinks.py",
+      "src/grippy/rules/path_traversal.py",
+      "src/grippy/rules/registry.py",
+      "src/grippy/rules/secrets_in_diff.py",
+      "src/grippy/rules/workflow_permissions.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-context-d1",
+    "description": "Direct dependents of context.py",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/context.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/rules/__init__.py",
+      "src/grippy/rules/base.py",
+      "src/grippy/rules/ci_script_risk.py",
+      "src/grippy/rules/dangerous_sinks.py",
+      "src/grippy/rules/engine.py",
+      "src/grippy/rules/llm_output_sinks.py",
+      "src/grippy/rules/path_traversal.py",
+      "src/grippy/rules/secrets_in_diff.py",
+      "src/grippy/rules/workflow_permissions.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "blast-graph_types-d2",
+    "description": "Transitive dependents of graph_types.py at depth 2",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph_types.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 2
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/__main__.py",
+      "src/grippy/graph.py",
+      "src/grippy/graph_context.py",
+      "src/grippy/graph_store.py",
+      "src/grippy/review.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_2",
+      "multi_hop"
+    ]
+  },
+  {
+    "id": "blast-schema-d2",
+    "description": "Transitive dependents of schema.py at depth 2",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/schema.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 2
+    },
+    "expected_files": [
+      "src/grippy/__init__.py",
+      "src/grippy/agent.py",
+      "src/grippy/github_review.py",
+      "src/grippy/retry.py",
+      "src/grippy/review.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_2",
+      "multi_hop"
+    ]
+  },
+  {
+    "id": "blast-base-d2",
+    "description": "Transitive dependents of base.py at depth 2",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/base.py"
+      ],
+      "direction": "incoming",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 2
+    },
+    "expected_files": [
+      "src/grippy/rules/__init__.py",
+      "src/grippy/rules/ci_script_risk.py",
+      "src/grippy/rules/config.py",
+      "src/grippy/rules/context.py",
+      "src/grippy/rules/dangerous_sinks.py",
+      "src/grippy/rules/engine.py",
+      "src/grippy/rules/llm_output_sinks.py",
+      "src/grippy/rules/path_traversal.py",
+      "src/grippy/rules/registry.py",
+      "src/grippy/rules/secrets_in_diff.py",
+      "src/grippy/rules/workflow_permissions.py"
+    ],
+    "tags": [
+      "blast_radius",
+      "depth_2",
+      "multi_hop"
+    ]
+  },
+  {
+    "id": "deps-review-d1",
+    "description": "What does review.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/review.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/agent.py",
+      "src/grippy/codebase.py",
+      "src/grippy/embedder.py",
+      "src/grippy/github_review.py",
+      "src/grippy/graph_context.py",
+      "src/grippy/graph_store.py",
+      "src/grippy/graph_types.py",
+      "src/grippy/imports.py",
+      "src/grippy/retry.py",
+      "src/grippy/rules.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-agent-d1",
+    "description": "What does agent.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/agent.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/prompts.py",
+      "src/grippy/schema.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-graph_context-d1",
+    "description": "What does graph_context.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph_context.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/graph_store.py",
+      "src/grippy/graph_types.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-graph_store-d1",
+    "description": "What does graph_store.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph_store.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/graph_types.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-github_review-d1",
+    "description": "What does github_review.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/github_review.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/schema.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-retry-d1",
+    "description": "What does retry.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/retry.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/schema.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-graph-d1",
+    "description": "What does graph.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/graph_types.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-rules-engine-d1",
+    "description": "What does engine.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/engine.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/rules/base.py",
+      "src/grippy/rules/config.py",
+      "src/grippy/rules/context.py",
+      "src/grippy/rules/registry.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-rules-registry-d1",
+    "description": "What does registry.py import from grippy?",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/registry.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [
+      "src/grippy/rules/base.py",
+      "src/grippy/rules/ci_script_risk.py",
+      "src/grippy/rules/dangerous_sinks.py",
+      "src/grippy/rules/llm_output_sinks.py",
+      "src/grippy/rules/path_traversal.py",
+      "src/grippy/rules/secrets_in_diff.py",
+      "src/grippy/rules/workflow_permissions.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "deps-review-d2",
+    "description": "Transitive deps of review.py at depth 2",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/review.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 2
+    },
+    "expected_files": [
+      "src/grippy/agent.py",
+      "src/grippy/codebase.py",
+      "src/grippy/embedder.py",
+      "src/grippy/github_review.py",
+      "src/grippy/graph_context.py",
+      "src/grippy/graph_store.py",
+      "src/grippy/graph_types.py",
+      "src/grippy/imports.py",
+      "src/grippy/prompts.py",
+      "src/grippy/retry.py",
+      "src/grippy/rules.py",
+      "src/grippy/schema.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_2",
+      "multi_hop"
+    ]
+  },
+  {
+    "id": "deps-rules-engine-d2",
+    "description": "Transitive deps of engine.py at depth 2",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/rules/engine.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 2
+    },
+    "expected_files": [
+      "src/grippy/rules/base.py",
+      "src/grippy/rules/ci_script_risk.py",
+      "src/grippy/rules/config.py",
+      "src/grippy/rules/context.py",
+      "src/grippy/rules/dangerous_sinks.py",
+      "src/grippy/rules/llm_output_sinks.py",
+      "src/grippy/rules/path_traversal.py",
+      "src/grippy/rules/registry.py",
+      "src/grippy/rules/secrets_in_diff.py",
+      "src/grippy/rules/workflow_permissions.py"
+    ],
+    "tags": [
+      "dependencies",
+      "depth_2",
+      "multi_hop"
+    ]
+  },
+  {
+    "id": "leaf-codebase",
+    "description": "codebase.py has no grippy imports (leaf node)",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/codebase.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [],
+    "tags": [
+      "leaf_node",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "leaf-embedder",
+    "description": "embedder.py has no grippy imports (leaf node)",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/embedder.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [],
+    "tags": [
+      "leaf_node",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "leaf-graph_types",
+    "description": "graph_types.py has no grippy imports (leaf node)",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/graph_types.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [],
+    "tags": [
+      "leaf_node",
+      "depth_1"
+    ]
+  },
+  {
+    "id": "leaf-imports",
+    "description": "imports.py has no grippy imports (leaf node)",
+    "query_type": "walk",
+    "params": {
+      "start_files": [
+        "src/grippy/imports.py"
+      ],
+      "direction": "outgoing",
+      "rel_allow": [
+        "IMPORTS"
+      ],
+      "max_depth": 1
+    },
+    "expected_files": [],
+    "tags": [
+      "leaf_node",
+      "depth_1"
+    ]
+  }
+]

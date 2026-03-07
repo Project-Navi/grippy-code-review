@@ -33,6 +33,9 @@ dependencies = [
 persistence = [
     "lancedb>=0.20.0",
 ]
+benchmarks = [
+    "coir-eval>=0.1.0",
+]
 
 [dependency-groups]
 dev = [
@@ -67,6 +70,11 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["grippy.*", "coir.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.bandit]
 targets = ["src/grippy"]

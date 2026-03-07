@@ -18,3 +18,6 @@ docs/internal/
 docs/plans/
 nboot-spec.json
 .hypothesis/
+.worktrees/
+benchmarks/output/
+!benchmarks/output/.gitkeep
