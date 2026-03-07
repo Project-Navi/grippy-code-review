@@ -138,7 +138,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --extra persistence
+        run: uv sync
 
       - name: Audit dependencies
         run: uv run pip-audit --desc --output=pip-audit-report.json --format=json --skip-editable

@@ -85,7 +85,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Grippy
-        run: pip install "grippy-code-review[persistence]"
+        run: pip install "grippy-code-review"
 
       - name: Run review
         env:
@@ -108,10 +108,10 @@ Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studi
 
 ```bash
 # With uv (recommended)
-uv add "grippy-code-review[persistence]"
+uv add "grippy-code-review"
 
 # Or with pip
-pip install "grippy-code-review[persistence]"
+pip install "grippy-code-review"
 ```
 
 ### MCP Server
