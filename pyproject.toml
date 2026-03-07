@@ -56,6 +56,7 @@ dev = [
     "pip-audit>=2.7.0",
     "hypothesis>=6.0.0",
     "defusedxml>=0.7.0",
+    "pytest-timeout>=2.3.0",
 ]
 
 [tool.ruff]
@@ -68,6 +69,7 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["e2e: end-to-end tests requiring external services (LLM APIs, MCP server)"]
 
 [tool.mypy]
 python_version = "3.12"

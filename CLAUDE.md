@@ -53,6 +53,15 @@ python -m grippy install-mcp
 
 # Run MCP-specific tests
 uv run pytest tests/test_grippy_mcp_server.py tests/test_grippy_mcp_config.py tests/test_grippy_mcp_response.py tests/test_grippy_local_diff.py tests/test_grippy_cli_mcp.py -v
+
+# Run e2e tests (requires API keys in env)
+OPENAI_API_KEY=sk-... uv run pytest -m e2e -v
+
+# Run e2e tests for a specific provider
+ANTHROPIC_API_KEY=... uv run pytest -m e2e tests/test_e2e_llm_smoke.py -k anthropic -v
+
+# Run MCP stdio e2e tests (no API key needed for scan_diff)
+uv run pytest -m e2e tests/test_e2e_mcp_stdio.py -v
 ```
 
 ## Architecture
