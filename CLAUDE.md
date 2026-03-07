@@ -39,11 +39,13 @@ uv run pytest tests/test_grippy_rules_engine.py tests/test_grippy_rules_config.p
 # Run a single rule's tests
 uv run pytest tests/test_grippy_rule_secrets.py -v
 
-# Run review locally
+# Run review locally (python -m grippy still works; grippy alias requires pip install grippy-mcp)
 OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -m grippy
+OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json grippy
 
 # Run review with security profile
 OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -m grippy --profile security
+OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json grippy --profile security
 
 # Start MCP server (stdio transport)
 python -m grippy serve
@@ -62,6 +64,14 @@ ANTHROPIC_API_KEY=... uv run pytest -m e2e tests/test_e2e_llm_smoke.py -k anthro
 
 # Run MCP stdio e2e tests (no API key needed for scan_diff)
 uv run pytest -m e2e tests/test_e2e_mcp_stdio.py -v
+
+# Console scripts (after pip install grippy-mcp)
+grippy serve              # Start MCP server
+grippy install-mcp        # Interactive MCP client installer
+grippy --profile security # Legacy CI review
+
+# Zero-install via uvx
+uvx grippy-mcp serve
 ```
 
 ## Architecture
