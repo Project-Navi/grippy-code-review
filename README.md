@@ -7,7 +7,7 @@
 [![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Project-Navi/grippy-code-review/badge)](https://scorecard.dev/viewer/?uri=github.com/Project-Navi/grippy-code-review)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
-[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://pypi.org/project/grippy-code-review/)
+[![PyPI](https://img.shields.io/pypi/v/grippy-mcp)](https://pypi.org/project/grippy-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -85,7 +85,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Grippy
-        run: pip install "grippy-code-review"
+        run: pip install "grippy-mcp"
 
       - name: Run review
         env:
@@ -108,25 +108,38 @@ Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studi
 
 ```bash
 # OpenAI (default, included in base install)
-pip install "grippy-code-review"
+pip install "grippy-mcp"
 
 # Anthropic
-pip install "grippy-code-review[anthropic]"
+pip install "grippy-mcp[anthropic]"
 
 # Google (Gemini)
-pip install "grippy-code-review[google]"
+pip install "grippy-mcp[google]"
 
 # Groq
-pip install "grippy-code-review[groq]"
+pip install "grippy-mcp[groq]"
 
 # Mistral
-pip install "grippy-code-review[mistral]"
+pip install "grippy-mcp[mistral]"
 
 # Or with uv
-uv add "grippy-code-review[anthropic]"
+uv add "grippy-mcp[anthropic]"
 ```
 
 ### MCP Server
+
+### Quick start (zero install)
+
+```bash
+uvx grippy-mcp serve
+```
+
+Or install globally:
+
+```bash
+pip install grippy-mcp
+grippy serve
+```
 
 Grippy runs as an MCP server for local git diff auditing — no GitHub Actions required.
 
@@ -145,7 +158,8 @@ Grippy runs as an MCP server for local git diff auditing — no GitHub Actions r
 **Install into your MCP client:**
 
 ```bash
-python -m grippy install-mcp
+python -m grippy install-mcp          # registers uvx grippy-mcp in client configs
+python -m grippy install-mcp --dev    # dev mode: uses uv run --directory
 ```
 
 The installer detects Claude Code, Claude Desktop, and Cursor, then writes the server config with your chosen LLM transport and API keys.
