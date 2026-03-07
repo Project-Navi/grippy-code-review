@@ -70,7 +70,7 @@ class TestGenerateServerEntry:
 
     def test_entry_has_env(self) -> None:
         """Entry includes the provided env dict."""
-        env = {"OPENAI_API_KEY": "sk-test"}
+        env = {"GRIPPY_TRANSPORT": "openai"}
         entry = generate_server_entry(Path("/p"), env)
         assert entry["env"] == env
 

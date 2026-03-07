@@ -174,7 +174,7 @@ class TestSerializeAudit:
                 message="Hardcoded secret",
                 file="config.py",
                 line=10,
-                evidence="API_KEY = 'sk-...'",
+                evidence="TOKEN = 'redacted'",
             ),
         ]
         result = serialize_audit(
@@ -187,7 +187,7 @@ class TestSerializeAudit:
         assert rf["message"] == "Hardcoded secret"
         assert rf["file"] == "config.py"
         assert rf["line"] == 10
-        assert rf["evidence"] == "API_KEY = 'sk-...'"
+        assert rf["evidence"] == "TOKEN = 'redacted'"
 
     def test_rule_findings_empty_by_default(self) -> None:
         review = _make_review()
