@@ -206,6 +206,7 @@ def _ci_review(argv: list[str]) -> None:
 # Routing
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Console script entry point — dispatches subcommands."""
     if len(sys.argv) > 1 and sys.argv[1] in _SUBCOMMANDS:

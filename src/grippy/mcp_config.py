@@ -63,9 +63,7 @@ def get_available_clients() -> list[MCPClient]:
     return available
 
 
-def generate_server_entry(
-    project_root: Path | None, env: dict[str, str]
-) -> dict[str, Any]:
+def generate_server_entry(project_root: Path | None, env: dict[str, str]) -> dict[str, Any]:
     """Generate a grippy MCP server entry for client config files.
 
     If *project_root* is provided, generates a dev-mode entry using
