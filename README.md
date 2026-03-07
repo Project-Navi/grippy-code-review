@@ -107,11 +107,23 @@ Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studi
 ### Local development
 
 ```bash
-# With uv (recommended)
-uv add "grippy-code-review"
-
-# Or with pip
+# OpenAI (default, included in base install)
 pip install "grippy-code-review"
+
+# Anthropic
+pip install "grippy-code-review[anthropic]"
+
+# Google (Gemini)
+pip install "grippy-code-review[google]"
+
+# Groq
+pip install "grippy-code-review[groq]"
+
+# Mistral
+pip install "grippy-code-review[mistral]"
+
+# Or with uv
+uv add "grippy-code-review[anthropic]"
 ```
 
 ### MCP Server
@@ -152,7 +164,7 @@ Grippy is configured entirely through environment variables.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `GRIPPY_TRANSPORT` | API transport: `openai` or `local` | Inferred from `OPENAI_API_KEY` |
+| `GRIPPY_TRANSPORT` | API transport: `openai`, `anthropic`, `google`, `groq`, `mistral`, or `local` | Inferred from `OPENAI_API_KEY` |
 | `GRIPPY_MODEL_ID` | Model identifier | `devstral-small-2-24b-instruct-2512` |
 | `GRIPPY_BASE_URL` | API endpoint for local transport | `http://localhost:1234/v1` |
 | `GRIPPY_EMBEDDING_MODEL` | Embedding model name | `text-embedding-qwen3-embedding-4b` |

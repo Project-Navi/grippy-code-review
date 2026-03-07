@@ -32,6 +32,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+anthropic = ["agno[anthropic]>=1.1.0"]
+google = ["agno[google]>=1.1.0"]
+groq = ["agno[groq]>=1.1.0"]
+mistral = ["agno[mistral]>=1.1.0"]
 benchmarks = [
     "coir-eval>=0.1.0",
 ]
