@@ -46,6 +46,23 @@ class TestGetConfigPath:
         assert path is not None
         assert path.name == "claude_desktop_config.json"
 
+    def test_claude_desktop_darwin(self) -> None:
+        """Claude Desktop config path on macOS uses Application Support."""
+        with patch("grippy.mcp_config.sys") as mock_sys:
+            mock_sys.platform = "darwin"
+            path = get_config_path(MCPClient.CLAUDE_DESKTOP)
+        assert path is not None
+        assert "Application Support" in str(path) or "Claude" in str(path)
+        assert path.name == "claude_desktop_config.json"
+
+    def test_claude_desktop_win32(self) -> None:
+        """Claude Desktop config path on Windows uses AppData/Roaming."""
+        with patch("grippy.mcp_config.sys") as mock_sys:
+            mock_sys.platform = "win32"
+            path = get_config_path(MCPClient.CLAUDE_DESKTOP)
+        assert path is not None
+        assert path.name == "claude_desktop_config.json"
+
 
 # ---------------------------------------------------------------------------
 # generate_server_entry tests
