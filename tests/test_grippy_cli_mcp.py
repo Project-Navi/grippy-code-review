@@ -255,6 +255,54 @@ class TestCiReviewInProcess:
 
 
 # ---------------------------------------------------------------------------
+# main() entry point tests
+# ---------------------------------------------------------------------------
+
+
+class TestMainEntryPoint:
+    """Tests for the main() console script entry point."""
+
+    def test_main_dispatches_serve(self) -> None:
+        """main() dispatches 'serve' subcommand."""
+        with (
+            patch("grippy.__main__._serve") as mock_serve,
+            patch("sys.argv", ["grippy", "serve"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_serve.assert_called_once_with([])
+
+    def test_main_dispatches_install_mcp(self) -> None:
+        """main() dispatches 'install-mcp' subcommand."""
+        with (
+            patch("grippy.__main__._install_mcp") as mock_install,
+            patch("sys.argv", ["grippy", "install-mcp"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_install.assert_called_once_with([])
+
+    def test_main_dispatches_legacy_ci(self) -> None:
+        """main() dispatches to legacy CI when no subcommand."""
+        with (
+            patch("grippy.__main__._ci_review") as mock_ci,
+            patch("sys.argv", ["grippy", "--profile", "security"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_ci.assert_called_once_with(["--profile", "security"])
+
+    def test_main_is_callable(self) -> None:
+        """main is importable and callable."""
+        from grippy.__main__ import main
+
+        assert callable(main)
+
+
+# ---------------------------------------------------------------------------
 # Subprocess integration tests (kept for real end-to-end coverage)
 # ---------------------------------------------------------------------------
 

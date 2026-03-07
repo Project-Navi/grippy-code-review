@@ -199,9 +199,8 @@ def _ci_review(argv: list[str]) -> None:
 # Routing
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    # Check if the first positional arg is a known subcommand.
-    # If so, dispatch to it. Otherwise, fall through to legacy CI argparse.
+def main() -> None:
+    """Console script entry point — dispatches subcommands."""
     if len(sys.argv) > 1 and sys.argv[1] in _SUBCOMMANDS:
         subcommand = sys.argv[1]
         rest = sys.argv[2:]
@@ -211,3 +210,7 @@ if __name__ == "__main__":
             _install_mcp(rest)
     else:
         _ci_review(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    main()
