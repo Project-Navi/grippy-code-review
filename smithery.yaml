@@ -1,0 +1,38 @@
+startCommand:
+  type: stdio
+  command: uvx
+  args:
+    - grippy-mcp
+    - serve
+  env:
+    GRIPPY_TRANSPORT:
+      description: "LLM transport: openai, anthropic, google, groq, mistral, or local"
+      required: false
+      default: "local"
+    GRIPPY_MODEL_ID:
+      description: "Model identifier at the inference endpoint"
+      required: false
+      default: "devstral-small-2-24b-instruct-2512"
+    GRIPPY_BASE_URL:
+      description: "API endpoint for local transport"
+      required: false
+      default: "http://localhost:1234/v1"
+    GRIPPY_PROFILE:
+      description: "Security profile: general, security, or strict-security"
+      required: false
+      default: "general"
+    OPENAI_API_KEY:
+      description: "OpenAI API key (auto-sets transport to openai)"
+      required: false
+    ANTHROPIC_API_KEY:
+      description: "Anthropic API key (when transport=anthropic)"
+      required: false
+    GOOGLE_API_KEY:
+      description: "Google API key (when transport=google)"
+      required: false
+    GROQ_API_KEY:
+      description: "Groq API key (when transport=groq)"
+      required: false
+    MISTRAL_API_KEY:
+      description: "Mistral API key (when transport=mistral)"
+      required: false

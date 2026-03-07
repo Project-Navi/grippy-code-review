@@ -87,18 +87,25 @@ jobs:
       - name: Install Grippy
         run: pip install "grippy-mcp"
 
+      # Cache the vector index to avoid re-indexing on every push
+      - name: Cache Grippy data
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5
+        with:
+          path: ./grippy-data
+          key: grippy-${{ github.event.pull_request.number }}-${{ github.sha }}
+          restore-keys: grippy-${{ github.event.pull_request.number }}-
+
       - name: Run review
+        id: review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GRIPPY_TRANSPORT: openai
           GRIPPY_MODEL_ID: gpt-4.1
-          GRIPPY_EMBEDDING_MODEL: text-embedding-3-large
-          GRIPPY_DATA_DIR: ./grippy-data
-          GRIPPY_TIMEOUT: 300
-        run: python -m grippy
+        run: grippy
 ```
+
+> **Want security gating?** Add `GRIPPY_PROFILE: security` to enable the deterministic rule engine and merge blocking. See [`examples/github-actions/grippy-security.yml`](examples/github-actions/grippy-security.yml) for a full security-focused workflow.
 
 ### GitHub Actions (self-hosted LLM)
 
@@ -294,6 +301,19 @@ Results are written as JSON to `benchmarks/output/`.
 - [Security Model](https://github.com/Project-Navi/grippy-code-review/wiki/Security-Model) — Codebase tool protections, hardened CI
 - [Self-Hosted LLM Guide](https://github.com/Project-Navi/grippy-code-review/wiki/Self-Hosted-LLM-Guide) — Ollama/LM Studio + Cloudflare Tunnel
 - [Contributing](https://github.com/Project-Navi/grippy-code-review/wiki/Contributing) — Dev setup, testing, conventions
+- [Examples](examples/) — Copy-paste workflow YAMLs and sample review output
+- [Changelog](CHANGELOG.md) — Release history
+
+### Migrating from `grippy-code-review`?
+
+The package was renamed to `grippy-mcp` in v0.2.0. Update your install:
+
+```bash
+pip uninstall grippy-code-review
+pip install grippy-mcp
+```
+
+No code changes required — all environment variables and configuration are unchanged.
 
 ## License
 

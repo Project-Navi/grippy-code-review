@@ -67,6 +67,8 @@ grippy-mcp = "grippy.__main__:main"
 Homepage = "https://github.com/Project-Navi/grippy-code-review"
 Repository = "https://github.com/Project-Navi/grippy-code-review"
 Issues = "https://github.com/Project-Navi/grippy-code-review/issues"
+Documentation = "https://github.com/Project-Navi/grippy-code-review/wiki"
+Changelog = "https://github.com/Project-Navi/grippy-code-review/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [

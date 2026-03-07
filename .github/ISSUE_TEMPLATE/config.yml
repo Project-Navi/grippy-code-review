@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/Project-Navi/grippy-code-review/security/advisories/new
+    about: Report security vulnerabilities privately via GitHub Security Advisories.
+  - name: Documentation
+    url: https://github.com/Project-Navi/grippy-code-review/wiki
+    about: Check the wiki for setup guides, configuration, and architecture docs.
