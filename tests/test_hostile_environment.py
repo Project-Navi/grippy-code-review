@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: MIT
 """Adversarial test suite — hostile input vectors for Grippy.
 
-Documents all known attack surfaces across 4 domains: prompt injection,
-GitHub Actions security, codebase tool exploitation, and output sanitization.
+Documents all known attack surfaces across 9 domains: Unicode input attacks,
+prompt injection, tool output injection, output sanitization, codebase tool
+exploitation, information leakage, schema validation, session history poisoning,
+and PR target advice.
 Tests for undefended gaps use ``pytest.mark.xfail`` — flip to normal tests
 as defenses are implemented.
 """
