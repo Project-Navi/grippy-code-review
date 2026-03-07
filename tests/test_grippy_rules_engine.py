@@ -129,6 +129,60 @@ class TestRuleEngine:
         engine = RuleEngine()
         assert len(engine._rules) == 10
 
+    def test_check_gate_skips_suppressed(self) -> None:
+        from dataclasses import replace
+
+        from grippy.rules.base import ResultEnrichment
+
+        suppressed_enrichment = ResultEnrichment(
+            blast_radius=0,
+            is_recurring=False,
+            prior_count=0,
+            suppressed=True,
+            suppression_reason="file imports sqlalchemy",
+            velocity="",
+        )
+        results = [
+            replace(
+                RuleResult(
+                    rule_id="sql-injection-risk",
+                    severity=RuleSeverity.ERROR,
+                    message="SQL injection risk",
+                    file="app.py",
+                ),
+                enrichment=suppressed_enrichment,
+            )
+        ]
+        config = ProfileConfig(name="security", fail_on=RuleSeverity.ERROR)
+        assert not RuleEngine(rule_classes=[]).check_gate(results, config)
+
+    def test_check_gate_still_fails_on_unsuppressed(self) -> None:
+        from dataclasses import replace
+
+        from grippy.rules.base import ResultEnrichment
+
+        unsuppressed = ResultEnrichment(
+            blast_radius=3,
+            is_recurring=True,
+            prior_count=2,
+            suppressed=False,
+            suppression_reason="",
+            velocity="",
+        )
+        results = [
+            replace(
+                RuleResult(
+                    rule_id="sql-injection-risk",
+                    severity=RuleSeverity.ERROR,
+                    message="SQL injection risk",
+                    file="app.py",
+                ),
+                enrichment=unsuppressed,
+            )
+        ]
+        config = ProfileConfig(name="security", fail_on=RuleSeverity.ERROR)
+        assert RuleEngine(rule_classes=[]).check_gate(results, config)
+
 
 # --- Convenience wrappers from grippy.rules.__init__ ---
 

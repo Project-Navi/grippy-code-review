@@ -28,5 +28,9 @@ class RuleEngine:
         return results
 
     def check_gate(self, results: list[RuleResult], config: ProfileConfig) -> bool:
-        """Return True if any result meets or exceeds the profile's fail_on threshold."""
-        return any(r.severity.value >= config.fail_on.value for r in results)
+        """Return True if any non-suppressed result meets or exceeds the profile's fail_on threshold."""
+        return any(
+            r.severity.value >= config.fail_on.value
+            for r in results
+            if not (r.enrichment and r.enrichment.suppressed)
+        )
