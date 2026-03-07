@@ -18,7 +18,7 @@ Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, 
 
 - **Your model, your infrastructure.** Bring your own model. No SaaS dependency, no per-seat fees. Run GPT-5 through OpenAI, Claude through a compatible proxy, or a local model via Ollama or LM Studio.
 
-- **Codebase-aware, not diff-blind.** Grippy embeds your repository into a LanceDB vector index and searches it during review. It understands the code around the diff, not just the diff itself. Most OSS alternatives paywall this behind a hosted tier.
+- **Codebase-aware, not diff-blind.** Grippy embeds your repository into a LanceDB hybrid search index (vector + full-text) and searches it during review. It understands the code around the diff, not just the diff itself. Most OSS alternatives paywall this behind a hosted tier.
 
 - **Cross-PR memory, not amnesia.** Grippy builds a knowledge graph of your codebase — tracking files, reviews, findings, and import dependencies across every PR. It knows which modules are blast-radius risks, which files have recurring findings, and which authors have patterns worth watching. Tools like CodeRabbit, Greptile, and Qodo charge $20–38/seat/month for comparable cross-PR context. Here, it's free and open-source.
 
@@ -27,6 +27,8 @@ Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, 
 - **Security-first, not security-added.** Grippy is a security auditor that also reviews code, not the other way around. Dedicated audit modes go deeper than a general-purpose linter.
 
 - **Deterministic rules, not just LLM guesses.** A built-in rule engine runs 6 security rules against every diff before the LLM sees it. Findings are guaranteed — not hallucinated — and the profile gate can fail CI on critical severity hits, independent of model output.
+
+- **MCP server** — use Grippy as a local diff auditor from Claude Code, Cursor, or Claude Desktop via the Model Context Protocol.
 
 - **It has opinions.** Grippy is a grumpy security auditor persona, not a faceless bot. Good code gets grudging respect. Bad code gets disappointment. The personality keeps reviews readable and honest.
 
@@ -111,6 +113,38 @@ uv add "grippy-code-review[persistence]"
 # Or with pip
 pip install "grippy-code-review[persistence]"
 ```
+
+### MCP Server
+
+Grippy runs as an MCP server for local git diff auditing — no GitHub Actions required.
+
+**Two tools:**
+
+| Tool | What it does | LLM required? |
+|------|-------------|---------------|
+| `scan_diff` | Deterministic security rules | No |
+| `audit_diff` | Full AI-powered code review | Yes |
+
+**Scope options** (both tools):
+- `"staged"` — staged changes (`git diff --cached`)
+- `"commit:<ref>"` — a specific commit (e.g. `"commit:HEAD"`)
+- `"range:<base>..<head>"` — commit range (e.g. `"range:main..HEAD"`)
+
+**Install into your MCP client:**
+
+```bash
+python -m grippy install-mcp
+```
+
+The installer detects Claude Code, Claude Desktop, and Cursor, then writes the server config with your chosen LLM transport and API keys.
+
+**Run the server directly:**
+
+```bash
+python -m grippy serve
+```
+
+MCP tools return dense, structured JSON designed for AI agent consumption — no personality or ASCII art.
 
 ## Configuration
 
@@ -206,6 +240,23 @@ Grippy operates in an adversarial environment — PR diffs are untrusted input c
 **Adversarial test suite.** `tests/test_hostile_environment.py` exercises 44 attack scenarios across Unicode attacks, prompt injection, tool exploitation, output sanitization gaps, information leakage, schema validation attacks, session history poisoning, and more. All 44 pass.
 
 See the [Security Model](https://github.com/Project-Navi/grippy-code-review/wiki/Security-Model) wiki page for codebase tool protections, CI hardening, and the full threat model.
+
+### Retrieval Quality Benchmarks
+
+Grippy includes a benchmark suite for validating search and graph retrieval quality.
+
+```bash
+# Run search benchmarks (requires embedding model)
+python -m benchmarks search --k 5
+
+# Run graph retrieval benchmarks (requires populated graph DB)
+python -m benchmarks graph
+
+# Run all benchmarks
+python -m benchmarks all
+```
+
+Results are written as JSON to `benchmarks/output/`.
 
 ## Documentation
 

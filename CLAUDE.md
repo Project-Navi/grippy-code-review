@@ -44,6 +44,15 @@ OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -
 
 # Run review with security profile
 OPENAI_API_KEY=sk-... GITHUB_TOKEN=ghp-... GITHUB_EVENT_PATH=event.json python -m grippy --profile security
+
+# Start MCP server (stdio transport)
+python -m grippy serve
+
+# Install Grippy as MCP server in Claude Code/Desktop/Cursor
+python -m grippy install-mcp
+
+# Run MCP-specific tests
+uv run pytest tests/test_grippy_mcp_server.py tests/test_grippy_mcp_config.py tests/test_grippy_mcp_response.py tests/test_grippy_local_diff.py tests/test_grippy_cli_mcp.py -v
 ```
 
 ## Architecture
@@ -63,6 +72,16 @@ PR event (GITHUB_EVENT_PATH) → load PR metadata
   → set GitHub Actions outputs (score, verdict, rule-gate-failed, profile, …)
 ```
 
+MCP server flow (`python -m grippy serve`):
+
+```
+MCP client request → scan_diff or audit_diff tool
+  → parse_scope() + get_local_diff() (local_diff.py) — git diff via subprocess
+  → scan_diff: run_rules() → serialize_scan() → JSON response
+  → audit_diff: run_rules() + truncate_diff() + create_reviewer() + run_review()
+    → serialize_audit() (strips personality) → JSON response
+```
+
 ### Key Modules
 
 - **review.py** — Orchestration entry point. Loads PR event, coordinates the full review pipeline, sets GitHub Actions outputs.
@@ -70,8 +89,11 @@ PR event (GITHUB_EVENT_PATH) → load PR metadata
 - **codebase.py** — `CodebaseIndex` (LanceDB vector index), `CodebaseToolkit` (Agno toolkit with `read_file`, `grep_code`, `list_files`), and `sanitize_tool_hook` (Agno `tool_hooks` middleware for centralized output sanitization). Has security-critical path traversal and symlink protections.
 - **github_review.py** — GitHub API integration. Parses unified diffs to map findings to addressable lines, posts inline comments, resolves stale threads.
 - **schema.py** — Pydantic models for the full structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`.
-- **graph.py** — Graph data model (`ReviewGraph`, `Node`, `Edge`) that transforms flat reviews into typed entity-relationship structures.
-- **persistence.py** — `GrippyStore` with dual backends: SQLite for edges, LanceDB for node embeddings. Stores the codebase knowledge graph. Includes migration support.
+- **graph_types.py** — Data model types: `NodeType`, `EdgeType` enums and `MissingNodeError`. Used by the graph store and context builder.
+- **graph.py** — Backward-compat stub re-exporting from `graph_types.py`.
+- **graph_store.py** — `SQLiteGraphStore`: manages the codebase knowledge graph in SQLite. Stores nodes and typed edges (imports, calls, defines). Includes migration support.
+- **graph_context.py** — Pre-review context builder. `build_context_pack()` traverses the import graph to gather relevant context files, `format_context_for_llm()` renders them for the prompt.
+- **imports.py** — Python import extraction via AST (`extract_imports()`). Builds dependency graph edges for the knowledge graph.
 - **retry.py** — `run_review()` wraps agent execution with JSON parsing (raw, dict, markdown-fenced) and Pydantic validation, retrying on failure with error feedback.
 - **prompts.py** — Loads and composes 21 markdown prompt files from `prompts_data/`. Chain: identity (CONSTITUTION + PERSONA) → mode-specific instructions → shared quality gates → suffix (rubric + output schema).
 - **rules/** — Deterministic security rule engine. 6 rules scan diffs for secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, and CI script risks. Feature-flagged via `GRIPPY_PROFILE` env var / `--profile` CLI flag. Profiles: `general` (rules off), `security` (fail on ERROR+), `strict-security` (fail on WARN+).
@@ -81,6 +103,10 @@ PR event (GITHUB_EVENT_PATH) → load PR metadata
   - **rules/config.py** — `ProfileConfig`, `load_profile()` (CLI > `GRIPPY_PROFILE` env > `general` default), `PROFILES` dict.
   - **rules/registry.py** — `RULE_REGISTRY`: explicit list of all `Rule` classes.
 - **embedder.py** — Embedder factory for OpenAI-compatible embedding models.
+- **mcp_server.py** — FastMCP server exposing `scan_diff` (rules-only, no LLM) and `audit_diff` (full LLM review) as MCP tools over stdio transport.
+- **mcp_config.py** — MCP client detection and registration. Supports Claude Code, Claude Desktop, Cursor. Used by the `install-mcp` CLI.
+- **mcp_response.py** — AI-facing response serializers. Strips personality fields and outputs dense structured JSON for MCP tool callers.
+- **local_diff.py** — Local git diff acquisition. Parses scope strings (`staged`, `commit:<ref>`, `range:<base>..<head>`), validates refs against injection, runs git subprocess with timeout.
 
 ### Prompt System
 
@@ -114,6 +140,7 @@ Review modes: `pr_review`, `security_audit`, `governance_check`, `surprise_audit
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
 | `GRIPPY_PROFILE` | Security profile: `general`, `security`, `strict-security` | `general` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
+| `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | — |
 | `OPENAI_API_KEY` | OpenAI API key (when transport=openai) | — |
 | `GITHUB_TOKEN` | GitHub API access for PR operations | — |
 | `GITHUB_EVENT_PATH` | Path to PR event JSON (set by Actions) | — |
