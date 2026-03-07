@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import re
@@ -11,13 +12,25 @@ from typing import Any
 
 import navi_sanitize
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
 from agno.models.openai.like import OpenAILike
 
 from grippy.prompts import load_identity, load_instructions
 from grippy.schema import GrippyReview
 
 DEFAULT_PROMPTS_DIR = Path(__file__).parent / "prompts_data"
+
+# ---------------------------------------------------------------------------
+# Provider registry — maps transport names to agno model classes.
+# Each entry: (module_path, class_name, supports_native_structured_outputs)
+# Imports are deferred so users only need the SDK for their chosen provider.
+# ---------------------------------------------------------------------------
+_PROVIDERS: dict[str, tuple[str, str, bool]] = {
+    "openai": ("agno.models.openai", "OpenAIChat", True),
+    "anthropic": ("agno.models.anthropic", "Claude", False),
+    "google": ("agno.models.google", "Gemini", False),
+    "groq": ("agno.models.groq", "Groq", False),
+    "mistral": ("agno.models.mistral", "MistralChat", False),
+}
 
 
 # Natural-language prompt injection patterns — adapted from navi-os's
@@ -50,7 +63,7 @@ def _escape_xml(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-_VALID_TRANSPORTS = {"openai", "local"}
+_VALID_TRANSPORTS = set(_PROVIDERS) | {"local"}
 
 
 def _resolve_transport(
@@ -68,7 +81,7 @@ def _resolve_transport(
         (transport, source) — e.g. ("openai", "param") or ("local", "env:GRIPPY_TRANSPORT").
 
     Raises:
-        ValueError: If transport value is not "openai" or "local".
+        ValueError: If transport value is not a known provider or "local".
     """
     resolved: str | None = None
     source = "default"
@@ -132,11 +145,12 @@ def create_reviewer(
         model_id: Model identifier at the inference endpoint.
         base_url: OpenAI-compatible API base URL (ignored when transport="openai").
         api_key: API key (LM Studio accepts any non-empty string).
-        transport: "openai" or "local". "openai" uses OpenAIChat (reads
-            OPENAI_API_KEY from env), "local" uses OpenAILike with explicit
-            base_url/api_key. If None, resolved via GRIPPY_TRANSPORT env var
-            or inferred from OPENAI_API_KEY presence. Invalid values raise
-            ValueError.
+        transport: Provider name ("openai", "anthropic", "google", "groq",
+            "mistral") or "local" for OpenAI-compatible endpoints. Each
+            provider uses the corresponding agno model class. "local" uses
+            OpenAILike with explicit base_url/api_key. If None, resolved via
+            GRIPPY_TRANSPORT env var or inferred from OPENAI_API_KEY presence.
+            Invalid values raise ValueError.
         prompts_dir: Directory containing Grippy's 21 markdown prompt files.
         mode: Review mode — pr_review, security_audit, governance_check,
             surprise_audit, cli, github_app.
@@ -181,17 +195,15 @@ def create_reviewer(
     log = logging.getLogger(__name__)
     log.info("Grippy transport=%s (source: %s)", resolved_transport, source)
 
-    if resolved_transport == "openai":
-        model = OpenAIChat(id=model_id)
-    else:
+    if resolved_transport == "local":
         model = OpenAILike(id=model_id, api_key=api_key, base_url=base_url)
-
-    # Enable native structured outputs for OpenAI models — the API enforces
-    # the Pydantic schema at the wire level, eliminating most parse failures.
-    # Disabled for local transport: many local servers (LM Studio, vLLM) don't
-    # support the response_format json_schema parameter and may reject it.
-    # retry.py provides fallback validation regardless.
-    structured = resolved_transport == "openai"
+        structured = False
+    else:
+        # Deferred import from provider registry
+        module_path, class_name, structured = _PROVIDERS[resolved_transport]
+        mod = importlib.import_module(module_path)
+        model_cls = getattr(mod, class_name)
+        model = model_cls(id=model_id)
 
     return Agent(
         name="grippy",

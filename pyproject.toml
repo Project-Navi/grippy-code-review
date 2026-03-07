@@ -32,6 +32,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+anthropic = ["agno[anthropic]>=1.1.0"]
+google = ["agno[google]>=1.1.0"]
+groq = ["agno[groq]>=1.1.0"]
+mistral = ["agno[mistral]>=1.1.0"]
 benchmarks = [
     "coir-eval>=0.1.0",
 ]
@@ -52,6 +56,7 @@ dev = [
     "pip-audit>=2.7.0",
     "hypothesis>=6.0.0",
     "defusedxml>=0.7.0",
+    "pytest-timeout>=2.3.0",
 ]
 
 [tool.ruff]
@@ -64,6 +69,7 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["e2e: end-to-end tests requiring external services (LLM APIs, MCP server)"]
 
 [tool.mypy]
 python_version = "3.12"

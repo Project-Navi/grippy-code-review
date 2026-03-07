@@ -53,6 +53,15 @@ python -m grippy install-mcp
 
 # Run MCP-specific tests
 uv run pytest tests/test_grippy_mcp_server.py tests/test_grippy_mcp_config.py tests/test_grippy_mcp_response.py tests/test_grippy_local_diff.py tests/test_grippy_cli_mcp.py -v
+
+# Run e2e tests (requires API keys in env)
+OPENAI_API_KEY=sk-... uv run pytest -m e2e -v
+
+# Run e2e tests for a specific provider
+ANTHROPIC_API_KEY=... uv run pytest -m e2e tests/test_e2e_llm_smoke.py -k anthropic -v
+
+# Run MCP stdio e2e tests (no API key needed for scan_diff)
+uv run pytest -m e2e tests/test_e2e_mcp_stdio.py -v
 ```
 
 ## Architecture
@@ -85,7 +94,7 @@ MCP client request → scan_diff or audit_diff tool
 ### Key Modules
 
 - **review.py** — Orchestration entry point. Loads PR event, coordinates the full review pipeline, sets GitHub Actions outputs.
-- **agent.py** — `create_reviewer()` factory. Resolves transport (OpenAI vs local), composes the prompt chain, attaches tools, structured output schema, and `tool_hooks` middleware. Enables `structured_outputs=True` for OpenAI transport (wire-level schema enforcement).
+- **agent.py** — `create_reviewer()` factory. Resolves transport via `_PROVIDERS` registry (OpenAI, Anthropic, Google, Groq, Mistral) or `local` for OpenAI-compatible endpoints. Composes the prompt chain, attaches tools, structured output schema, and `tool_hooks` middleware. Enables `structured_outputs=True` for OpenAI transport (wire-level schema enforcement).
 - **codebase.py** — `CodebaseIndex` (LanceDB vector index), `CodebaseToolkit` (Agno toolkit with `read_file`, `grep_code`, `list_files`), and `sanitize_tool_hook` (Agno `tool_hooks` middleware for centralized output sanitization). Has security-critical path traversal and symlink protections.
 - **github_review.py** — GitHub API integration. Parses unified diffs to map findings to addressable lines, posts inline comments, resolves stale threads.
 - **schema.py** — Pydantic models for the full structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`.
@@ -131,7 +140,7 @@ Review modes: `pr_review`, `security_audit`, `governance_check`, `surprise_audit
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `GRIPPY_TRANSPORT` | `"openai"` or `"local"` | `"local"` |
+| `GRIPPY_TRANSPORT` | `"openai"`, `"anthropic"`, `"google"`, `"groq"`, `"mistral"`, or `"local"` | `"local"` |
 | `GRIPPY_MODEL_ID` | Model identifier | `devstral-small-2-24b-instruct-2512` |
 | `GRIPPY_BASE_URL` | API endpoint for local transport | `http://localhost:1234/v1` |
 | `GRIPPY_EMBEDDING_MODEL` | Embedding model name | `text-embedding-qwen3-embedding-4b` |

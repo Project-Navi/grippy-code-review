@@ -275,3 +275,93 @@ class TestTransportSelection:
         monkeypatch.setenv("GRIPPY_TRANSPORT", "gcp")
         with pytest.raises(ValueError, match="Invalid GRIPPY_TRANSPORT"):
             _resolve_transport(None, "test-model")
+
+
+class TestMultiProviderTransport:
+    """Tests for multi-provider transport support."""
+
+    @pytest.mark.parametrize("provider", ["anthropic", "google", "groq", "mistral"])
+    def test_provider_transport_resolves(self, provider: str) -> None:
+        """Provider names are accepted as valid transports."""
+        transport, source = _resolve_transport(provider, "test-model")
+        assert transport == provider
+        assert source == "param"
+
+    @pytest.mark.parametrize("provider", ["anthropic", "google", "groq", "mistral"])
+    def test_provider_env_transport_resolves(
+        self, provider: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Provider names work via GRIPPY_TRANSPORT env var."""
+        monkeypatch.setenv("GRIPPY_TRANSPORT", provider)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        transport, source = _resolve_transport(None, "test-model")
+        assert transport == provider
+        assert source == "env:GRIPPY_TRANSPORT"
+
+    @pytest.mark.parametrize(
+        "provider,module_path,class_name",
+        [
+            ("anthropic", "agno.models.anthropic", "Claude"),
+            ("google", "agno.models.google", "Gemini"),
+            ("groq", "agno.models.groq", "Groq"),
+            ("mistral", "agno.models.mistral", "MistralChat"),
+        ],
+    )
+    def test_provider_creates_correct_model(
+        self, provider: str, module_path: str, class_name: str
+    ) -> None:
+        """Each provider transport instantiates the correct agno model class."""
+        from unittest.mock import MagicMock
+
+        from agno.models.base import Model
+
+        mock_model_instance = MagicMock(spec=Model)
+        mock_cls = MagicMock(return_value=mock_model_instance)
+        mock_module = MagicMock()
+        setattr(mock_module, class_name, mock_cls)
+
+        with patch("importlib.import_module", return_value=mock_module) as mock_import:
+            create_reviewer(prompts_dir=PROMPTS_DIR, transport=provider, model_id="test-model")
+            mock_import.assert_called_once_with(module_path)
+            mock_cls.assert_called_once_with(id="test-model")
+
+    def test_provider_structured_outputs_false(self) -> None:
+        """Non-OpenAI providers have structured_outputs=False."""
+        from unittest.mock import MagicMock
+
+        from agno.models.base import Model
+
+        mock_model_instance = MagicMock(spec=Model)
+        mock_cls = MagicMock(return_value=mock_model_instance)
+        mock_module = MagicMock()
+        mock_module.Claude = mock_cls
+
+        with patch("importlib.import_module", return_value=mock_module):
+            agent = create_reviewer(
+                prompts_dir=PROMPTS_DIR, transport="anthropic", model_id="test-model"
+            )
+            assert agent.structured_outputs is False
+
+    def test_openai_structured_outputs_true(self) -> None:
+        """OpenAI provider has structured_outputs=True."""
+        from unittest.mock import MagicMock
+
+        from agno.models.base import Model
+
+        mock_model_instance = MagicMock(spec=Model)
+        mock_cls = MagicMock(return_value=mock_model_instance)
+        mock_module = MagicMock()
+        mock_module.OpenAIChat = mock_cls
+
+        with patch("importlib.import_module", return_value=mock_module):
+            agent = create_reviewer(
+                prompts_dir=PROMPTS_DIR, transport="openai", model_id="test-model"
+            )
+            assert agent.structured_outputs is True
+
+    def test_local_still_uses_openai_like(self) -> None:
+        """Local transport still uses OpenAILike directly (no registry)."""
+        from agno.models.openai.like import OpenAILike
+
+        agent = create_reviewer(prompts_dir=PROMPTS_DIR, transport="local")
+        assert isinstance(agent.model, OpenAILike)

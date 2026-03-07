@@ -52,7 +52,7 @@ class TestInstallMcpInProcess:
                 [
                     "--transport",
                     "openai",
-                    "--openai-key",
+                    "--api-key",
                     "test-key-not-real",
                     "--clients",
                     "claude-code",
@@ -119,7 +119,7 @@ class TestInstallMcpInProcess:
                 [
                     "--transport",
                     "openai",
-                    "--openai-key",
+                    "--api-key",
                     "fake",
                     "--clients",
                     "nonexistent",
@@ -141,12 +141,12 @@ class TestInstallMcpInProcess:
         assert data["mcpServers"]["grippy"]["env"]["GRIPPY_TRANSPORT"] == "openai"
 
     def test_install_interactive_local_transport(self, tmp_path: Path) -> None:
-        """Interactive transport selection (choice=2 → local)."""
+        """Interactive transport selection (choice=6 → local)."""
         config_file = tmp_path / ".claude.json"
         config_file.write_text("{}")
         with (
             patch("grippy.mcp_config.get_config_path", return_value=config_file),
-            patch("builtins.input", side_effect=["2", "http://test:8080/v1", "my-model"]),
+            patch("builtins.input", side_effect=["6", "http://test:8080/v1", "my-model"]),
         ):
             _install_mcp(["--clients", "claude-code"])
         data = json.loads(config_file.read_text())
@@ -169,7 +169,7 @@ class TestInstallMcpInProcess:
             ),
             patch("builtins.input", side_effect=["1"]),
         ):
-            _install_mcp(["--transport", "openai", "--openai-key", "fake"])
+            _install_mcp(["--transport", "openai", "--api-key", "fake"])
         data = json.loads(config_file.read_text())
         assert "grippy" in data["mcpServers"]
 
@@ -187,7 +187,7 @@ class TestInstallMcpInProcess:
             ),
             patch("builtins.input", side_effect=["all"]),
         ):
-            _install_mcp(["--transport", "openai", "--openai-key", "fake"])
+            _install_mcp(["--transport", "openai", "--api-key", "fake"])
         data = json.loads(config_file.read_text())
         assert "grippy" in data["mcpServers"]
 
@@ -197,7 +197,7 @@ class TestInstallMcpInProcess:
             patch("grippy.mcp_config.get_available_clients", return_value=[]),
             pytest.raises(SystemExit) as exc_info,
         ):
-            _install_mcp(["--transport", "openai", "--openai-key", "fake"])
+            _install_mcp(["--transport", "openai", "--api-key", "fake"])
         assert exc_info.value.code == 1
 
     def test_install_add_failure_prints_fail(
@@ -211,7 +211,7 @@ class TestInstallMcpInProcess:
                 [
                     "--transport",
                     "openai",
-                    "--openai-key",
+                    "--api-key",
                     "fake",
                     "--clients",
                     "claude-code",

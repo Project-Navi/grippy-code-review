@@ -57,14 +57,14 @@ def _install_mcp(argv: list[str]) -> None:
     )
     parser.add_argument(
         "--transport",
-        choices=["openai", "local"],
+        choices=["openai", "anthropic", "google", "groq", "mistral", "local"],
         default=None,
-        help="LLM transport for audit_diff (openai or local)",
+        help="LLM transport for audit_diff",
     )
     parser.add_argument(
-        "--openai-key",
+        "--api-key",
         default=None,
-        help="OpenAI API key (prompted if transport=openai and not provided)",
+        help="API key for the chosen provider (prompted if not provided)",
     )
     parser.add_argument(
         "--base-url",
@@ -97,30 +97,44 @@ def _install_mcp(argv: list[str]) -> None:
     )
 
     # -- Collect transport --
+    transports = ["openai", "anthropic", "google", "groq", "mistral", "local"]
     transport: str = args.transport or ""
     if not transport:
         print("Select LLM transport for audit_diff:")
-        print("  1) openai")
-        print("  2) local")
-        choice = input("Choice [1/2]: ").strip()
-        transport = "openai" if choice == "1" else "local"
+        for i, t in enumerate(transports, 1):
+            print(f"  {i}) {t}")
+        choice = input(f"Choice [1-{len(transports)}]: ").strip()
+        try:
+            transport = transports[int(choice) - 1]
+        except (ValueError, IndexError):
+            transport = "local"
 
     # -- Collect transport-specific config --
+    # Map provider names to their expected API key env vars
+    api_key_envs: dict[str, str] = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+    }
+
     env: dict[str, str] = {
         "GRIPPY_TRANSPORT": transport,
         "GRIPPY_PROFILE": args.profile,
     }
 
-    if transport == "openai":
-        api_key = args.openai_key or getpass.getpass("OpenAI API key: ")
-        env["OPENAI_API_KEY"] = api_key
-    else:
+    if transport == "local":
         base_url = args.base_url or input("Base URL [http://localhost:1234/v1]: ").strip()
         if base_url:
             env["GRIPPY_BASE_URL"] = base_url
         model_id = args.model_id or input("Model ID [devstral-small-2-24b-instruct-2512]: ").strip()
         if model_id:
             env["GRIPPY_MODEL_ID"] = model_id
+    elif transport in api_key_envs:
+        key_env = api_key_envs[transport]
+        api_key = args.api_key or getpass.getpass(f"{key_env}: ")
+        env[key_env] = api_key
 
     # -- Collect target clients --
     selected_clients: list[MCPClient]
