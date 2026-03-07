@@ -9,14 +9,33 @@ packages = ["src/grippy"]
 "src/grippy/prompts_data" = "grippy/prompts_data"
 
 [project]
-name = "grippy-code-review"
+name = "grippy-mcp"
 version = "0.2.0"
-description = "AI code review agent with personality — built on Agno"
+description = "AI code review agent with personality — security-focused MCP server and CI action, built on Agno"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 authors = [
     { name = "Nelson Spencer" }
+]
+keywords = [
+    "mcp",
+    "code-review",
+    "security",
+    "ai",
+    "llm",
+    "github-actions",
+    "static-analysis",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Security",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -39,6 +58,15 @@ mistral = ["agno[mistral]>=1.1.0"]
 benchmarks = [
     "coir-eval>=0.1.0",
 ]
+
+[project.scripts]
+grippy = "grippy.__main__:main"
+grippy-mcp = "grippy.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/Project-Navi/grippy-code-review"
+Repository = "https://github.com/Project-Navi/grippy-code-review"
+Issues = "https://github.com/Project-Navi/grippy-code-review/issues"
 
 [dependency-groups]
 dev = [
