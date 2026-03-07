@@ -93,7 +93,7 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GRIPPY_TRANSPORT: openai
-          GRIPPY_MODEL_ID: gpt-5.2
+          GRIPPY_MODEL_ID: gpt-4.1
           GRIPPY_EMBEDDING_MODEL: text-embedding-3-large
           GRIPPY_DATA_DIR: ./grippy-data
           GRIPPY_TIMEOUT: 300

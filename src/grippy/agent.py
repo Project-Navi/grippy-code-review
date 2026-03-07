@@ -151,7 +151,7 @@ def create_reviewer(
             OpenAILike with explicit base_url/api_key. If None, resolved via
             GRIPPY_TRANSPORT env var or inferred from OPENAI_API_KEY presence.
             Invalid values raise ValueError.
-        prompts_dir: Directory containing Grippy's 21 markdown prompt files.
+        prompts_dir: Directory containing Grippy's 20 markdown prompt files.
         mode: Review mode — pr_review, security_audit, governance_check,
             surprise_audit, cli, github_app.
         db_path: Path to SQLite file for session persistence. None = stateless.

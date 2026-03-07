@@ -104,7 +104,7 @@ MCP client request → scan_diff or audit_diff tool
 - **graph_context.py** — Pre-review context builder. `build_context_pack()` traverses the import graph to gather relevant context files, `format_context_for_llm()` renders them for the prompt.
 - **imports.py** — Python import extraction via AST (`extract_imports()`). Builds dependency graph edges for the knowledge graph.
 - **retry.py** — `run_review()` wraps agent execution with JSON parsing (raw, dict, markdown-fenced) and Pydantic validation, retrying on failure with error feedback.
-- **prompts.py** — Loads and composes 21 markdown prompt files from `prompts_data/`. Chain: identity (CONSTITUTION + PERSONA) → mode-specific instructions → shared quality gates → suffix (rubric + output schema).
+- **prompts.py** — Loads and composes 20 markdown prompt files from `prompts_data/`. Chain: identity (CONSTITUTION + PERSONA) → mode-specific instructions → shared quality gates → suffix (rubric + output schema).
 - **rules/** — Deterministic security rule engine. 6 rules scan diffs for secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, and CI script risks. Feature-flagged via `GRIPPY_PROFILE` env var / `--profile` CLI flag. Profiles: `general` (rules off), `security` (fail on ERROR+), `strict-security` (fail on WARN+).
   - **rules/base.py** — `Rule` protocol, `RuleResult` dataclass, `RuleSeverity` enum (`CRITICAL`, `ERROR`, `WARN`, `INFO`).
   - **rules/context.py** — Diff parsing: `parse_diff()` → `ChangedFile` / `DiffHunk` / `DiffLine`. `RuleContext` holds parsed diff + profile.
