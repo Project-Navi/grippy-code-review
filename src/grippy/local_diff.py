@@ -48,7 +48,7 @@ def parse_scope(scope: str) -> list[str]:
     if scope.startswith("commit:"):
         ref = scope[len("commit:") :]
         _validate_ref(ref)
-        return ["git", "show", "--format=", "--", ref]
+        return ["git", "show", "--format=", ref, "--"]
 
     if scope.startswith("range:"):
         range_str = scope[len("range:") :]

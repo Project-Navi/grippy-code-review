@@ -27,19 +27,19 @@ class TestParseScope:
         assert parse_scope("staged") == ["git", "diff", "--cached"]
 
     def test_commit_head(self) -> None:
-        assert parse_scope("commit:HEAD") == ["git", "show", "--format=", "--", "HEAD"]
+        assert parse_scope("commit:HEAD") == ["git", "show", "--format=", "HEAD", "--"]
 
     def test_commit_sha(self) -> None:
         assert parse_scope("commit:abc123def") == [
             "git",
             "show",
             "--format=",
-            "--",
             "abc123def",
+            "--",
         ]
 
     def test_commit_head_tilde(self) -> None:
-        assert parse_scope("commit:HEAD~3") == ["git", "show", "--format=", "--", "HEAD~3"]
+        assert parse_scope("commit:HEAD~3") == ["git", "show", "--format=", "HEAD~3", "--"]
 
     def test_range_main_head(self) -> None:
         assert parse_scope("range:main..HEAD") == ["git", "diff", "main..HEAD"]

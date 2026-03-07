@@ -108,7 +108,9 @@ def _run_audit(scope: str = "staged", profile: str = "general") -> str:
             include_rule_findings=bool(rule_findings),
         )
     except ValueError as exc:
-        return _json_error(str(exc))
+        return _json_error(f"Config error: {exc}")
+    except Exception:
+        return _json_error("Failed to initialize review agent")
 
     # Format rule findings text
     rule_findings_text = ""
@@ -126,9 +128,9 @@ def _run_audit(scope: str = "staged", profile: str = "general") -> str:
     try:
         review = run_review(agent, user_message)
     except ReviewParseError as exc:
-        return _json_error(f"Review failed after {exc.attempts} attempts: {exc}")
+        return _json_error(f"Review failed after {exc.attempts} attempts")
     except Exception as exc:
-        return _json_error(f"Review failed: {exc}")
+        return _json_error(f"Review failed: {type(exc).__name__}")
 
     review.model = model_id
 
