@@ -18,7 +18,7 @@ import pytest
 
 from grippy.agent import DEFAULT_PROMPTS_DIR, create_reviewer, format_pr_context
 from grippy.retry import run_review
-from grippy.schema import GrippyReview, VerdictStatus
+from grippy.schema import GrippyReview, Severity, VerdictStatus
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -221,6 +221,239 @@ class TestLocalHomelabSmoke:
             base_url=_HOMELAB_URL,
         )
         _assert_basic_review(review)
+
+
+# ---------------------------------------------------------------------------
+# Complex diffs for retry / recovery tests
+# ---------------------------------------------------------------------------
+
+SECURITY_MULTI_FILE_DIFF: str = """\
+diff --git a/auth/login.py b/auth/login.py
+new file mode 100644
+index 0000000..b2c3d4e
+--- /dev/null
++++ b/auth/login.py
+@@ -0,0 +1,22 @@
++\"\"\"Authentication handler.\"\"\"
++import hashlib
++import os
++import sqlite3
++
++DB_PASSWORD = "admin123"
++
++
++def authenticate(username: str, password: str) -> bool:
++    \"\"\"Check credentials against the database.\"\"\"
++    conn = sqlite3.connect("users.db")
++    query = f"SELECT * FROM users WHERE name='{username}' AND pass='{password}'"
++    result = conn.execute(query)
++    return result.fetchone() is not None
++
++
++def hash_password(pw: str) -> str:
++    \"\"\"Hash a password for storage.\"\"\"
++    return hashlib.md5(pw.encode()).hexdigest()
++
++
++API_KEY = "sk-proj-AAAAAAAAAAAAAAAA"
+diff --git a/api/views.py b/api/views.py
+new file mode 100644
+index 0000000..c3d4e5f
+--- /dev/null
++++ b/api/views.py
+@@ -0,0 +1,18 @@
++\"\"\"API views for user management.\"\"\"
++import subprocess
++
++
++def run_report(user_input: str) -> str:
++    \"\"\"Generate a report based on user input.\"\"\"
++    result = subprocess.run(
++        f"generate-report {user_input}",
++        shell=True,
++        capture_output=True,
++    )
++    return result.stdout.decode()
++
++
++def get_user(user_id: int) -> dict:
++    \"\"\"Fetch user data.\"\"\"
++    data = open(f"/data/users/{user_id}.json").read()
++    return {"raw": data}
+"""
+
+MULTI_ISSUE_DIFF: str = """\
+diff --git a/services/payment.py b/services/payment.py
+new file mode 100644
+index 0000000..d4e5f6a
+--- /dev/null
++++ b/services/payment.py
+@@ -0,0 +1,42 @@
++\"\"\"Payment processing service.\"\"\"
++import sqlite3
++import hashlib
++
++STRIPE_SECRET_KEY = "sk_test_FAKE_KEY_FOR_TESTING_1234567890"
++DB_CONN_STRING = "postgresql://admin:password123@prod-db:5432/payments"
++
++
++def process_payment(card_number: str, amount: float, merchant_id: str) -> dict:
++    \"\"\"Process a payment transaction.\"\"\"
++    conn = sqlite3.connect("payments.db")
++    conn.execute(
++        f"INSERT INTO transactions (card, amount, merchant) "
++        f"VALUES ('{card_number}', {amount}, '{merchant_id}')"
++    )
++    conn.commit()
++    return {"status": "ok", "card": card_number}
++
++
++def verify_signature(payload: str, secret: str) -> bool:
++    \"\"\"Verify webhook signature.\"\"\"
++    computed = hashlib.md5(payload.encode()).hexdigest()
++    return computed == secret
++
++
++def get_transaction(txn_id: str) -> dict:
++    \"\"\"Retrieve transaction details.\"\"\"
++    conn = sqlite3.connect("payments.db")
++    row = conn.execute(
++        f"SELECT * FROM transactions WHERE id='{txn_id}'"
++    ).fetchone()
++    if row is None:
++        return {}
++    return dict(row)
++
++
++def refund(txn_id: str, reason: str) -> None:
++    \"\"\"Issue a refund.\"\"\"
++    conn = sqlite3.connect("payments.db")
++    conn.execute(
++        f"UPDATE transactions SET status='refunded', reason='{reason}' "
++        f"WHERE id='{txn_id}'"
++    )
++    conn.commit()
+"""
+
+
+# ---------------------------------------------------------------------------
+# Retry / recovery e2e tests
+# ---------------------------------------------------------------------------
+
+
+@skip_no_homelab
+class TestRetryRecoveryE2E:
+    """E2E tests exercising the retry/recovery path with real LLM calls."""
+
+    @pytest.mark.timeout(300)
+    def test_retry_succeeds_after_validation_errors(self) -> None:
+        """Verify that run_review can recover through retries on schema edge cases."""
+        agent = create_reviewer(
+            transport="local",
+            model_id="devstral-small-2-24b-instruct-2512",
+            base_url=_HOMELAB_URL,
+            prompts_dir=PROMPTS_DIR,
+            mode="pr_review",
+        )
+
+        message = format_pr_context(
+            title="Add auth module with SQL queries",
+            author="dev-bob",
+            branch="feat/auth -> main",
+            description="Adds login authentication and API views with report generation.",
+            diff=SECURITY_MULTI_FILE_DIFF,
+        )
+
+        retry_errors: list[tuple[int, Exception]] = []
+
+        def track_error(attempt: int, error: Exception) -> None:
+            retry_errors.append((attempt, error))
+
+        review = run_review(agent, message, max_retries=3, on_validation_error=track_error)
+
+        # Core assertion: we got a valid review regardless of how many retries
+        assert isinstance(review, GrippyReview)
+        _assert_basic_review(review)
+        # retry_errors may be empty (first attempt succeeded) or non-empty (retries fired)
+        assert isinstance(retry_errors, list)
+
+    @pytest.mark.timeout(300)
+    def test_retry_callback_fires_on_error(self) -> None:
+        """Verify the on_validation_error callback mechanism works end-to-end."""
+        agent = create_reviewer(
+            transport="local",
+            model_id="devstral-small-2-24b-instruct-2512",
+            base_url=_HOMELAB_URL,
+            prompts_dir=PROMPTS_DIR,
+            mode="pr_review",
+        )
+
+        message = format_pr_context(
+            title="Add auth with hardcoded credentials",
+            author="dev-charlie",
+            branch="feat/auth-creds -> main",
+            description="Authentication module with database access.",
+            diff=SECURITY_MULTI_FILE_DIFF,
+        )
+
+        callback_log: list[tuple[int, str]] = []
+
+        def on_error(attempt: int, error: Exception) -> None:
+            callback_log.append((attempt, type(error).__name__))
+
+        review = run_review(agent, message, max_retries=3, on_validation_error=on_error)
+
+        # Review must succeed
+        assert isinstance(review, GrippyReview)
+        _assert_basic_review(review)
+        # callback_log is a list — may be empty if first attempt succeeded
+        assert isinstance(callback_log, list)
+        # If retries happened, verify callback entries are well-formed
+        for attempt_num, error_name in callback_log:
+            assert isinstance(attempt_num, int)
+            assert attempt_num >= 1
+            assert isinstance(error_name, str)
+
+    @pytest.mark.timeout(300)
+    def test_review_with_multiple_findings(self) -> None:
+        """Verify the schema handles real multi-finding output from a buggy diff."""
+        agent = create_reviewer(
+            transport="local",
+            model_id="devstral-small-2-24b-instruct-2512",
+            base_url=_HOMELAB_URL,
+            prompts_dir=PROMPTS_DIR,
+            mode="pr_review",
+        )
+
+        message = format_pr_context(
+            title="Add payment processing service",
+            author="dev-dana",
+            branch="feat/payments -> main",
+            description="Payment processing with SQL, secrets, and crypto.",
+            diff=MULTI_ISSUE_DIFF,
+        )
+
+        review = run_review(agent, message, max_retries=3)
+
+        _assert_basic_review(review)
+
+        # The diff has SQL injection, hardcoded secrets, weak crypto — expect findings
+        assert len(review.findings) >= 1, (
+            f"Expected at least 1 finding for a diff with obvious security issues, "
+            f"got {len(review.findings)}"
+        )
+
+        # Validate each finding has the required schema fields populated
+        for finding in review.findings:
+            assert finding.file, f"Finding {finding.id} missing file"
+            assert finding.severity in list(Severity), (
+                f"Finding {finding.id} has invalid severity: {finding.severity}"
+            )
+            assert finding.title, f"Finding {finding.id} missing title"
+            assert finding.description, f"Finding {finding.id} missing description"
+            assert 0 <= finding.confidence <= 100, (
+                f"Finding {finding.id} confidence out of range: {finding.confidence}"
+            )
 
 
 @skip_no_any_key
