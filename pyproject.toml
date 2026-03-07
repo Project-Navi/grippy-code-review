@@ -27,6 +27,7 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "navi-sanitize>=0.1.0",
     "nh3>=0.2.0",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +36,10 @@ persistence = [
 ]
 benchmarks = [
     "coir-eval>=0.1.0",
+]
+cli = [
+    "typer>=0.15.0",
+    "rich>=13.0.0",
 ]
 
 [dependency-groups]
