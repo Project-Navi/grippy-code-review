@@ -7,6 +7,7 @@ import json
 import os
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from grippy.local_diff import DiffError, diff_stats, get_local_diff
 from grippy.mcp_response import serialize_audit, serialize_scan
@@ -150,7 +151,7 @@ def _run_audit(scope: str = "staged", profile: str = "general") -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def scan_diff(scope: str = "staged", profile: str = "security") -> str:
     """Run deterministic security rules against a local git diff. Fast, no LLM needed.
 
@@ -166,7 +167,7 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
     return _run_scan(scope=scope, profile=profile)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def audit_diff(scope: str = "staged", profile: str = "general") -> str:
     """Run a full AI-powered code review against a local git diff. Requires LLM config.
 
