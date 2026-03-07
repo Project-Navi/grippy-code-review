@@ -60,7 +60,7 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     )
 
 
-def _run_audit(scope: str = "staged", profile: str = "general") -> str:
+def _run_audit(scope: str = "staged", profile: str = "security") -> str:
     """Run full LLM-powered review and return JSON results."""
     try:
         profile_config = load_profile(cli_profile=profile)
@@ -168,7 +168,7 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def audit_diff(scope: str = "staged", profile: str = "general") -> str:
+def audit_diff(scope: str = "staged", profile: str = "security") -> str:
     """Run a full AI-powered code review against a local git diff. Requires LLM config.
 
     Args:
@@ -177,9 +177,9 @@ def audit_diff(scope: str = "staged", profile: str = "general") -> str:
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
         profile: Security profile controlling rule gate and review mode.
-            - "general" (default) -- no deterministic rules, standard review
-            - "security" -- run rules, fail gate on ERROR or higher
+            - "security" (default) -- run deterministic rules, fail gate on ERROR or higher
             - "strict-security" -- run rules, fail gate on WARN or higher
+            - "general" -- no deterministic rules, LLM-only review
     """
     return _run_audit(scope=scope, profile=profile)
 

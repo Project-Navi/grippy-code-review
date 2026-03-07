@@ -105,7 +105,7 @@ jobs:
         run: grippy
 ```
 
-> **Want security gating?** Add `GRIPPY_PROFILE: security` to enable the deterministic rule engine and merge blocking. See [`examples/github-actions/grippy-security.yml`](examples/github-actions/grippy-security.yml) for a full security-focused workflow.
+> **Want LLM-only review without the rule engine?** Set `GRIPPY_PROFILE: general`. For stricter gating (fail on WARN+), use `strict-security`. See [`examples/`](examples/) for more workflow variants.
 
 ### GitHub Actions (self-hosted LLM)
 
@@ -192,7 +192,7 @@ Grippy is configured entirely through environment variables.
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` |
 | `GRIPPY_DATA_DIR` | Persistence directory | `./grippy-data` |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
-| `GRIPPY_PROFILE` | Security profile: `general`, `security`, `strict-security` | `general` |
+| `GRIPPY_PROFILE` | Security profile: `security`, `strict-security`, `general` | `security` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
 | `OPENAI_API_KEY` | OpenAI API key (sets transport to `openai`) | — |
 | `GITHUB_TOKEN` | GitHub API token (set automatically by Actions) | — |
@@ -203,15 +203,28 @@ If your codebase is co-developed with an AI coding assistant, **we strongly reco
 
 ## Security profiles
 
-Grippy's deterministic rule engine is controlled by profiles. Set via `GRIPPY_PROFILE` env var or `--profile` CLI flag (CLI takes priority).
+Grippy ships with the deterministic rule engine **on by default** (`security` profile). Six rules scan every diff for secrets, dangerous sinks, workflow permission escalation, path traversal, unsanitized LLM output, and risky CI scripts — before the LLM sees anything. These findings are guaranteed, not hallucinated.
 
-| Profile | Rule engine | Gate threshold | Use case |
+Switch profiles via `GRIPPY_PROFILE` env var or `--profile` CLI flag (CLI takes priority).
+
+| Profile | What happens | Gate behavior | When to use |
 |---|---|---|---|
-| `general` | Off | — | Standard LLM-only review |
-| `security` | On | Fail on ERROR+ | Security-focused CI gate |
-| `strict-security` | On | Fail on WARN+ | High-assurance environments |
+| **`security`** (default) | Rules + LLM review | CI fails on ERROR or CRITICAL rule findings | Most teams — catches real issues without noise |
+| `strict-security` | Rules + LLM review | CI fails on WARN or higher | High-assurance, compliance, external contributors |
+| `general` | LLM review only | No rule gate | When you only want AI-powered review, no deterministic scanning |
 
-When a non-`general` profile is active, Grippy runs 6 deterministic rules before the LLM:
+```bash
+# Use the default (security)
+grippy
+
+# Explicit profile
+grippy --profile strict-security
+
+# Via environment variable
+GRIPPY_PROFILE=general grippy
+```
+
+The 6 deterministic rules:
 
 | Rule ID | Detects | Severity |
 |---|---|---|

@@ -90,10 +90,10 @@ MCP client → scan_diff or audit_diff tool
 
 ### Rules Engine
 
-6 rules scan diffs before the LLM: secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks. Feature-flagged via `GRIPPY_PROFILE`:
-- `general` — rules off
-- `security` — gate fails on ERROR+
+6 rules scan diffs before the LLM: secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks. Controlled by `GRIPPY_PROFILE`:
+- `security` (default) — gate fails on ERROR+
 - `strict-security` — gate fails on WARN+
+- `general` — rules off, LLM-only review
 
 ### Prompt System
 
@@ -127,7 +127,7 @@ MCP client → scan_diff or audit_diff tool
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` |
 | `GRIPPY_DATA_DIR` | Persistence directory | `./grippy-data` |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
-| `GRIPPY_PROFILE` | Security profile | `general` |
+| `GRIPPY_PROFILE` | Security profile | `security` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
 | `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | — |
 | `OPENAI_API_KEY` | OpenAI API key (sets transport to openai) | — |

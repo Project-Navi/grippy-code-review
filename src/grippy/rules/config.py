@@ -36,7 +36,7 @@ def load_profile(cli_profile: str | None = None) -> ProfileConfig:
     Raises:
         ValueError: If the profile name is not recognized.
     """
-    name = cli_profile or os.environ.get("GRIPPY_PROFILE", "general")
+    name = cli_profile or os.environ.get("GRIPPY_PROFILE", "security")
     if name not in PROFILES:
         msg = f"Unknown profile: {name!r}. Valid profiles: {sorted(PROFILES.keys())}"
         raise ValueError(msg)

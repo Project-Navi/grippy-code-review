@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default security profile** changed from `general` to `security` — the deterministic rule engine now runs by default. Set `GRIPPY_PROFILE=general` to disable rules for LLM-only review.
 - **Package renamed** from `grippy-code-review` to `grippy-mcp` on PyPI
 - **MEDIUM confidence minimum** aligned to 75 (was 70 in scoring-rubric prompt, now matches confidence-filter)
 - **Transport hints** in error messages list all 6 providers (was only openai/local)
