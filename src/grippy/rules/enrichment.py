@@ -6,13 +6,10 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from dataclasses import replace
-from typing import TYPE_CHECKING
 
+from grippy.graph_store import SQLiteGraphStore
 from grippy.graph_types import EdgeType, NodeType, _record_id
 from grippy.rules.base import ResultEnrichment, RuleResult
-
-if TYPE_CHECKING:
-    from grippy.graph_store import SQLiteGraphStore
 
 log = logging.getLogger(__name__)
 
@@ -189,3 +186,37 @@ def _compute_velocity(
         else:
             out[rid] = ""
     return out
+
+
+def persist_rule_findings(
+    store: SQLiteGraphStore,
+    findings: list[RuleResult],
+    review_id: str,
+) -> None:
+    """Persist deterministic rule findings to the graph for future recurrence queries.
+
+    Creates FINDING nodes with rule_id in data, links them to FILE and REVIEW nodes.
+    Non-fatal — logs warnings on error.
+    """
+    for r in findings:
+        try:
+            finding_id = _record_id(NodeType.FINDING, review_id, r.rule_id, r.file, str(r.line))
+            store.upsert_node(
+                finding_id,
+                NodeType.FINDING,
+                {
+                    "rule_id": r.rule_id,
+                    "severity": r.severity.name,
+                    "message": r.message,
+                    "file": r.file,
+                    "line": r.line,
+                },
+            )
+            store.upsert_edge(review_id, finding_id, EdgeType.PRODUCED)
+            file_id = _record_id(NodeType.FILE, r.file)
+            try:
+                store.upsert_edge(finding_id, file_id, EdgeType.FOUND_IN)
+            except Exception:
+                pass  # file not in graph
+        except Exception:
+            log.warning("Failed to persist rule finding %s (non-fatal)", r.rule_id, exc_info=True)

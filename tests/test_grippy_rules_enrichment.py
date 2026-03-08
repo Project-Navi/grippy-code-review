@@ -174,6 +174,32 @@ class TestVelocity:
             assert results[0].enrichment.velocity == ""
 
 
+class TestRuleFindingPersistence:
+    def test_persisted_rule_finding_detected_as_recurring(self) -> None:
+        """Simulate: persist a rule finding, then check recurrence on next run."""
+        from grippy.rules.enrichment import persist_rule_findings
+
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            # Set up file node
+            file_id = _record_id(NodeType.FILE, "app.py")
+            store.upsert_node(file_id, NodeType.FILE, {"path": "app.py"})
+            # Set up review node
+            review_id = _record_id(NodeType.REVIEW, "test-review-1")
+            store.upsert_node(review_id, NodeType.REVIEW, {"pr": 1, "score": 50})
+
+            # Persist a rule finding
+            findings = [_result(rule_id="sql-injection-risk", file="app.py")]
+            persist_rule_findings(store, findings, review_id)
+
+            # Now enrich — should detect recurrence
+            new_findings = [_result(rule_id="sql-injection-risk", file="app.py")]
+            enriched = enrich_results(new_findings, store)
+            assert enriched[0].enrichment is not None
+            assert enriched[0].enrichment.is_recurring is True
+            assert enriched[0].enrichment.prior_count == 1
+
+
 class TestMultipleResults:
     def test_multiple_files_enriched_independently(self) -> None:
         with TemporaryDirectory() as tmp:
