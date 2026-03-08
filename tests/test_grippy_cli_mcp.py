@@ -228,6 +228,33 @@ class TestInstallMcpInProcess:
 
 
 # ---------------------------------------------------------------------------
+# generate_server_entry uvx tests
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateServerEntryUvx:
+    """Tests for uvx-based server entry generation."""
+
+    def test_generate_entry_uses_uvx(self) -> None:
+        """Published install generates uvx grippy-mcp command."""
+        from grippy.mcp_config import generate_server_entry
+
+        entry = generate_server_entry(project_root=None, env={"GRIPPY_TRANSPORT": "local"})
+        assert entry["command"] == "uvx"
+        assert entry["args"] == ["grippy-mcp", "serve"]
+        assert entry["env"] == {"GRIPPY_TRANSPORT": "local"}
+
+    def test_generate_entry_dev_mode(self) -> None:
+        """Dev install with project_root uses uv run --directory."""
+        from grippy.mcp_config import generate_server_entry
+
+        entry = generate_server_entry(project_root=Path("/some/path"), env={})
+        assert entry["command"] == "uv"
+        assert "--directory" in entry["args"]
+        assert "/some/path" in entry["args"]
+
+
+# ---------------------------------------------------------------------------
 # _ci_review tests (in-process)
 # ---------------------------------------------------------------------------
 
@@ -252,6 +279,54 @@ class TestCiReviewInProcess:
         with pytest.raises(SystemExit) as exc_info:
             _ci_review(["--help"])
         assert exc_info.value.code == 0
+
+
+# ---------------------------------------------------------------------------
+# main() entry point tests
+# ---------------------------------------------------------------------------
+
+
+class TestMainEntryPoint:
+    """Tests for the main() console script entry point."""
+
+    def test_main_dispatches_serve(self) -> None:
+        """main() dispatches 'serve' subcommand."""
+        with (
+            patch("grippy.__main__._serve") as mock_serve,
+            patch("sys.argv", ["grippy", "serve"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_serve.assert_called_once_with([])
+
+    def test_main_dispatches_install_mcp(self) -> None:
+        """main() dispatches 'install-mcp' subcommand."""
+        with (
+            patch("grippy.__main__._install_mcp") as mock_install,
+            patch("sys.argv", ["grippy", "install-mcp"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_install.assert_called_once_with([])
+
+    def test_main_dispatches_legacy_ci(self) -> None:
+        """main() dispatches to legacy CI when no subcommand."""
+        with (
+            patch("grippy.__main__._ci_review") as mock_ci,
+            patch("sys.argv", ["grippy", "--profile", "security"]),
+        ):
+            from grippy.__main__ import main
+
+            main()
+            mock_ci.assert_called_once_with(["--profile", "security"])
+
+    def test_main_is_callable(self) -> None:
+        """main is importable and callable."""
+        from grippy.__main__ import main
+
+        assert callable(main)
 
 
 # ---------------------------------------------------------------------------

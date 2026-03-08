@@ -1,0 +1,36 @@
+{
+  "tool": "scan_diff",
+  "scope": "staged",
+  "profile": "security",
+  "gate_passed": false,
+  "gate_threshold": "ERROR",
+  "max_severity": "CRITICAL",
+  "findings": [
+    {
+      "rule_id": "secrets-in-diff",
+      "severity": "CRITICAL",
+      "file": "config/settings.py",
+      "line": 12,
+      "message": "Possible API key detected in diff",
+      "evidence": "+API_KEY = \"sk-proj-abc123def456...\""
+    },
+    {
+      "rule_id": "workflow-permissions-expanded",
+      "severity": "WARN",
+      "file": ".github/workflows/deploy.yml",
+      "line": 8,
+      "message": "Workflow requests write permission: contents: write",
+      "evidence": "+    contents: write"
+    }
+  ],
+  "summary": {
+    "files_scanned": 3,
+    "total_findings": 2,
+    "by_severity": {
+      "CRITICAL": 1,
+      "ERROR": 0,
+      "WARN": 1,
+      "INFO": 0
+    }
+  }
+}

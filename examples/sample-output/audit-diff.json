@@ -1,0 +1,92 @@
+{
+  "tool": "audit_diff",
+  "scope": "range:main..HEAD",
+  "audit_type": "security_audit",
+  "score": {
+    "overall": 62,
+    "breakdown": {
+      "security": 50,
+      "logic": 90,
+      "governance": 85,
+      "reliability": 75,
+      "observability": 80
+    },
+    "deductions": {
+      "critical_count": 1,
+      "high_count": 1,
+      "medium_count": 2,
+      "low_count": 0,
+      "total_deduction": 38
+    }
+  },
+  "verdict": {
+    "status": "FAIL",
+    "pass_threshold": 85,
+    "merge_blocking": true,
+    "rationale": "1 CRITICAL finding (SQL injection) and 1 HIGH finding (missing input validation) require resolution before merge."
+  },
+  "findings": [
+    {
+      "id": "f-001",
+      "title": "SQL injection via string interpolation",
+      "severity": "CRITICAL",
+      "confidence": 95,
+      "category": "security",
+      "file": "src/api/users.py",
+      "line_start": 42,
+      "line_end": 42,
+      "description": "User-controlled input interpolated directly into SQL query. Use parameterized queries.",
+      "suggestion": "cursor.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,))",
+      "rule_id": null
+    },
+    {
+      "id": "f-002",
+      "title": "Missing input validation on user-facing endpoint",
+      "severity": "HIGH",
+      "confidence": 82,
+      "category": "security",
+      "file": "src/api/users.py",
+      "line_start": 38,
+      "line_end": 38,
+      "description": "The user_id parameter is accepted without type or range validation. An attacker could pass arbitrary values.",
+      "suggestion": "Validate user_id is a positive integer before use.",
+      "rule_id": null
+    },
+    {
+      "id": "f-003",
+      "title": "Missing error handling on database call",
+      "severity": "MEDIUM",
+      "confidence": 78,
+      "category": "reliability",
+      "file": "src/api/users.py",
+      "line_start": 42,
+      "line_end": 45,
+      "description": "Database query has no try/except block. Connection errors will propagate as unhandled exceptions.",
+      "suggestion": "Wrap in try/except with appropriate error response.",
+      "rule_id": null
+    },
+    {
+      "id": "f-004",
+      "title": "No logging on authentication failure path",
+      "severity": "MEDIUM",
+      "confidence": 76,
+      "category": "observability",
+      "file": "src/api/auth.py",
+      "line_start": 67,
+      "line_end": 70,
+      "description": "Failed authentication attempts are not logged. This makes incident investigation difficult.",
+      "suggestion": "Add structured logging with request metadata (IP, user agent) on auth failure.",
+      "rule_id": null
+    }
+  ],
+  "escalations": [
+    {
+      "target": "security-team",
+      "reason": "CRITICAL SQL injection finding requires security team review",
+      "findings": ["f-001"]
+    }
+  ],
+  "files_reviewed": 4,
+  "files_in_diff": 5,
+  "review_coverage_pct": 80
+}

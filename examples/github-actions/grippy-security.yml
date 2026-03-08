@@ -1,0 +1,64 @@
+# Security-focused Grippy workflow with merge gating
+#
+# This workflow:
+#   1. Runs the deterministic rule engine (secrets, dangerous sinks, etc.)
+#   2. Runs a full AI security audit
+#   3. Blocks merge if the rule gate fails OR any CRITICAL finding exists
+#
+# Prerequisites:
+#   1. Add OPENAI_API_KEY to your repo secrets
+#   2. Add "Grippy Code Review" as a required status check in branch protection
+
+name: Grippy Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Grippy Security Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b  # v2.15.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Grippy
+        run: pip install "grippy-mcp"
+
+      - name: Cache Grippy data
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5
+        with:
+          path: ./grippy-data
+          key: grippy-${{ github.event.pull_request.number }}-${{ github.sha }}
+          restore-keys: grippy-${{ github.event.pull_request.number }}-
+
+      - name: Run security review
+        id: review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GRIPPY_MODEL_ID: gpt-4.1
+          GRIPPY_PROFILE: security
+        run: grippy --profile security
+
+      # Block merge if the rule gate failed or verdict is merge-blocking
+      - name: Enforce merge gate
+        if: steps.review.outputs.merge-blocking == 'true' || steps.review.outputs.rule-gate-failed == 'true'
+        run: |
+          echo "::error::Grippy blocked this PR. Score: ${{ steps.review.outputs.score }}/100, Verdict: ${{ steps.review.outputs.verdict }}"
+          echo "Rule gate failed: ${{ steps.review.outputs.rule-gate-failed }}"
+          echo "Review the findings in the PR comments and resolve before merging."
+          exit 1

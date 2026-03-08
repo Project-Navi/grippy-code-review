@@ -986,7 +986,7 @@ wheels = [
 ]
 
 [[package]]
-name = "grippy-code-review"
+name = "grippy-mcp"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [

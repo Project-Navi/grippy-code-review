@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from grippy.rules.base import RuleResult, RuleSeverity
 from grippy.rules.config import ProfileConfig
 from grippy.rules.context import RuleContext
@@ -125,7 +127,61 @@ class TestRuleEngine:
     def test_default_registry_loads(self) -> None:
         """Verify default engine loads all rules from the registry."""
         engine = RuleEngine()
-        assert len(engine._rules) == 6
+        assert len(engine._rules) == 10
+
+    def test_check_gate_skips_suppressed(self) -> None:
+        from dataclasses import replace
+
+        from grippy.rules.base import ResultEnrichment
+
+        suppressed_enrichment = ResultEnrichment(
+            blast_radius=0,
+            is_recurring=False,
+            prior_count=0,
+            suppressed=True,
+            suppression_reason="file imports sqlalchemy",
+            velocity="",
+        )
+        results = [
+            replace(
+                RuleResult(
+                    rule_id="sql-injection-risk",
+                    severity=RuleSeverity.ERROR,
+                    message="SQL injection risk",
+                    file="app.py",
+                ),
+                enrichment=suppressed_enrichment,
+            )
+        ]
+        config = ProfileConfig(name="security", fail_on=RuleSeverity.ERROR)
+        assert not RuleEngine(rule_classes=[]).check_gate(results, config)
+
+    def test_check_gate_still_fails_on_unsuppressed(self) -> None:
+        from dataclasses import replace
+
+        from grippy.rules.base import ResultEnrichment
+
+        unsuppressed = ResultEnrichment(
+            blast_radius=3,
+            is_recurring=True,
+            prior_count=2,
+            suppressed=False,
+            suppression_reason="",
+            velocity="",
+        )
+        results = [
+            replace(
+                RuleResult(
+                    rule_id="sql-injection-risk",
+                    severity=RuleSeverity.ERROR,
+                    message="SQL injection risk",
+                    file="app.py",
+                ),
+                enrichment=unsuppressed,
+            )
+        ]
+        config = ProfileConfig(name="security", fail_on=RuleSeverity.ERROR)
+        assert RuleEngine(rule_classes=[]).check_gate(results, config)
 
 
 # --- Convenience wrappers from grippy.rules.__init__ ---
@@ -174,3 +230,65 @@ class TestConvenienceWrappers:
 
         warn_results = [RuleResult(rule_id="x", severity=RuleSeverity.WARN, message="m", file="f")]
         assert check_gate(warn_results, profile) is False
+
+
+class TestResultEnrichment:
+    def test_rule_result_default_enrichment_is_none(self) -> None:
+        r = RuleResult(rule_id="test", severity=RuleSeverity.WARN, message="msg", file="f.py")
+        assert r.enrichment is None
+
+    def test_rule_result_with_enrichment(self) -> None:
+        from grippy.rules.base import ResultEnrichment
+
+        e = ResultEnrichment(
+            blast_radius=5,
+            is_recurring=True,
+            prior_count=3,
+            suppressed=False,
+            suppression_reason="",
+            velocity="",
+        )
+        r = RuleResult(
+            rule_id="test",
+            severity=RuleSeverity.WARN,
+            message="msg",
+            file="f.py",
+            enrichment=e,
+        )
+        assert r.enrichment is not None
+        assert r.enrichment.blast_radius == 5
+        assert r.enrichment.is_recurring is True
+        assert r.enrichment.prior_count == 3
+
+    def test_enrichment_is_frozen(self) -> None:
+        from grippy.rules.base import ResultEnrichment
+
+        e = ResultEnrichment(
+            blast_radius=0,
+            is_recurring=False,
+            prior_count=0,
+            suppressed=False,
+            suppression_reason="",
+            velocity="",
+        )
+        with pytest.raises(AttributeError):
+            e.blast_radius = 99  # type: ignore[misc]
+
+    def test_replace_adds_enrichment(self) -> None:
+        from dataclasses import replace
+
+        from grippy.rules.base import ResultEnrichment
+
+        r = RuleResult(rule_id="test", severity=RuleSeverity.WARN, message="msg", file="f.py")
+        e = ResultEnrichment(
+            blast_radius=2,
+            is_recurring=False,
+            prior_count=0,
+            suppressed=False,
+            suppression_reason="",
+            velocity="",
+        )
+        r2 = replace(r, enrichment=e)
+        assert r.enrichment is None  # original unchanged
+        assert r2.enrichment is not None
+        assert r2.enrichment.blast_radius == 2

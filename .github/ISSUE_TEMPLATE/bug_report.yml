@@ -1,0 +1,84 @@
+name: Bug Report
+description: Report a bug in Grippy
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the sections below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Mode
+      options:
+        - GitHub Actions (CI)
+        - MCP Server (local)
+        - CLI
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - openai
+        - anthropic
+        - google
+        - groq
+        - mistral
+        - local (Ollama/LM Studio/vLLM)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Grippy Version
+      description: "Output of `pip show grippy-mcp | grep Version`"
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      placeholder: "3.12.x"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to trigger the bug.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste any relevant logs or error messages.
+      render: shell
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant environment variables (redact API keys).
+      render: yaml

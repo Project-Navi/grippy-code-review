@@ -11,7 +11,7 @@ Environment variables:
     GRIPPY_BASE_URL         — API endpoint (default: http://localhost:1234/v1)
     GRIPPY_MODEL_ID         — model identifier (default: devstral-small-2-24b-instruct-2512)
     GRIPPY_EMBEDDING_MODEL  — embedding model (default: text-embedding-qwen3-embedding-4b)
-    GRIPPY_TRANSPORT        — "openai" or "local" (default: infer from OPENAI_API_KEY)
+    GRIPPY_TRANSPORT        — API transport (default: infer from OPENAI_API_KEY)
     GRIPPY_API_KEY          — API key for non-OpenAI endpoints (embedding auth fallback)
     GRIPPY_DATA_DIR         — persistent directory for graph DB + LanceDB
     GRIPPY_TIMEOUT          — seconds before review is killed (0 = no timeout)
@@ -40,13 +40,14 @@ from grippy.graph_types import EdgeType, MissingNodeError, NodeType, _record_id
 from grippy.imports import extract_imports
 from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
+from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
 # Max diff size sent to the LLM — ~500K chars ≈ 125K tokens
 MAX_DIFF_CHARS = 500_000
 
 
 _ERROR_HINTS: dict[str, str] = {
-    "CONFIG ERROR": "Valid `GRIPPY_TRANSPORT` values: `openai`, `local`.",
+    "CONFIG ERROR": "Valid `GRIPPY_TRANSPORT` values: `openai`, `anthropic`, `google`, `groq`, `mistral`, `local`.",
     "TIMEOUT": "Increase `GRIPPY_TIMEOUT` or reduce PR diff size.",
 }
 
@@ -436,6 +437,7 @@ def main(*, profile: str | None = None) -> None:
     if profile_config.name != "general":
         print(f"Running rule engine (profile={profile_config.name})...")
         rule_findings = run_rules(diff, profile_config)
+        rule_findings = enrich_results(rule_findings, graph_store)
         rule_gate_failed = check_gate(rule_findings, profile_config)
         print(f"  {len(rule_findings)} findings, gate={'FAILED' if rule_gate_failed else 'passed'}")
         if rule_findings:
@@ -689,6 +691,10 @@ def main(*, profile: str | None = None) -> None:
                     )
                 except Exception:  # nosec B110
                     pass  # file not in graph
+
+            # Persist rule findings for recurrence tracking
+            if rule_findings:
+                persist_rule_findings(graph_store, rule_findings, review_id)
         except Exception as exc:
             print(f"::warning::Graph persistence failed (non-fatal): {exc}")
 

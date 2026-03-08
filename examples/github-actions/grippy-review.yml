@@ -1,0 +1,46 @@
+# Minimal Grippy review workflow — copy this to .github/workflows/grippy-review.yml
+#
+# Prerequisites:
+#   1. Add OPENAI_API_KEY to your repo secrets (Settings → Secrets → Actions)
+#   2. That's it. Everything else has sensible defaults.
+
+name: Grippy Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Grippy Code Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Grippy
+        run: pip install "grippy-mcp"
+
+      # Cache the vector index to avoid re-indexing on every push
+      - name: Cache Grippy data
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5
+        with:
+          path: ./grippy-data
+          key: grippy-${{ github.event.pull_request.number }}-${{ github.sha }}
+          restore-keys: grippy-${{ github.event.pull_request.number }}-
+
+      - name: Run review
+        id: review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GRIPPY_MODEL_ID: gpt-4.1
+        run: grippy

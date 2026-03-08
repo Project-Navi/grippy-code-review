@@ -5,14 +5,18 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
+from grippy.graph_store import SQLiteGraphStore
 from grippy.local_diff import DiffError, diff_stats, get_local_diff
 from grippy.mcp_response import serialize_audit, serialize_scan
 from grippy.review import _format_rule_findings, truncate_diff
 from grippy.rules import check_gate, load_profile, run_rules
 from grippy.rules.base import RuleResult
+from grippy.rules.enrichment import enrich_results
 
 mcp = FastMCP(
     "grippy",
@@ -34,6 +38,18 @@ def _json_error(message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _load_graph_store() -> SQLiteGraphStore | None:
+    """Load graph store from GRIPPY_DATA_DIR if available."""
+    data_dir = os.environ.get("GRIPPY_DATA_DIR", "./grippy-data")
+    db_path = Path(data_dir) / "navi-graph.db"
+    if not db_path.exists():
+        return None
+    try:
+        return SQLiteGraphStore(db_path=db_path)
+    except Exception:
+        return None
+
+
 def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     """Run deterministic rules and return JSON results."""
     try:
@@ -52,6 +68,7 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     gate_failed = False
     if diff:
         findings = run_rules(diff, profile_config)
+        findings = enrich_results(findings, _load_graph_store())
         gate_failed = check_gate(findings, profile_config)
 
     return json.dumps(
@@ -59,7 +76,7 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     )
 
 
-def _run_audit(scope: str = "staged", profile: str = "general") -> str:
+def _run_audit(scope: str = "staged", profile: str = "security") -> str:
     """Run full LLM-powered review and return JSON results."""
     try:
         profile_config = load_profile(cli_profile=profile)
@@ -81,6 +98,7 @@ def _run_audit(scope: str = "staged", profile: str = "general") -> str:
     mode = "pr_review"
     if profile_config.name != "general":
         rule_findings = run_rules(diff, profile_config)
+        rule_findings = enrich_results(rule_findings, _load_graph_store())
         mode = "security_audit"
 
     # Truncate diff for LLM context window
@@ -150,7 +168,7 @@ def _run_audit(scope: str = "staged", profile: str = "general") -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
 def scan_diff(scope: str = "staged", profile: str = "security") -> str:
     """Run deterministic security rules against a local git diff. Fast, no LLM needed.
 
@@ -166,8 +184,8 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
     return _run_scan(scope=scope, profile=profile)
 
 
-@mcp.tool()
-def audit_diff(scope: str = "staged", profile: str = "general") -> str:
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
+def audit_diff(scope: str = "staged", profile: str = "security") -> str:
     """Run a full AI-powered code review against a local git diff. Requires LLM config.
 
     Args:
@@ -176,9 +194,9 @@ def audit_diff(scope: str = "staged", profile: str = "general") -> str:
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
         profile: Security profile controlling rule gate and review mode.
-            - "general" (default) -- no deterministic rules, standard review
-            - "security" -- run rules, fail gate on ERROR or higher
+            - "security" (default) -- run deterministic rules, fail gate on ERROR or higher
             - "strict-security" -- run rules, fail gate on WARN or higher
+            - "general" -- no deterministic rules, LLM-only review
     """
     return _run_audit(scope=scope, profile=profile)
 
