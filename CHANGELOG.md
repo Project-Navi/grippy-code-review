@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `weak-crypto` — MD5, SHA1, DES, ECB mode, and `random` for security contexts (A02)
   - `hardcoded-credentials` — hardcoded passwords, DB connection strings, auth headers (A07)
   - `insecure-deserialization` — unsafe deserialization sinks: shelve, dill, yaml.load, torch.load (A08)
+- **Graph-enhanced rule engine** — rule findings enriched with blast radius, recurrence detection, import-based false positive suppression, and finding velocity from the knowledge graph
 
 ### Changed
 

@@ -95,6 +95,8 @@ MCP client → scan_diff or audit_diff tool
 - `strict-security` — gate fails on WARN+
 - `general` — rules off, LLM-only review
 
+Graph enrichment: `enrich_results()` (rules/enrichment.py) post-processes findings with blast radius, recurrence, import-based suppression, and velocity from the graph store. Gate check skips suppressed findings.
+
 ### Prompt System
 
 20 markdown files in `src/grippy/prompts_data/`. Composition:

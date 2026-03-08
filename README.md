@@ -241,6 +241,12 @@ The 10 deterministic rules:
 
 Rule findings are injected into the LLM context as confirmed facts for explanation.
 
+When the knowledge graph is available (CI with caching, or MCP with persistent `GRIPPY_DATA_DIR`), rule findings are enriched with:
+- **Blast radius** — how many modules depend on the flagged file
+- **Recurrence** — whether this rule has fired on this file in prior reviews
+- **False positive suppression** — import-aware suppression (e.g., SQL injection suppressed when file imports SQLAlchemy)
+- **Finding velocity** — how often this rule fires across recent reviews
+
 ## Review modes
 
 | Mode | Trigger | Focus |
