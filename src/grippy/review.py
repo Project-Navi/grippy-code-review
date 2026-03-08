@@ -40,6 +40,7 @@ from grippy.graph_types import EdgeType, MissingNodeError, NodeType, _record_id
 from grippy.imports import extract_imports
 from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
+from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
 # Max diff size sent to the LLM — ~500K chars ≈ 125K tokens
 MAX_DIFF_CHARS = 500_000
@@ -436,6 +437,7 @@ def main(*, profile: str | None = None) -> None:
     if profile_config.name != "general":
         print(f"Running rule engine (profile={profile_config.name})...")
         rule_findings = run_rules(diff, profile_config)
+        rule_findings = enrich_results(rule_findings, graph_store)
         rule_gate_failed = check_gate(rule_findings, profile_config)
         print(f"  {len(rule_findings)} findings, gate={'FAILED' if rule_gate_failed else 'passed'}")
         if rule_findings:
@@ -689,6 +691,10 @@ def main(*, profile: str | None = None) -> None:
                     )
                 except Exception:  # nosec B110
                     pass  # file not in graph
+
+            # Persist rule findings for recurrence tracking
+            if rule_findings:
+                persist_rule_findings(graph_store, rule_findings, review_id)
         except Exception as exc:
             print(f"::warning::Graph persistence failed (non-fatal): {exc}")
 

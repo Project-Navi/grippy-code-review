@@ -5,15 +5,18 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from grippy.graph_store import SQLiteGraphStore
 from grippy.local_diff import DiffError, diff_stats, get_local_diff
 from grippy.mcp_response import serialize_audit, serialize_scan
 from grippy.review import _format_rule_findings, truncate_diff
 from grippy.rules import check_gate, load_profile, run_rules
 from grippy.rules.base import RuleResult
+from grippy.rules.enrichment import enrich_results
 
 mcp = FastMCP(
     "grippy",
@@ -35,6 +38,18 @@ def _json_error(message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _load_graph_store() -> SQLiteGraphStore | None:
+    """Load graph store from GRIPPY_DATA_DIR if available."""
+    data_dir = os.environ.get("GRIPPY_DATA_DIR", "./grippy-data")
+    db_path = Path(data_dir) / "navi-graph.db"
+    if not db_path.exists():
+        return None
+    try:
+        return SQLiteGraphStore(db_path=db_path)
+    except Exception:
+        return None
+
+
 def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     """Run deterministic rules and return JSON results."""
     try:
@@ -53,6 +68,7 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     gate_failed = False
     if diff:
         findings = run_rules(diff, profile_config)
+        findings = enrich_results(findings, _load_graph_store())
         gate_failed = check_gate(findings, profile_config)
 
     return json.dumps(
@@ -82,6 +98,7 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
     mode = "pr_review"
     if profile_config.name != "general":
         rule_findings = run_rules(diff, profile_config)
+        rule_findings = enrich_results(rule_findings, _load_graph_store())
         mode = "security_audit"
 
     # Truncate diff for LLM context window

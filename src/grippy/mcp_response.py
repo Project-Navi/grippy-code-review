@@ -26,6 +26,15 @@ def _serialize_rule_finding(r: RuleResult) -> dict[str, Any]:
     }
     if r.evidence is not None:
         d["evidence"] = r.evidence
+    if r.enrichment is not None:
+        d["enrichment"] = {
+            "blast_radius": r.enrichment.blast_radius,
+            "is_recurring": r.enrichment.is_recurring,
+            "prior_count": r.enrichment.prior_count,
+            "suppressed": r.enrichment.suppressed,
+            "suppression_reason": r.enrichment.suppression_reason,
+            "velocity": r.enrichment.velocity,
+        }
     return d
 
 
