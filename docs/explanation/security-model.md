@@ -124,6 +124,10 @@ Grippy includes a deterministic rule engine (`src/grippy/rules/`) that runs befo
 | `path-traversal-risk` | WARN | Tainted path variables, `../` directory traversal patterns |
 | `llm-output-unsanitized` | ERROR | Model output piped to output sinks (comment APIs, `render()`, `f"<"`) without sanitizer |
 | `ci-script-execution-risk` | WARN | Risky CI patterns, `sudo` in CI, `chmod +x` (individual patterns like `curl\|bash` are elevated to CRITICAL dynamically) |
+| `sql-injection-risk` | ERROR | SQL queries built with f-strings, %-formatting, or concatenation |
+| `weak-crypto` | WARN | MD5, SHA1, DES, ECB mode, and `random` module for security contexts |
+| `hardcoded-credentials` | ERROR | Hardcoded passwords, DB connection strings, and auth headers |
+| `insecure-deserialization` | ERROR | Unsafe deserialization via shelve, jsonpickle, dill, cloudpickle, and torch.load |
 
 ### Quality Gate
 

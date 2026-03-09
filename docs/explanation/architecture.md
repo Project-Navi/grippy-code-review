@@ -238,6 +238,10 @@ The `src/grippy/rules/` subpackage implements a deterministic security rule engi
 | `path-traversal-risk` | `path_traversal.py` | WARN | Tainted path variables, `../` traversal patterns |
 | `llm-output-unsanitized` | `llm_output_sinks.py` | ERROR | Model output piped to output sinks without sanitizer |
 | `ci-script-execution-risk` | `ci_script_risk.py` | WARN | Risky CI script patterns, `sudo` in CI, `chmod +x` (individual patterns like `curl\|bash` are elevated to CRITICAL dynamically) |
+| `sql-injection-risk` | `sql_injection.py` | ERROR | SQL queries built with f-strings, %-formatting, or concatenation |
+| `weak-crypto` | `weak_crypto.py` | WARN | MD5, SHA1, DES, ECB mode, and `random` module for security contexts |
+| `hardcoded-credentials` | `hardcoded_credentials.py` | ERROR | Hardcoded passwords, DB connection strings, and auth headers |
+| `insecure-deserialization` | `insecure_deserialization.py` | ERROR | Unsafe deserialization via shelve, jsonpickle, dill, cloudpickle, and torch.load |
 
 ### Pipeline Integration
 
