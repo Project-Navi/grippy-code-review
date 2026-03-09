@@ -67,7 +67,7 @@ grippy-mcp = "grippy.__main__:main"
 Homepage = "https://github.com/Project-Navi/grippy-code-review"
 Repository = "https://github.com/Project-Navi/grippy-code-review"
 Issues = "https://github.com/Project-Navi/grippy-code-review/issues"
-Documentation = "https://github.com/Project-Navi/grippy-code-review/wiki"
+Documentation = "https://project-navi.github.io/grippy-code-review"
 Changelog = "https://github.com/Project-Navi/grippy-code-review/blob/main/CHANGELOG.md"
 
 [dependency-groups]
@@ -83,6 +83,9 @@ dev = [
     "hypothesis>=6.0.0",
     "defusedxml>=0.7.0",
     "pytest-timeout>=2.3.0",
+]
+docs = [
+    "zensical>=0.0.24",
 ]
 
 [tool.ruff]
