@@ -16,6 +16,7 @@ permissions:
 jobs:
   review:
     name: Grippy Code Review
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
