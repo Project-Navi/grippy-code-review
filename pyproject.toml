@@ -10,7 +10,7 @@ packages = ["src/grippy"]
 
 [project]
 name = "grippy-mcp"
-version = "0.2.0"
+version = "0.1.0"
 description = "AI code review agent with personality — security-focused MCP server and CI action, built on Agno"
 readme = "README.md"
 license = "MIT"
