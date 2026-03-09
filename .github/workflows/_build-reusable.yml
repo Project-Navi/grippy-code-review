@@ -42,6 +42,9 @@ jobs:
       - name: Build sdist and wheel
         run: uv build
 
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
       - name: Generate SBOM (CycloneDX)
         uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11  # v0.23.0
         with:
