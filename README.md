@@ -7,7 +7,7 @@
 [![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Project-Navi/grippy-code-review/badge)](https://scorecard.dev/viewer/?uri=github.com/Project-Navi/grippy-code-review)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
-[![PyPI](https://img.shields.io/pypi/v/grippy-mcp)](https://pypi.org/project/grippy-mcp/)
+[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://pypi.org/project/grippy-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
