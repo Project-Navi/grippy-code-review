@@ -20,7 +20,7 @@ startCommand:
     GRIPPY_PROFILE:
       description: "Security profile: general, security, or strict-security"
       required: false
-      default: "general"
+      default: "security"
     OPENAI_API_KEY:
       description: "OpenAI API key (auto-sets transport to openai)"
       required: false

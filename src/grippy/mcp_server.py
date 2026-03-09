@@ -66,7 +66,7 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
 
     findings: list[RuleResult] = []
     gate_failed = False
-    if diff:
+    if diff and profile_config.name != "general":
         findings = run_rules(diff, profile_config)
         findings = enrich_results(findings, _load_graph_store())
         gate_failed = check_gate(findings, profile_config)
@@ -180,6 +180,7 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
         profile: Security profile controlling gate threshold.
             - "security" (default) -- fail gate on ERROR or higher
             - "strict-security" -- fail gate on WARN or higher
+            - "general" -- no rules, returns empty findings
     """
     return _run_scan(scope=scope, profile=profile)
 

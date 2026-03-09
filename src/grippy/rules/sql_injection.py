@@ -22,9 +22,9 @@ _PERCENT_SQL = re.compile(
     re.IGNORECASE,
 )
 
-# String concatenation with SQL keyword
+# String concatenation with SQL keyword (both directions)
 _CONCAT_SQL = re.compile(
-    rf"""['"].*\b{_SQL_KEYWORDS}\b.*['"]\s*\+""",
+    rf"""(?:['"].*\b{_SQL_KEYWORDS}\b.*['"]\s*\+|\+\s*['"].*\b{_SQL_KEYWORDS}\b)""",
     re.IGNORECASE,
 )
 

@@ -33,7 +33,7 @@
           "description": "Security profile: general, security, or strict-security",
           "isRequired": false,
           "isSecret": false,
-          "default": "general"
+          "default": "security"
         },
         {
           "name": "OPENAI_API_KEY",
@@ -44,6 +44,24 @@
         {
           "name": "ANTHROPIC_API_KEY",
           "description": "Anthropic API key (when transport=anthropic)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "GOOGLE_API_KEY",
+          "description": "Google API key (when transport=google)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "GROQ_API_KEY",
+          "description": "Groq API key (when transport=groq)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "MISTRAL_API_KEY",
+          "description": "Mistral API key (when transport=mistral)",
           "isRequired": false,
           "isSecret": true
         },

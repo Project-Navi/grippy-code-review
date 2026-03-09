@@ -21,11 +21,8 @@ _DESER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("cloudpickle.loads — arbitrary code execution", re.compile(r"\bcloudpickle\.loads?\s*\(")),
 ]
 
-# yaml.load without SafeLoader
-_YAML_LOAD_RE = re.compile(r"\byaml\.load\s*\(")
-_YAML_SAFE_RE = re.compile(r"\b(?:yaml\.safe_load|SafeLoader|CSafeLoader)\b")
-
 # torch.load without weights_only=True
+# NOTE: yaml.load is handled by dangerous_sinks.py (Rule 3)
 _TORCH_LOAD_RE = re.compile(r"\btorch\.load\s*\(")
 _TORCH_SAFE_RE = re.compile(r"\bweights_only\s*=\s*True\b")
 
@@ -47,7 +44,7 @@ class InsecureDeserializationRule:
     """Detect unsafe deserialization of untrusted data."""
 
     id = "insecure-deserialization"
-    description = "Flag shelve, jsonpickle, dill, cloudpickle, unsafe yaml.load, and torch.load"
+    description = "Flag shelve, jsonpickle, dill, cloudpickle, and torch.load"
     default_severity = RuleSeverity.ERROR
 
     def run(self, ctx: RuleContext) -> list[RuleResult]:
@@ -79,20 +76,9 @@ class InsecureDeserializationRule:
                 if matched:
                     continue
 
-                # yaml.load without safe loader
-                if _YAML_LOAD_RE.search(content) and not _YAML_SAFE_RE.search(content):
-                    results.append(
-                        RuleResult(
-                            rule_id=self.id,
-                            severity=self.default_severity,
-                            message="Insecure deserialization: yaml.load without SafeLoader",
-                            file=path,
-                            line=lineno,
-                            evidence=content.strip()[:120],
-                        )
-                    )
                 # torch.load without weights_only=True
-                elif _TORCH_LOAD_RE.search(content) and not _TORCH_SAFE_RE.search(content):
+                # NOTE: yaml.load is handled by dangerous_sinks.py (Rule 3)
+                if _TORCH_LOAD_RE.search(content) and not _TORCH_SAFE_RE.search(content):
                     results.append(
                         RuleResult(
                             rule_id=self.id,

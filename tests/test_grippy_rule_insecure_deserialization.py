@@ -26,14 +26,9 @@ def _ctx(diff: str) -> RuleContext:
 
 
 class TestInsecureDeserializationRule:
-    def test_yaml_unsafe_load(self) -> None:
+    def test_yaml_load_not_flagged(self) -> None:
+        """yaml.load is handled by dangerous_sinks.py, not this rule."""
         diff = _make_diff("config.py", ["data = yaml.load(raw, Loader=yaml.FullLoader)"])
-        results = InsecureDeserializationRule().run(_ctx(diff))
-        assert len(results) == 1
-        assert results[0].severity == RuleSeverity.ERROR
-
-    def test_yaml_safe_load_ok(self) -> None:
-        diff = _make_diff("config.py", ["data = yaml.safe_load(raw)"])
         results = InsecureDeserializationRule().run(_ctx(diff))
         assert len(results) == 0
 
