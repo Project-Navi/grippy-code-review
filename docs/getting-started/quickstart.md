@@ -155,8 +155,8 @@ pip install "grippy-mcp[mistral]"     # Mistral
 For OpenAI:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export GITHUB_TOKEN="ghp_..."
+export OPENAI_API_KEY="sk-..."  # pragma: allowlist secret
+export GITHUB_TOKEN="ghp_..."  # pragma: allowlist secret
 ```
 
 For a local model (LM Studio, Ollama, etc.):
@@ -165,7 +165,7 @@ For a local model (LM Studio, Ollama, etc.):
 export GRIPPY_TRANSPORT=local  # Valid: openai, anthropic, google, groq, mistral, local
 export GRIPPY_BASE_URL="http://localhost:1234/v1"
 export GRIPPY_MODEL_ID="devstral-small-2-24b-instruct-2512"
-export GITHUB_TOKEN="ghp_..."
+export GITHUB_TOKEN="ghp_..."  # pragma: allowlist secret
 # Optional: enable security rule engine
 export GRIPPY_PROFILE=security
 ```
