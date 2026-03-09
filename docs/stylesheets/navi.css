@@ -215,14 +215,15 @@ body {
 .md-content .hero-glow::before {
   content: '';
   position: absolute;
-  top: -60px;
-  left: -10%;
-  right: -10%;
-  height: 400px;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150%;
+  height: 100%;
   background: radial-gradient(
     ellipse at center top,
     rgba(126, 184, 168, 0.08) 0%,
-    transparent 70%
+    transparent 50%
   );
   pointer-events: none;
   z-index: -1;
