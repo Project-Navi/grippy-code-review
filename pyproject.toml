@@ -16,7 +16,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 authors = [
-    { name = "Nelson Spencer" }
+    { name = "Nelson Spence" }
 ]
 keywords = [
     "mcp",

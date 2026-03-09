@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Actions deployment** — PR review on `pull_request` events with inline findings
 - **6 review modes** — pr_review, security_audit, governance_check, surprise_audit, cli, github_app
 - **Deterministic rule engine** — 10 security rules (secrets, dangerous sinks, workflow permissions, path traversal, LLM output sinks, CI script risks, SQL injection, weak crypto, hardcoded credentials, insecure deserialization)
+- **Suppression directives** — `.grippyignore` for file/path exclusion (gitignore syntax), `# nogrip` inline pragma for line-level rule suppression
 - **3 security profiles** — general (rules off), security (ERROR+ gate), strict-security (WARN+ gate)
 - **Scoring rubric** — 0-100 score across 5 dimensions (security, logic, governance, reliability, observability)
 - **Codebase indexing** — LanceDB hybrid search (vector + full-text + RRF reranking) with vector-only fallback

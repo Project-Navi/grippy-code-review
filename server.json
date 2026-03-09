@@ -3,7 +3,7 @@
   "name": "io.github.Project-Navi/grippy-mcp",
   "title": "Grippy — AI Code Review Agent",
   "description": "Security-focused code review agent with personality. Two tools: scan_diff (fast deterministic security rules, no LLM) and audit_diff (full AI-powered review). Works with OpenAI, Anthropic, Google, Groq, Mistral, or self-hosted LLMs.",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "websiteUrl": "https://github.com/Project-Navi/grippy-code-review",
   "repository": {
     "url": "https://github.com/Project-Navi/grippy-code-review",
@@ -15,7 +15,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "grippy-mcp",
-      "version": "0.2.0",
+      "version": "0.1.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

@@ -100,7 +100,7 @@ jobs:
           GRIPPY_EMBEDDING_MODEL: text-embedding-3-large
           GRIPPY_DATA_DIR: ./grippy-data
           GRIPPY_TIMEOUT: 300
-          # GRIPPY_PROFILE: security  # Optional: enable deterministic rule engine
+          # GRIPPY_PROFILE: security  # Default — deterministic rules ON, gate fails on ERROR+
         run: python -m grippy
 ```
 

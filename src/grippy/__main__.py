@@ -182,29 +182,15 @@ def _install_mcp(argv: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Legacy CI entry point
-# ---------------------------------------------------------------------------
-
-
-def _ci_review(argv: list[str]) -> None:
-    """Run the legacy CI review pipeline."""
-    parser = argparse.ArgumentParser(description="Grippy AI code review agent")
-    parser.add_argument(
-        "--profile",
-        choices=["general", "security", "strict-security"],
-        default=None,
-        help="Security profile (overrides GRIPPY_PROFILE env var)",
-    )
-    args = parser.parse_args(argv)
-
-    from grippy.review import main
-
-    main(profile=args.profile)
-
-
-# ---------------------------------------------------------------------------
 # Routing
 # ---------------------------------------------------------------------------
+
+
+def _get_version() -> str:
+    """Return the package version string."""
+    from grippy import __version__
+
+    return __version__
 
 
 def main() -> None:
@@ -216,8 +202,38 @@ def main() -> None:
             _serve(rest)
         elif subcommand == "install-mcp":
             _install_mcp(rest)
-    else:
-        _ci_review(sys.argv[1:])
+        return
+
+    # Top-level: CI review with --version and subcommand-aware --help
+    parser = argparse.ArgumentParser(
+        prog="grippy",
+        description="Grippy — the reluctant code inspector.",
+        epilog=(
+            "subcommands:\n"
+            "  serve         Start the MCP server over stdio\n"
+            "  install-mcp   Interactive MCP client installer\n"
+            "\n"
+            "Run 'grippy <subcommand> --help' for subcommand-specific help."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {_get_version()}",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=["general", "security", "strict-security"],
+        default=None,
+        help="Security profile (overrides GRIPPY_PROFILE env var)",
+    )
+    args = parser.parse_args()
+
+    from grippy.review import main as review_main
+
+    review_main(profile=args.profile)
 
 
 if __name__ == "__main__":

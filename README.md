@@ -362,17 +362,6 @@ Results are written as JSON to `benchmarks/output/`.
 - [Examples](examples/) — Copy-paste workflow YAMLs and sample review output
 - [Changelog](https://project-navi.github.io/grippy-code-review/reference/changelog/) — Release history
 
-### Migrating from `grippy-code-review`?
-
-The package was renamed to `grippy-mcp` in v0.2.0. Update your install:
-
-```bash
-pip uninstall grippy-code-review
-pip install grippy-mcp
-```
-
-No code changes required — all environment variables and configuration are unchanged.
-
 ## License
 
 [MIT](LICENSE)

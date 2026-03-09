@@ -179,8 +179,15 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_profile(profile: str | None) -> str:
+    """Resolve effective profile: explicit param > GRIPPY_PROFILE env > 'security'."""
+    if profile is not None:
+        return profile
+    return os.environ.get("GRIPPY_PROFILE", "security")
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def scan_diff(scope: str = "staged", profile: str = "security") -> str:
+def scan_diff(scope: str = "staged", profile: str | None = None) -> str:
     """Run deterministic security rules against a local git diff. Fast, no LLM needed.
 
     Args:
@@ -188,16 +195,17 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
             - "staged" (default) -- staged changes (git diff --cached)
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
-        profile: Security profile controlling gate threshold.
+        profile: Security profile controlling gate threshold. Falls back to
+            GRIPPY_PROFILE env var, then "security".
             - "security" (default) -- fail gate on ERROR or higher
             - "strict-security" -- fail gate on WARN or higher
             - "general" -- no rules, returns empty findings
     """
-    return _run_scan(scope=scope, profile=profile)
+    return _run_scan(scope=scope, profile=_resolve_profile(profile))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def audit_diff(scope: str = "staged", profile: str = "security") -> str:
+def audit_diff(scope: str = "staged", profile: str | None = None) -> str:
     """Run a full AI-powered code review against a local git diff. Requires LLM config.
 
     Args:
@@ -205,12 +213,13 @@ def audit_diff(scope: str = "staged", profile: str = "security") -> str:
             - "staged" (default) -- staged changes (git diff --cached)
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
-        profile: Security profile controlling rule gate and review mode.
+        profile: Security profile controlling rule gate and review mode. Falls back to
+            GRIPPY_PROFILE env var, then "security".
             - "security" (default) -- run deterministic rules, fail gate on ERROR or higher
             - "strict-security" -- run rules, fail gate on WARN or higher
             - "general" -- no deterministic rules, LLM-only review
     """
-    return _run_audit(scope=scope, profile=profile)
+    return _run_audit(scope=scope, profile=_resolve_profile(profile))
 
 
 # ---------------------------------------------------------------------------

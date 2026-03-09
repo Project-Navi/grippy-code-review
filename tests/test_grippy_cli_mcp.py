@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from grippy.__main__ import _ci_review, _install_mcp, _serve
+from grippy.__main__ import _install_mcp, _serve, main
 
 # ---------------------------------------------------------------------------
 # _serve tests (in-process)
@@ -255,29 +255,47 @@ class TestGenerateServerEntryUvx:
 
 
 # ---------------------------------------------------------------------------
-# _ci_review tests (in-process)
+# CI review via main() (in-process)
 # ---------------------------------------------------------------------------
 
 
-class TestCiReviewInProcess:
-    """Tests for the _ci_review function."""
+class TestCiReviewViaMain:
+    """Tests for CI review routed through main()."""
 
     def test_ci_review_calls_main(self) -> None:
-        """_ci_review([]) calls review.main(profile=None)."""
-        with patch("grippy.review.main") as mock_main:
-            _ci_review([])
+        """main() with no subcommand calls review.main(profile=None)."""
+        with (
+            patch("grippy.review.main") as mock_main,
+            patch("sys.argv", ["grippy"]),
+        ):
+            main()
             mock_main.assert_called_once_with(profile=None)
 
     def test_ci_review_with_profile(self) -> None:
-        """_ci_review(["--profile", "security"]) passes profile through."""
-        with patch("grippy.review.main") as mock_main:
-            _ci_review(["--profile", "security"])
+        """main() passes --profile through to review.main."""
+        with (
+            patch("grippy.review.main") as mock_main,
+            patch("sys.argv", ["grippy", "--profile", "security"]),
+        ):
+            main()
             mock_main.assert_called_once_with(profile="security")
 
     def test_ci_review_help_exits_zero(self) -> None:
         """--help exits 0."""
-        with pytest.raises(SystemExit) as exc_info:
-            _ci_review(["--help"])
+        with (
+            pytest.raises(SystemExit) as exc_info,
+            patch("sys.argv", ["grippy", "--help"]),
+        ):
+            main()
+        assert exc_info.value.code == 0
+
+    def test_version_flag_exits_zero(self) -> None:
+        """--version exits 0."""
+        with (
+            pytest.raises(SystemExit) as exc_info,
+            patch("sys.argv", ["grippy", "--version"]),
+        ):
+            main()
         assert exc_info.value.code == 0
 
 
@@ -312,15 +330,15 @@ class TestMainEntryPoint:
             mock_install.assert_called_once_with([])
 
     def test_main_dispatches_legacy_ci(self) -> None:
-        """main() dispatches to legacy CI when no subcommand."""
+        """main() dispatches to review.main when no subcommand."""
         with (
-            patch("grippy.__main__._ci_review") as mock_ci,
+            patch("grippy.review.main") as mock_review,
             patch("sys.argv", ["grippy", "--profile", "security"]),
         ):
             from grippy.__main__ import main
 
             main()
-            mock_ci.assert_called_once_with(["--profile", "security"])
+            mock_review.assert_called_once_with(profile="security")
 
     def test_main_is_callable(self) -> None:
         """main is importable and callable."""
