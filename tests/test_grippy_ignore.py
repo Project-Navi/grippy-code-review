@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pathspec
 
-from grippy.ignore import build_nogrip_index, filter_diff, load_grippyignore, parse_nogrip
+from grippy.ignore import filter_diff, load_grippyignore, parse_nogrip
 from grippy.rules import RuleContext, check_gate, load_profile, run_rules
 from grippy.rules.base import RuleResult, RuleSeverity
 from grippy.rules.engine import RuleEngine
