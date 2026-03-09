@@ -216,7 +216,7 @@ def persist_rule_findings(
             file_id = _record_id(NodeType.FILE, r.file)
             try:
                 store.upsert_edge(finding_id, file_id, EdgeType.FOUND_IN)
-            except Exception:
+            except Exception:  # nosec B110
                 pass  # file not in graph
         except Exception:
             log.warning("Failed to persist rule finding %s (non-fatal)", r.rule_id, exc_info=True)

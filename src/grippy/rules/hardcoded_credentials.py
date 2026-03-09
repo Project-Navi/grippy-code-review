@@ -8,7 +8,7 @@ import re
 from grippy.rules.base import RuleResult, RuleSeverity
 from grippy.rules.context import RuleContext
 
-# password/secret = "literal" (not env var, not placeholder)
+# password/secret = "literal" (not env var, not placeholder)  # pragma: allowlist secret
 _CREDENTIAL_ASSIGN = re.compile(
     r"""(?:password|passwd|pwd|secret|credential|auth_token|db_pass)\s*=\s*["'][^"']{4,}["']""",
     re.IGNORECASE,

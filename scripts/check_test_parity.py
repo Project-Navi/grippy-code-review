@@ -40,6 +40,11 @@ SUBPACKAGE_PARITY: dict[str, dict[str, Path | str | set[str] | dict[str, str]]] 
             "path_traversal": "test_grippy_rule_traversal.py",
             "llm_output_sinks": "test_grippy_rule_llm.py",
             "ci_script_risk": "test_grippy_rule_ci.py",
+            "sql_injection": "test_grippy_rule_sql_injection.py",
+            "weak_crypto": "test_grippy_rule_weak_crypto.py",
+            "hardcoded_credentials": "test_grippy_rule_hardcoded_credentials.py",
+            "insecure_deserialization": "test_grippy_rule_insecure_deserialization.py",
+            "enrichment": "test_grippy_rules_enrichment.py",
         },
     },
 }
