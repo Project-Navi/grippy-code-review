@@ -4,8 +4,6 @@ hide:
   - toc
 ---
 
-<div class="hero-glow" markdown>
-
 # grippy-code-review
 
 **AI-powered PR review agent with security rule engine.**
@@ -14,8 +12,6 @@ Runs with any OpenAI-compatible model as an MCP server or GitHub Actions workflo
 
 [Get Started](getting-started/quickstart.md){ .md-button .md-button--primary }
 [Configuration](how-to/configuration.md){ .md-button }
-
-</div>
 
 ---
 
