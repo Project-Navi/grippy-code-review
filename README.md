@@ -185,7 +185,7 @@ Grippy is configured entirely through environment variables.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `GRIPPY_TRANSPORT` | API transport: `openai`, `anthropic`, `google`, `groq`, `mistral`, or `local` | Inferred from `OPENAI_API_KEY` |
+| `GRIPPY_TRANSPORT` | API transport: `openai`, `anthropic`, `google`, `groq`, `mistral`, or `local` | `local` |
 | `GRIPPY_MODEL_ID` | Model identifier | `devstral-small-2-24b-instruct-2512` |
 | `GRIPPY_BASE_URL` | API endpoint for local transport | `http://localhost:1234/v1` |
 | `GRIPPY_EMBEDDING_MODEL` | Embedding model name | `text-embedding-qwen3-embedding-4b` |

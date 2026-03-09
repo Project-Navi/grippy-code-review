@@ -17,7 +17,7 @@ _WEAK_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("ECB mode — use CBC/GCM", re.compile(r"\bMODE_ECB\b")),
     (
         "random module for security — use secrets",
-        re.compile(r"\brandom\.(?:randint|random|choice|getrandbits)\s*\("),
+        re.compile(r"\brandom\.(?:randint|random|choice|getrandbits|sample|shuffle)\s*\("),
     ),
 ]
 
@@ -28,6 +28,11 @@ def _file_ext(path: str) -> str:
     """Get file extension including the dot."""
     dot = path.rfind(".")
     return path[dot:] if dot >= 0 else ""
+
+
+def _in_tests_dir(path: str) -> bool:
+    """Check if path is under a tests directory."""
+    return path.startswith("tests/") or "/tests/" in path
 
 
 def _is_comment(content: str) -> bool:
@@ -46,6 +51,8 @@ class WeakCryptoRule:
         results: list[RuleResult] = []
         for f in ctx.files:
             if _file_ext(f.path) not in _PYTHON_EXTENSIONS:
+                continue
+            if _in_tests_dir(f.path):
                 continue
             for path, lineno, content in ctx.added_lines_for(f.path):
                 if _is_comment(content):

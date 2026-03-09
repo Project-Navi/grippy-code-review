@@ -76,6 +76,27 @@ class TestWeakCryptoRule:
         results = WeakCryptoRule().run(_ctx(diff))
         assert len(results) == 0
 
+    def test_random_sample_flagged(self) -> None:
+        diff = _make_diff("token.py", ["chars = random.sample(alphabet, 16)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+
+    def test_random_shuffle_flagged(self) -> None:
+        diff = _make_diff("token.py", ["random.shuffle(deck)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+
+    def test_tests_dir_ignored(self) -> None:
+        """Files under tests/ should not trigger weak-crypto findings."""
+        diff = _make_diff("tests/test_auth.py", ["h = hashlib.md5(b'test')"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 0
+
+    def test_nested_tests_dir_ignored(self) -> None:
+        diff = _make_diff("src/app/tests/conftest.py", ["random.randint(1, 10)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 0
+
     def test_rule_metadata(self) -> None:
         rule = WeakCryptoRule()
         assert rule.id == "weak-crypto"
