@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+import grippy
 from grippy.__main__ import _install_mcp, _serve, main
 
 # ---------------------------------------------------------------------------
@@ -399,3 +400,28 @@ class TestLegacyCIEntryPoint:
             env=env,
         )
         assert result.returncode != 0
+
+
+# ---------------------------------------------------------------------------
+# __version__ attribute tests
+# ---------------------------------------------------------------------------
+
+
+class TestVersion:
+    """Tests for grippy.__version__ attribute."""
+
+    def test_version_is_string(self) -> None:
+        assert isinstance(grippy.__version__, str)
+
+    def test_version_in_all(self) -> None:
+        assert "__version__" in grippy.__all__
+
+    def test_version_fallback(self) -> None:
+        """PackageNotFoundError fallback returns a valid semver string."""
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            v = version("grippy-mcp")
+            assert grippy.__version__ == v
+        except PackageNotFoundError:
+            assert grippy.__version__ == "0.1.0"

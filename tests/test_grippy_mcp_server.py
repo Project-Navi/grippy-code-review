@@ -7,7 +7,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from grippy.mcp_server import _run_audit, _run_scan, audit_diff, main, scan_diff
+from grippy.mcp_server import _resolve_profile, _run_audit, _run_scan, audit_diff, main, scan_diff
 from grippy.retry import ReviewParseError
 from grippy.schema import (
     AsciiArtKey,
@@ -399,3 +399,23 @@ class TestGrippyignoreIntegration:
 
         result = json.loads(_run_audit(scope="staged", profile="security"))
         assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# _resolve_profile tests
+# ---------------------------------------------------------------------------
+
+
+class TestResolveProfile:
+    """Tests for GRIPPY_PROFILE env var fallback in MCP tools."""
+
+    def test_explicit_profile_wins(self) -> None:
+        assert _resolve_profile("strict-security") == "strict-security"
+
+    def test_env_var_fallback(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("GRIPPY_PROFILE", "general")
+        assert _resolve_profile(None) == "general"
+
+    def test_default_security(self, monkeypatch: Any) -> None:
+        monkeypatch.delenv("GRIPPY_PROFILE", raising=False)
+        assert _resolve_profile(None) == "security"
