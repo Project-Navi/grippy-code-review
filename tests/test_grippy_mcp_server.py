@@ -218,6 +218,19 @@ class TestRunAudit:
         call_kwargs = mock_create.call_args
         assert call_kwargs.kwargs.get("mode") == "security_audit"
 
+    def test_audit_security_with_findings_formats_text(self) -> None:
+        """Security profile with actual rule findings exercises formatting path."""
+        review = _make_review()
+        mock_agent = MagicMock()
+        with (
+            patch("grippy.mcp_server.get_local_diff", return_value=_SECRET_DIFF),
+            patch("grippy.agent.create_reviewer", return_value=mock_agent),
+            patch("grippy.retry.run_review", return_value=review),
+        ):
+            result = json.loads(_run_audit(scope="staged", profile="security"))
+        assert "findings" in result
+        assert result["score"]["overall"] == 90
+
     def test_audit_create_reviewer_value_error(self) -> None:
         """ValueError from create_reviewer returns config error."""
         with (

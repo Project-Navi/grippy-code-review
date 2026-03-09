@@ -248,3 +248,19 @@ class TestGetRepoRoot:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         assert get_repo_root() is None
+
+    def test_returns_none_on_timeout(self) -> None:
+        """TimeoutExpired is caught and returns None."""
+        with patch(
+            "grippy.local_diff.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 5),
+        ):
+            assert get_repo_root() is None
+
+    def test_returns_none_on_os_error(self) -> None:
+        """OSError (e.g. git not installed) is caught and returns None."""
+        with patch(
+            "grippy.local_diff.subprocess.run",
+            side_effect=OSError("No such file or directory"),
+        ):
+            assert get_repo_root() is None
