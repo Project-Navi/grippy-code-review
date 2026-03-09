@@ -8,6 +8,7 @@ from pathlib import Path
 import pathspec
 
 from grippy.ignore import filter_diff, load_grippyignore, parse_nogrip
+from grippy.rules import check_gate, load_profile, run_rules
 
 
 class TestParseNogrip:
@@ -140,3 +141,31 @@ class TestFilterDiff:
         filtered, count = filter_diff("", spec)
         assert count == 0
         assert filtered == ""
+
+
+class TestCIIntegration:
+    def test_filter_then_rules_produces_no_findings(self) -> None:
+        """End-to-end: filter diff → run rules → gate should pass."""
+        diff = _two_file_diff()
+        spec = pathspec.PathSpec.from_lines("gitignore", ["tests/"])
+        filtered, excluded = filter_diff(diff, spec)
+        assert excluded == 1
+
+        profile = load_profile(cli_profile="security")
+        findings = run_rules(filtered, profile)
+        # src/app.py has "x = 1" which should not trigger rules
+        assert len(findings) == 0
+        assert not check_gate(findings, profile)
+
+    def test_touched_files_after_filter(self) -> None:
+        """Excluded files must not appear in touched file list."""
+        diff = _two_file_diff()
+        spec = pathspec.PathSpec.from_lines("gitignore", ["tests/"])
+        filtered, _ = filter_diff(diff, spec)
+        touched = [
+            line.split(" b/", 1)[1]
+            for line in filtered.splitlines()
+            if line.startswith("diff --git") and " b/" in line
+        ]
+        assert "tests/test_rule.py" not in touched
+        assert "src/app.py" in touched
