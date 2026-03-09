@@ -21,3 +21,6 @@ nboot-spec.json
 .worktrees/
 benchmarks/output/
 !benchmarks/output/.gitkeep
+
+# Zensical build output
+site/
