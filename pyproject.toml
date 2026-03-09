@@ -48,6 +48,7 @@ dependencies = [
     "nh3>=0.2.0",
     "mcp>=1.0.0",
     "lancedb>=0.20.0",
+    "pathspec>=0.12",
 ]
 
 [project.optional-dependencies]
