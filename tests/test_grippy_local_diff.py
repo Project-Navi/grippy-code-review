@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,7 @@ from grippy.local_diff import (
     DiffError,
     diff_stats,
     get_local_diff,
+    get_repo_root,
     parse_scope,
 )
 
@@ -226,3 +228,23 @@ class TestDiffStats:
     def test_empty_diff(self) -> None:
         stats = diff_stats("")
         assert stats == {"files": 0, "additions": 0, "deletions": 0}
+
+
+# ---------------------------------------------------------------------------
+# get_repo_root
+# ---------------------------------------------------------------------------
+
+
+class TestGetRepoRoot:
+    """Tests for get_repo_root()."""
+
+    def test_returns_path_in_git_repo(self) -> None:
+        root = get_repo_root()
+        assert root is not None
+        assert (root / ".git").exists() or (root / ".git").is_file()
+
+    def test_returns_none_outside_git(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert get_repo_root() is None

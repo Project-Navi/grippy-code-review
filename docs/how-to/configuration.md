@@ -17,7 +17,7 @@ All configuration is through environment variables, with one CLI flag (`--profil
 | `GRIPPY_TIMEOUT` | Review timeout in seconds | `300` | Set to `0` to disable the timeout |
 | `GRIPPY_PROFILE` | Security rule engine profile | `security` | See [Security Profiles](#security-profiles) below |
 | `GRIPPY_MODE` | Review mode | `pr_review` | One of: `pr_review`, `security_audit`, `governance_check`, `surprise_audit`, `cli`, `github_app` |
-| `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | --- | Set to any value to force re-index |
+| `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | --- | Set to `1`, `true`, or `yes` to force re-index |
 | `OPENAI_API_KEY` | OpenAI API key | --- | Presence auto-sets transport to `openai` |
 | `ANTHROPIC_API_KEY` | Anthropic API key (when transport=anthropic) | --- | Requires `pip install "grippy-mcp[anthropic]"` |
 | `GOOGLE_API_KEY` | Google API key (when transport=google) | --- | Requires `pip install "grippy-mcp[google]"` |

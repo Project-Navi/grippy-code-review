@@ -21,6 +21,7 @@ nav = [
   ]},
   {"How-To Guides" = [
     {"Configuration" = "how-to/configuration.md"},
+    {"Suppression" = "how-to/suppression.md"},
     {"Review Modes" = "how-to/review-modes.md"},
     {"Self-Hosted LLM Guide" = "how-to/self-hosted-llm-guide.md"},
     {"Contributing" = "how-to/contributing.md"},

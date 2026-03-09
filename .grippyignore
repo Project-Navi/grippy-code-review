@@ -1,0 +1,3 @@
+# Grippy test fixtures contain intentional security anti-patterns
+# that exercise the rule engine - exclude them from self-review.
+tests/test_grippy_rule_*.py

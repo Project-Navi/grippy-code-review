@@ -11,7 +11,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from grippy.graph_store import SQLiteGraphStore
-from grippy.local_diff import DiffError, diff_stats, get_local_diff
+from grippy.ignore import filter_diff, load_grippyignore
+from grippy.local_diff import DiffError, diff_stats, get_local_diff, get_repo_root
 from grippy.mcp_response import serialize_audit, serialize_scan
 from grippy.review import _format_rule_findings, truncate_diff
 from grippy.rules import check_gate, load_profile, run_rules
@@ -62,6 +63,11 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     except DiffError as exc:
         return _json_error(str(exc))
 
+    # Filter ignored files
+    repo_root = get_repo_root()
+    spec = load_grippyignore(repo_root)
+    diff, _excluded = filter_diff(diff, spec)
+
     stats = diff_stats(diff)
 
     findings: list[RuleResult] = []
@@ -87,6 +93,11 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
         diff = get_local_diff(scope)
     except DiffError as exc:
         return _json_error(str(exc))
+
+    # Filter ignored files
+    repo_root = get_repo_root()
+    spec = load_grippyignore(repo_root)
+    diff, _excluded = filter_diff(diff, spec)
 
     if not diff:
         return _json_error("Empty diff — nothing to review")
@@ -168,8 +179,15 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_profile(profile: str | None) -> str:
+    """Resolve effective profile: explicit param > GRIPPY_PROFILE env > 'security'."""
+    if profile is not None:
+        return profile
+    return os.environ.get("GRIPPY_PROFILE", "security")
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def scan_diff(scope: str = "staged", profile: str = "security") -> str:
+def scan_diff(scope: str = "staged", profile: str | None = None) -> str:
     """Run deterministic security rules against a local git diff. Fast, no LLM needed.
 
     Args:
@@ -177,16 +195,17 @@ def scan_diff(scope: str = "staged", profile: str = "security") -> str:
             - "staged" (default) -- staged changes (git diff --cached)
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
-        profile: Security profile controlling gate threshold.
+        profile: Security profile controlling gate threshold. Falls back to
+            GRIPPY_PROFILE env var, then "security".
             - "security" (default) -- fail gate on ERROR or higher
             - "strict-security" -- fail gate on WARN or higher
             - "general" -- no rules, returns empty findings
     """
-    return _run_scan(scope=scope, profile=profile)
+    return _run_scan(scope=scope, profile=_resolve_profile(profile))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False))
-def audit_diff(scope: str = "staged", profile: str = "security") -> str:
+def audit_diff(scope: str = "staged", profile: str | None = None) -> str:
     """Run a full AI-powered code review against a local git diff. Requires LLM config.
 
     Args:
@@ -194,12 +213,13 @@ def audit_diff(scope: str = "staged", profile: str = "security") -> str:
             - "staged" (default) -- staged changes (git diff --cached)
             - "commit:<ref>" -- a specific commit (e.g. "commit:HEAD", "commit:abc123")
             - "range:<base>..<head>" -- a commit range (e.g. "range:main..HEAD")
-        profile: Security profile controlling rule gate and review mode.
+        profile: Security profile controlling rule gate and review mode. Falls back to
+            GRIPPY_PROFILE env var, then "security".
             - "security" (default) -- run deterministic rules, fail gate on ERROR or higher
             - "strict-security" -- run rules, fail gate on WARN or higher
             - "general" -- no deterministic rules, LLM-only review
     """
-    return _run_audit(scope=scope, profile=profile)
+    return _run_audit(scope=scope, profile=_resolve_profile(profile))
 
 
 # ---------------------------------------------------------------------------

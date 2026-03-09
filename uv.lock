@@ -996,7 +996,7 @@ wheels = [
 
 [[package]]
 name = "grippy-mcp"
-version = "0.2.0"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "agno", extra = ["openai"] },
@@ -1004,6 +1004,7 @@ dependencies = [
     { name = "mcp" },
     { name = "navi-sanitize" },
     { name = "nh3" },
+    { name = "pathspec" },
     { name = "pydantic" },
     { name = "pygithub" },
     { name = "requests" },
@@ -1057,6 +1058,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "navi-sanitize", specifier = ">=0.1.0" },
     { name = "nh3", specifier = ">=0.2.0" },
+    { name = "pathspec", specifier = ">=0.12" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pygithub", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.28.0" },

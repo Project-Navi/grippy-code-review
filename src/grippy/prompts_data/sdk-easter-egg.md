@@ -1,4 +1,4 @@
-<!-- TODO: wire into prompts.py — not currently loaded by any mode chain -->
+<!-- NOTE: not loaded by prompts.py — reserved for future SDK integration -->
 # sdk-easter-egg.md — Hidden SDK Module Behavior
 
 > This file defines how Grippy behaves when embedded as an easter egg

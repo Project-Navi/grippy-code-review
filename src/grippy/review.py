@@ -408,6 +408,15 @@ def main(*, profile: str | None = None) -> None:
     file_count = diff.count("diff --git")
     print(f"  {file_count} files, {len(diff)} chars")
 
+    # 3a. Apply .grippyignore filtering
+    from grippy.ignore import filter_diff, load_grippyignore
+    from grippy.local_diff import get_repo_root
+
+    spec = load_grippyignore(get_repo_root() or Path.cwd())
+    diff, excluded_count = filter_diff(diff, spec)
+    if excluded_count:
+        print(f"  {excluded_count} file(s) excluded by .grippyignore")
+
     # Extract touched files from FULL diff (before truncation)
     touched_files_from_diff = [
         line.split(" b/", 1)[1]

@@ -90,10 +90,11 @@ All modules live in `src/grippy/`.
 | `codebase.py` | Codebase indexing (LanceDB hybrid search: vector + keyword + RRF reranking) and `CodebaseToolkit` providing `search_code`, `read_file`, `grep_code`, `list_files` tools for the agent. |
 | `github_review.py` | GitHub API integration. Parses unified diffs to map findings to addressable lines, posts inline review comments (batched), manages thread lifecycle (new/persists/resolved), builds summary dashboard. |
 | `schema.py` | Pydantic models for the complete structured output: `GrippyReview`, `Finding`, `Score`, `Verdict`, `Escalation`, `Personality`. Enums for severity, category, verdict status, tone register. |
-| `prompts.py` | Prompt chain loader. Reads 20 markdown prompt files from `prompts_data/` and composes them into identity + instruction layers. |
+| `prompts.py` | Prompt chain loader. Reads 22 markdown prompt files from `prompts_data/` and composes them into identity + instruction layers. |
 | `mcp_server.py` | FastMCP server. `scan_diff` + `audit_diff` tools with `readOnlyHint` annotations. |
 | `mcp_config.py` | MCP client detection (Claude Code/Desktop/Cursor), server entry generation (uvx or dev mode). |
 | `mcp_response.py` | AI-facing serializers. Strips personality, outputs dense structured JSON for MCP tool responses. |
+| `ignore.py` | Suppression directives. `.grippyignore` file loading (gitignore syntax via `pathspec`), diff filtering, `# nogrip` line-level pragma parsing and index building. |
 | `local_diff.py` | Git diff acquisition. Scope parsing (`staged`, `commit:<ref>`, `range:<base>..<head>`), ref validation, subprocess with timeout. |
 | `graph_types.py` | Node/edge type enums (`NodeType`, `EdgeType`), dataclasses, deterministic ID helpers. Defines the navi-graph shape. |
 | `graph_store.py` | `SQLiteGraphStore` --- schema init, node/edge writes, neighbor queries, BFS traversal, append-only observations, migrations. |

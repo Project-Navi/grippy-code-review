@@ -75,7 +75,7 @@ uv run ruff format src/grippy/ tests/
 uv run mypy src/grippy/
 ```
 
-Ruff rules enabled: `E`, `F`, `I`, `N`, `W`, `UP`, `B`, `RUF`, `C4` (with `E501` ignored --- line length is handled by the formatter at 100 chars). MyPy runs in strict mode with `disallow_untyped_defs` and `check_untyped_defs`.
+Ruff rules enabled: `E`, `F`, `I`, `N`, `W`, `UP`, `B`, `RUF`, `C4` (with `E501` ignored --- line length is handled by the formatter at 100 chars). MyPy runs with `disallow_untyped_defs` and `check_untyped_defs` enabled.
 
 ## Security Scanning
 

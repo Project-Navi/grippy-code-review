@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: MIT
 """Grippy — the reluctant code inspector. Agno-based AI code review agent."""
 
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__: str = version("grippy-mcp")
+except PackageNotFoundError:
+    __version__ = "0.1.0"
+
 from grippy.agent import create_reviewer
 from grippy.codebase import CodebaseIndex, CodebaseToolkit
 from grippy.embedder import create_embedder
@@ -43,6 +50,7 @@ __all__ = [
     "SQLiteGraphStore",
     "TraversalReceipt",
     "TraversalResult",
+    "__version__",
     "build_review_comment",
     "classify_findings",
     "create_embedder",
