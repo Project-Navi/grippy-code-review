@@ -109,7 +109,7 @@ jobs:
 
 ### GitHub Actions (self-hosted LLM)
 
-Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studio, and vLLM. We recommend **Devstral-Small 24B at Q4 quantization or higher** — tested during development for structured output compliance and review quality. See the [Self-Hosted LLM Guide](https://github.com/Project-Navi/grippy-code-review/wiki/Self-Hosted-LLM-Guide) on the wiki for full setup instructions.
+Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studio, and vLLM. We recommend **Devstral-Small 24B at Q4 quantization or higher** — tested during development for structured output compliance and review quality. See the [Self-Hosted LLM Guide](https://project-navi.github.io/grippy-code-review/how-to/self-hosted-llm-guide/) for full setup instructions.
 
 ### Local development
 
@@ -295,7 +295,7 @@ Grippy operates in an adversarial environment — PR diffs are untrusted input c
 
 **Adversarial test suite.** `tests/test_hostile_environment.py` exercises 44 attack scenarios across Unicode attacks, prompt injection, tool exploitation, output sanitization gaps, information leakage, schema validation attacks, session history poisoning, and more. All 44 pass.
 
-See the [Security Model](https://github.com/Project-Navi/grippy-code-review/wiki/Security-Model) wiki page for codebase tool protections, CI hardening, and the full threat model.
+See the [Security Model](https://project-navi.github.io/grippy-code-review/explanation/security-model/) for codebase tool protections, CI hardening, and the full threat model.
 
 ### Retrieval Quality Benchmarks
 
@@ -316,16 +316,16 @@ Results are written as JSON to `benchmarks/output/`.
 
 ## Documentation
 
-- [Getting Started](https://github.com/Project-Navi/grippy-code-review/wiki/Getting-Started) — Setup for OpenAI, local LLMs, and development
-- [Configuration](https://github.com/Project-Navi/grippy-code-review/wiki/Configuration) — Environment variables and model options
-- [Architecture](https://github.com/Project-Navi/grippy-code-review/wiki/Architecture) — Module map, prompt system, data flow
-- [Review Modes](https://github.com/Project-Navi/grippy-code-review/wiki/Review-Modes) — The 6 review modes and how they work
-- [Scoring Rubric](https://github.com/Project-Navi/grippy-code-review/wiki/Scoring-Rubric) — How Grippy scores PRs
-- [Security Model](https://github.com/Project-Navi/grippy-code-review/wiki/Security-Model) — Codebase tool protections, hardened CI
-- [Self-Hosted LLM Guide](https://github.com/Project-Navi/grippy-code-review/wiki/Self-Hosted-LLM-Guide) — Ollama/LM Studio + Cloudflare Tunnel
-- [Contributing](https://github.com/Project-Navi/grippy-code-review/wiki/Contributing) — Dev setup, testing, conventions
+- [Getting Started](https://project-navi.github.io/grippy-code-review/getting-started/quickstart/) — Setup for OpenAI, local LLMs, and development
+- [Configuration](https://project-navi.github.io/grippy-code-review/how-to/configuration/) — Environment variables and model options
+- [Architecture](https://project-navi.github.io/grippy-code-review/explanation/architecture/) — Module map, prompt system, data flow
+- [Review Modes](https://project-navi.github.io/grippy-code-review/how-to/review-modes/) — The 6 review modes and how they work
+- [Scoring Rubric](https://project-navi.github.io/grippy-code-review/reference/scoring-rubric/) — How Grippy scores PRs
+- [Security Model](https://project-navi.github.io/grippy-code-review/explanation/security-model/) — Codebase tool protections, hardened CI
+- [Self-Hosted LLM Guide](https://project-navi.github.io/grippy-code-review/how-to/self-hosted-llm-guide/) — Ollama/LM Studio + Cloudflare Tunnel
+- [Contributing](https://project-navi.github.io/grippy-code-review/how-to/contributing/) — Dev setup, testing, conventions
 - [Examples](examples/) — Copy-paste workflow YAMLs and sample review output
-- [Changelog](CHANGELOG.md) — Release history
+- [Changelog](https://project-navi.github.io/grippy-code-review/reference/changelog/) — Release history
 
 ### Migrating from `grippy-code-review`?
 

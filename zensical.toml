@@ -19,7 +19,19 @@ nav = [
   {"Getting Started" = [
     {"Quickstart" = "getting-started/quickstart.md"},
   ]},
+  {"How-To Guides" = [
+    {"Configuration" = "how-to/configuration.md"},
+    {"Review Modes" = "how-to/review-modes.md"},
+    {"Self-Hosted LLM Guide" = "how-to/self-hosted-llm-guide.md"},
+    {"Contributing" = "how-to/contributing.md"},
+  ]},
+  {"Explanation" = [
+    {"Architecture" = "explanation/architecture.md"},
+    {"Security Model" = "explanation/security-model.md"},
+    {"Knowledge Graph" = "explanation/knowledge-graph.md"},
+  ]},
   {"Reference" = [
+    {"Scoring Rubric" = "reference/scoring-rubric.md"},
     {"Changelog" = "reference/changelog.md"},
   ]},
 ]
