@@ -21,10 +21,22 @@ class RuleEngine:
         self._rules: list[Rule] = [cls() for cls in (rule_classes or RULE_REGISTRY)]
 
     def run(self, ctx: RuleContext) -> list[RuleResult]:
-        """Run all rules and collect results."""
+        """Run all rules and collect results, filtering # nogrip pragmas."""
+        from grippy.ignore import build_nogrip_index
+
+        nogrip_index = build_nogrip_index(ctx)
         results: list[RuleResult] = []
         for rule in self._rules:
-            results.extend(rule.run(ctx))
+            for finding in rule.run(ctx):
+                if finding.line is None:
+                    results.append(finding)
+                    continue
+                nogrip = nogrip_index.get((finding.file, finding.line))
+                if nogrip is True:
+                    continue  # bare # nogrip — suppress all
+                if isinstance(nogrip, set) and finding.rule_id in nogrip:
+                    continue  # targeted # nogrip — suppress matching rule
+                results.append(finding)
         return results
 
     def check_gate(self, results: list[RuleResult], config: ProfileConfig) -> bool:

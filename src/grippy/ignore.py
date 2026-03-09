@@ -6,8 +6,12 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pathspec
+
+if TYPE_CHECKING:
+    from grippy.rules.context import RuleContext
 
 log = logging.getLogger(__name__)
 
@@ -93,3 +97,21 @@ def filter_diff(diff: str, spec: pathspec.PathSpec | None) -> tuple[str, int]:
         return "", excluded
 
     return "".join(kept), excluded
+
+
+def build_nogrip_index(ctx: RuleContext) -> dict[tuple[str, int], set[str] | bool]:
+    """Build a lookup of (file, lineno) -> nogrip pragma from parsed diff.
+
+    Uses the original added-line content from the diff parser, NOT the
+    truncated evidence field. This ensures pragmas past char 120 are
+    still detected.
+    """
+    index: dict[tuple[str, int], set[str] | bool] = {}
+    for f in ctx.files:
+        for hunk in f.hunks:
+            for line in hunk.lines:
+                if line.type == "add" and line.new_lineno is not None:
+                    nogrip = parse_nogrip(line.content)
+                    if nogrip is not None:
+                        index[(f.path, line.new_lineno)] = nogrip
+    return index

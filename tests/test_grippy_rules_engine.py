@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from grippy.rules.base import RuleResult, RuleSeverity
-from grippy.rules.config import ProfileConfig
-from grippy.rules.context import RuleContext
+from grippy.rules.config import PROFILES, ProfileConfig
+from grippy.rules.context import RuleContext, parse_diff
 from grippy.rules.engine import RuleEngine
 
 
@@ -292,3 +292,57 @@ class TestResultEnrichment:
         assert r.enrichment is None  # original unchanged
         assert r2.enrichment is not None
         assert r2.enrichment.blast_radius == 2
+
+
+# --- nogrip pragma integration ---
+
+
+def _make_diff(filename: str, added_lines: list[str]) -> str:
+    body = "\n".join(f"+{line}" for line in added_lines)
+    return (
+        f"diff --git a/{filename} b/{filename}\n"
+        f"new file mode 100644\n"
+        f"--- /dev/null\n"
+        f"+++ b/{filename}\n"
+        f"@@ -0,0 +1,{len(added_lines)} @@\n"
+        f"{body}\n"
+    )
+
+
+class TestNogrip:
+    def test_bare_nogrip_suppresses_all_rules(self) -> None:
+        diff = _make_diff("app.py", ["h = hashlib.md5(data)  # nogrip"])
+        ctx = RuleContext(diff=diff, files=parse_diff(diff), config=PROFILES["security"])
+        results = RuleEngine().run(ctx)
+        assert all(r.file != "app.py" or r.line != 1 for r in results)
+
+    def test_targeted_nogrip_suppresses_matching_rule(self) -> None:
+        diff = _make_diff("app.py", ["h = hashlib.md5(data)  # nogrip: weak-crypto"])
+        ctx = RuleContext(diff=diff, files=parse_diff(diff), config=PROFILES["security"])
+        results = RuleEngine().run(ctx)
+        assert not any(r.rule_id == "weak-crypto" and r.file == "app.py" for r in results)
+
+    def test_targeted_nogrip_does_not_suppress_other_rules(self) -> None:
+        diff = _make_diff("app.py", ["h = hashlib.md5(data)  # nogrip: sql-injection-risk"])
+        ctx = RuleContext(diff=diff, files=parse_diff(diff), config=PROFILES["security"])
+        results = RuleEngine().run(ctx)
+        assert any(r.rule_id == "weak-crypto" and r.file == "app.py" for r in results)
+
+    def test_nogrip_gate_check(self) -> None:
+        diff = _make_diff("app.py", ["h = hashlib.md5(data)  # nogrip"])
+        ctx = RuleContext(
+            diff=diff, files=parse_diff(diff), config=PROFILES["strict-security"]
+        )
+        engine = RuleEngine()
+        results = engine.run(ctx)
+        assert not engine.check_gate(results, PROFILES["strict-security"])
+
+    def test_nogrip_uses_original_line_not_evidence(self) -> None:
+        """Pragma at column 121+ must still suppress (evidence is truncated to 120)."""
+        padding = "x" * 115
+        line = f"{padding} = 1  # nogrip"  # pragma is past char 120
+        diff = _make_diff("app.py", [line])
+        ctx = RuleContext(diff=diff, files=parse_diff(diff), config=PROFILES["security"])
+        results = RuleEngine().run(ctx)
+        # If any rule fires on this line, nogrip should still suppress it
+        assert all(r.file != "app.py" or r.line != 1 for r in results)
