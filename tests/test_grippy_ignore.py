@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pathspec
 
-from grippy.ignore import filter_diff, load_grippyignore, parse_nogrip
-from grippy.rules import check_gate, load_profile, run_rules
+from grippy.ignore import build_nogrip_index, filter_diff, load_grippyignore, parse_nogrip
+from grippy.rules import RuleContext, check_gate, load_profile, run_rules
+from grippy.rules.base import RuleResult, RuleSeverity
+from grippy.rules.engine import RuleEngine
 
 
 class TestParseNogrip:
@@ -169,3 +171,61 @@ class TestCIIntegration:
         ]
         assert "tests/test_rule.py" not in touched
         assert "src/app.py" in touched
+
+
+# ---------------------------------------------------------------------------
+# Coverage: error/edge paths
+# ---------------------------------------------------------------------------
+
+
+class TestLoadGrippyignoreParseError:
+    """Test that a malformed .grippyignore degrades gracefully."""
+
+    def test_unreadable_file_returns_none(self, tmp_path: Path) -> None:
+        ignore = tmp_path / ".grippyignore"
+        ignore.write_bytes(b"\x80\x81\x82")  # invalid utf-8
+        result = load_grippyignore(tmp_path)
+        assert result is None
+
+
+class TestFilterDiffMalformedHeader:
+    """Diff chunk without ' b/' in header is kept, not dropped."""
+
+    def test_missing_b_slash_kept(self) -> None:
+        diff = "diff --git weird-header-no-path\n+added line\n"
+        spec = pathspec.PathSpec.from_lines("gitignore", ["*.py"])
+        filtered, excluded = filter_diff(diff, spec)
+        assert excluded == 0
+        assert "weird-header-no-path" in filtered
+
+
+class TestEngineNullLineFinding:
+    """Findings with line=None pass through nogrip filtering."""
+
+    def test_null_line_finding_not_suppressed(self) -> None:
+        """A finding with no line number cannot be suppressed by nogrip."""
+        diff = "diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1,1 +1,1 @@\n+x = 1  # nogrip\n"
+        profile = load_profile(cli_profile="security")
+        ctx = RuleContext(
+            diff=diff,
+            files=[],
+            config=profile,
+        )
+
+        # Create a mock rule that returns a finding with line=None
+        class _NullLineRule:
+            def run(self, ctx: RuleContext) -> list[RuleResult]:
+                return [
+                    RuleResult(
+                        rule_id="test-rule",
+                        severity=RuleSeverity.ERROR,
+                        message="context-level finding",
+                        file="app.py",
+                        line=None,
+                    )
+                ]
+
+        engine = RuleEngine(rule_classes=[_NullLineRule])  # type: ignore[list-item]
+        results = engine.run(ctx)
+        assert len(results) == 1
+        assert results[0].line is None
