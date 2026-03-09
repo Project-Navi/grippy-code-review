@@ -1,0 +1,88 @@
+{
+  "$schema": "https://registry.modelcontextprotocol.io/schemas/server.json",
+  "name": "io.github.Project-Navi/grippy-mcp",
+  "title": "Grippy — AI Code Review Agent",
+  "description": "Security-focused code review agent with personality. Two tools: scan_diff (fast deterministic security rules, no LLM) and audit_diff (full AI-powered review). Works with OpenAI, Anthropic, Google, Groq, Mistral, or self-hosted LLMs.",
+  "version": "0.2.0",
+  "websiteUrl": "https://github.com/Project-Navi/grippy-code-review",
+  "repository": {
+    "url": "https://github.com/Project-Navi/grippy-code-review",
+    "source": "github",
+    "id": "Project-Navi/grippy-code-review"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "grippy-mcp",
+      "version": "0.2.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "GRIPPY_TRANSPORT",
+          "description": "LLM provider: openai, anthropic, google, groq, mistral, or local",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "local"
+        },
+        {
+          "name": "GRIPPY_PROFILE",
+          "description": "Security profile: general, security, or strict-security",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "security"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "description": "OpenAI API key (when transport=openai)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "description": "Anthropic API key (when transport=anthropic)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "GOOGLE_API_KEY",
+          "description": "Google API key (when transport=google)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "GROQ_API_KEY",
+          "description": "Groq API key (when transport=groq)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "MISTRAL_API_KEY",
+          "description": "Mistral API key (when transport=mistral)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "GRIPPY_BASE_URL",
+          "description": "API endpoint for local transport",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "http://localhost:1234/v1"
+        },
+        {
+          "name": "GRIPPY_MODEL_ID",
+          "description": "Model identifier",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "devstral-small-2-24b-instruct-2512"
+        }
+      ],
+      "arguments": [
+        "serve"
+      ]
+    }
+  ]
+}

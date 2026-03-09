@@ -7,7 +7,7 @@
 [![CodeQL](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml/badge.svg)](https://github.com/Project-Navi/grippy-code-review/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Project-Navi/grippy-code-review/badge)](https://scorecard.dev/viewer/?uri=github.com/Project-Navi/grippy-code-review)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
-[![PyPI](https://img.shields.io/badge/PyPI-coming%20soon-lightgrey)](https://pypi.org/project/grippy-code-review/)
+[![PyPI](https://img.shields.io/pypi/v/grippy-mcp)](https://pypi.org/project/grippy-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -26,7 +26,7 @@ Grippy reviews pull requests using any OpenAI-compatible model — GPT, Claude, 
 
 - **Security-first, not security-added.** Grippy is a security auditor that also reviews code, not the other way around. Dedicated audit modes go deeper than a general-purpose linter.
 
-- **Deterministic rules, not just LLM guesses.** A built-in rule engine runs 6 security rules against every diff before the LLM sees it. Findings are guaranteed — not hallucinated — and the profile gate can fail CI on critical severity hits, independent of model output.
+- **Deterministic rules, not just LLM guesses.** A built-in rule engine runs 10 security rules against every diff before the LLM sees it. Findings are guaranteed — not hallucinated — and the profile gate can fail CI on critical severity hits, independent of model output.
 
 - **MCP server** — use Grippy as a local diff auditor from Claude Code, Cursor, or Claude Desktop via the Model Context Protocol.
 
@@ -85,20 +85,27 @@ jobs:
           python-version: '3.12'
 
       - name: Install Grippy
-        run: pip install "grippy-code-review"
+        run: pip install "grippy-mcp"
+
+      # Cache the vector index to avoid re-indexing on every push
+      - name: Cache Grippy data
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5
+        with:
+          path: ./grippy-data
+          key: grippy-${{ github.event.pull_request.number }}-${{ github.sha }}
+          restore-keys: grippy-${{ github.event.pull_request.number }}-
 
       - name: Run review
+        id: review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GRIPPY_TRANSPORT: openai
           GRIPPY_MODEL_ID: gpt-4.1
-          GRIPPY_EMBEDDING_MODEL: text-embedding-3-large
-          GRIPPY_DATA_DIR: ./grippy-data
-          GRIPPY_TIMEOUT: 300
-        run: python -m grippy
+        run: grippy
 ```
+
+> **Want LLM-only review without the rule engine?** Set `GRIPPY_PROFILE: general`. For stricter gating (fail on WARN+), use `strict-security`. See [`examples/`](examples/) for more workflow variants.
 
 ### GitHub Actions (self-hosted LLM)
 
@@ -108,25 +115,38 @@ Grippy works with any OpenAI-compatible API endpoint, including Ollama, LM Studi
 
 ```bash
 # OpenAI (default, included in base install)
-pip install "grippy-code-review"
+pip install "grippy-mcp"
 
 # Anthropic
-pip install "grippy-code-review[anthropic]"
+pip install "grippy-mcp[anthropic]"
 
 # Google (Gemini)
-pip install "grippy-code-review[google]"
+pip install "grippy-mcp[google]"
 
 # Groq
-pip install "grippy-code-review[groq]"
+pip install "grippy-mcp[groq]"
 
 # Mistral
-pip install "grippy-code-review[mistral]"
+pip install "grippy-mcp[mistral]"
 
 # Or with uv
-uv add "grippy-code-review[anthropic]"
+uv add "grippy-mcp[anthropic]"
 ```
 
 ### MCP Server
+
+### Quick start (zero install)
+
+```bash
+uvx grippy-mcp serve
+```
+
+Or install globally:
+
+```bash
+pip install grippy-mcp
+grippy serve
+```
 
 Grippy runs as an MCP server for local git diff auditing — no GitHub Actions required.
 
@@ -145,7 +165,8 @@ Grippy runs as an MCP server for local git diff auditing — no GitHub Actions r
 **Install into your MCP client:**
 
 ```bash
-python -m grippy install-mcp
+python -m grippy install-mcp          # registers uvx grippy-mcp in client configs
+python -m grippy install-mcp --dev    # dev mode: uses uv run --directory
 ```
 
 The installer detects Claude Code, Claude Desktop, and Cursor, then writes the server config with your chosen LLM transport and API keys.
@@ -164,14 +185,14 @@ Grippy is configured entirely through environment variables.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `GRIPPY_TRANSPORT` | API transport: `openai`, `anthropic`, `google`, `groq`, `mistral`, or `local` | Inferred from `OPENAI_API_KEY` |
+| `GRIPPY_TRANSPORT` | API transport: `openai`, `anthropic`, `google`, `groq`, `mistral`, or `local` | `local` |
 | `GRIPPY_MODEL_ID` | Model identifier | `devstral-small-2-24b-instruct-2512` |
 | `GRIPPY_BASE_URL` | API endpoint for local transport | `http://localhost:1234/v1` |
 | `GRIPPY_EMBEDDING_MODEL` | Embedding model name | `text-embedding-qwen3-embedding-4b` |
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` |
 | `GRIPPY_DATA_DIR` | Persistence directory | `./grippy-data` |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
-| `GRIPPY_PROFILE` | Security profile: `general`, `security`, `strict-security` | `general` |
+| `GRIPPY_PROFILE` | Security profile: `security`, `strict-security`, `general` | `security` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
 | `OPENAI_API_KEY` | OpenAI API key (sets transport to `openai`) | — |
 | `GITHUB_TOKEN` | GitHub API token (set automatically by Actions) | — |
@@ -182,15 +203,28 @@ If your codebase is co-developed with an AI coding assistant, **we strongly reco
 
 ## Security profiles
 
-Grippy's deterministic rule engine is controlled by profiles. Set via `GRIPPY_PROFILE` env var or `--profile` CLI flag (CLI takes priority).
+Grippy ships with the deterministic rule engine **on by default** (`security` profile). Ten rules scan every diff for secrets, dangerous sinks, workflow permission escalation, path traversal, unsanitized LLM output, risky CI scripts, SQL injection, weak cryptography, hardcoded credentials, and insecure deserialization — before the LLM sees anything. These findings are guaranteed, not hallucinated.
 
-| Profile | Rule engine | Gate threshold | Use case |
+Switch profiles via `GRIPPY_PROFILE` env var or `--profile` CLI flag (CLI takes priority).
+
+| Profile | What happens | Gate behavior | When to use |
 |---|---|---|---|
-| `general` | Off | — | Standard LLM-only review |
-| `security` | On | Fail on ERROR+ | Security-focused CI gate |
-| `strict-security` | On | Fail on WARN+ | High-assurance environments |
+| **`security`** (default) | Rules + LLM review | CI fails on ERROR or CRITICAL rule findings | Most teams — catches real issues without noise |
+| `strict-security` | Rules + LLM review | CI fails on WARN or higher | High-assurance, compliance, external contributors |
+| `general` | LLM review only | No rule gate | When you only want AI-powered review, no deterministic scanning |
 
-When a non-`general` profile is active, Grippy runs 6 deterministic rules before the LLM:
+```bash
+# Use the default (security)
+grippy
+
+# Explicit profile
+grippy --profile strict-security
+
+# Via environment variable
+GRIPPY_PROFILE=general grippy
+```
+
+The 10 deterministic rules:
 
 | Rule ID | Detects | Severity |
 |---|---|---|
@@ -200,8 +234,18 @@ When a non-`general` profile is active, Grippy runs 6 deterministic rules before
 | `path-traversal-risk` | tainted path variables, `../` patterns | WARN |
 | `llm-output-unsanitized` | model output piped to sinks without sanitizer | ERROR |
 | `ci-script-execution-risk` | risky CI script patterns, sudo in CI | CRITICAL / WARN |
+| `sql-injection-risk` | SQL queries built from interpolated input | ERROR |
+| `weak-crypto` | MD5, SHA1, DES, ECB mode, insecure RNG | WARN |
+| `hardcoded-credentials` | passwords, connection strings, auth headers | ERROR |
+| `insecure-deserialization` | unsafe deserialization sinks (shelve, dill, etc.) | ERROR |
 
 Rule findings are injected into the LLM context as confirmed facts for explanation.
+
+When the knowledge graph is available (CI with caching, or MCP with persistent `GRIPPY_DATA_DIR`), rule findings are enriched with:
+- **Blast radius** — how many modules depend on the flagged file
+- **Recurrence** — whether this rule has fired on this file in prior reviews
+- **False positive suppression** — import-aware suppression (e.g., SQL injection suppressed when file imports SQLAlchemy)
+- **Finding velocity** — how often this rule fires across recent reviews
 
 ## Review modes
 
@@ -280,6 +324,19 @@ Results are written as JSON to `benchmarks/output/`.
 - [Security Model](https://github.com/Project-Navi/grippy-code-review/wiki/Security-Model) — Codebase tool protections, hardened CI
 - [Self-Hosted LLM Guide](https://github.com/Project-Navi/grippy-code-review/wiki/Self-Hosted-LLM-Guide) — Ollama/LM Studio + Cloudflare Tunnel
 - [Contributing](https://github.com/Project-Navi/grippy-code-review/wiki/Contributing) — Dev setup, testing, conventions
+- [Examples](examples/) — Copy-paste workflow YAMLs and sample review output
+- [Changelog](CHANGELOG.md) — Release history
+
+### Migrating from `grippy-code-review`?
+
+The package was renamed to `grippy-mcp` in v0.2.0. Update your install:
+
+```bash
+pip uninstall grippy-code-review
+pip install grippy-mcp
+```
+
+No code changes required — all environment variables and configuration are unchanged.
 
 ## License
 

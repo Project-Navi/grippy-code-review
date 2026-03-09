@@ -271,6 +271,42 @@ class TestRunAudit:
 # ---------------------------------------------------------------------------
 
 
+class TestToolAnnotations:
+    """Tests that MCP tool annotations are correctly set."""
+
+    def test_scan_diff_read_only_hint(self) -> None:
+        """scan_diff is annotated as readOnly (no file writes)."""
+        from grippy.mcp_server import mcp
+
+        tool = mcp._tool_manager._tools["scan_diff"]
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+
+    def test_scan_diff_not_destructive(self) -> None:
+        """scan_diff is annotated as non-destructive."""
+        from grippy.mcp_server import mcp
+
+        tool = mcp._tool_manager._tools["scan_diff"]
+        assert tool.annotations is not None
+        assert tool.annotations.destructiveHint is False
+
+    def test_audit_diff_read_only_hint(self) -> None:
+        """audit_diff is annotated as readOnly (no file writes)."""
+        from grippy.mcp_server import mcp
+
+        tool = mcp._tool_manager._tools["audit_diff"]
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+
+    def test_audit_diff_not_destructive(self) -> None:
+        """audit_diff is annotated as non-destructive."""
+        from grippy.mcp_server import mcp
+
+        tool = mcp._tool_manager._tools["audit_diff"]
+        assert tool.annotations is not None
+        assert tool.annotations.destructiveHint is False
+
+
 class TestToolWrappers:
     """Tests for the @mcp.tool() decorated wrappers."""
 

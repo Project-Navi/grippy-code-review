@@ -87,6 +87,12 @@ def _install_mcp(argv: list[str]) -> None:
         default="security",
         help="Security profile (default: security)",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        default=False,
+        help="Use dev-mode entry (uv run --directory) instead of uvx",
+    )
     args = parser.parse_args(argv)
 
     from grippy.mcp_config import (
@@ -164,7 +170,8 @@ def _install_mcp(argv: list[str]) -> None:
             selected_clients = [available[i - 1] for i in indices]
 
     # -- Generate and install --
-    entry = generate_server_entry(_PROJECT_ROOT, env)
+    root = _PROJECT_ROOT if args.dev else None
+    entry = generate_server_entry(root, env)
 
     for client in selected_clients:
         ok = add_to_client(client, entry)
@@ -199,9 +206,9 @@ def _ci_review(argv: list[str]) -> None:
 # Routing
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    # Check if the first positional arg is a known subcommand.
-    # If so, dispatch to it. Otherwise, fall through to legacy CI argparse.
+
+def main() -> None:
+    """Console script entry point — dispatches subcommands."""
     if len(sys.argv) > 1 and sys.argv[1] in _SUBCOMMANDS:
         subcommand = sys.argv[1]
         rest = sys.argv[2:]
@@ -211,3 +218,7 @@ if __name__ == "__main__":
             _install_mcp(rest)
     else:
         _ci_review(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    main()

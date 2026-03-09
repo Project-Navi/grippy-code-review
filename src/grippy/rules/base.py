@@ -21,6 +21,18 @@ class RuleSeverity(IntEnum):
 
 
 @dataclass(frozen=True)
+class ResultEnrichment:
+    """Graph-derived context attached to a rule finding by the enrichment layer."""
+
+    blast_radius: int
+    is_recurring: bool
+    prior_count: int
+    suppressed: bool
+    suppression_reason: str
+    velocity: str
+
+
+@dataclass(frozen=True)
 class RuleResult:
     """A single finding produced by a deterministic rule."""
 
@@ -30,6 +42,7 @@ class RuleResult:
     file: str
     line: int | None = None
     evidence: str | None = None
+    enrichment: ResultEnrichment | None = None
 
 
 @runtime_checkable

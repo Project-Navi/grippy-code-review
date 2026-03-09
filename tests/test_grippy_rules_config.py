@@ -42,10 +42,10 @@ class TestLoadProfile:
         p = load_profile()
         assert p.name == "strict-security"
 
-    def test_default_is_general(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_is_security(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("GRIPPY_PROFILE", raising=False)
         p = load_profile()
-        assert p.name == "general"
+        assert p.name == "security"
 
     def test_invalid_profile_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown profile"):

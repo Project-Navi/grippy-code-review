@@ -26,7 +26,7 @@
 **Examples:** Missing observability, swallowed exceptions, hardcoded values that should be config, missing retry logic on external calls
 **Score deduction:** -5 points per finding
 **Merge blocking:** NO — advisory only
-**Confidence minimum:** 70
+**Confidence minimum:** 75
 
 ### LOW
 **Impact:** Minor improvement opportunity. No production risk.
