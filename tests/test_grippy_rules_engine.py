@@ -330,9 +330,7 @@ class TestNogrip:
 
     def test_nogrip_gate_check(self) -> None:
         diff = _make_diff("app.py", ["h = hashlib.md5(data)  # nogrip"])
-        ctx = RuleContext(
-            diff=diff, files=parse_diff(diff), config=PROFILES["strict-security"]
-        )
+        ctx = RuleContext(diff=diff, files=parse_diff(diff), config=PROFILES["strict-security"])
         engine = RuleEngine()
         results = engine.run(ctx)
         assert not engine.check_gate(results, PROFILES["strict-security"])

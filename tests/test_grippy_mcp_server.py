@@ -393,13 +393,7 @@ class TestGrippyignoreIntegration:
         """All files excluded should return an error, not proceed to LLM."""
         (tmp_path / ".grippyignore").write_text("*\n")
 
-        diff = (
-            "diff --git a/app.py b/app.py\n"
-            "--- a/app.py\n"
-            "+++ b/app.py\n"
-            "@@ -1 +1 @@\n"
-            "+x = 1\n"
-        )
+        diff = "diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@\n+x = 1\n"
         monkeypatch.setattr("grippy.mcp_server.get_local_diff", lambda _: diff)
         monkeypatch.setattr("grippy.mcp_server.get_repo_root", lambda: tmp_path)
 

@@ -48,7 +48,8 @@ grippy --profile security                         # with security profile
 
 ```
 PR event → load metadata → CodebaseIndex.build() [LanceDB, non-fatal]
-  → fetch_pr_diff() → run_rules() on FULL diff → truncate_diff() to 500K
+  → fetch_pr_diff() → filter_diff() [.grippyignore]
+  → run_rules() on FULL diff → truncate_diff() to 500K
   → create_reviewer() [Agno agent + prompt chain + tools]
   → format_pr_context() [rule findings + data-fence boundary]
   → run_review() [structured output validation + retry]
@@ -61,6 +62,7 @@ PR event → load metadata → CodebaseIndex.build() [LanceDB, non-fatal]
 ```
 MCP client → scan_diff or audit_diff tool
   → get_local_diff() [git subprocess, scope parsing]
+  → filter_diff() [.grippyignore]
   → scan_diff: run_rules() → serialize_scan() → JSON
   → audit_diff: run_rules() + create_reviewer() + run_review()
     → serialize_audit() [dense JSON, no personality] → response
@@ -84,6 +86,7 @@ MCP client → scan_diff or audit_diff tool
 | `local_diff.py` | Git diff acquisition. Scope parsing, ref validation, subprocess with timeout. |
 | `graph_store.py` | `SQLiteGraphStore` — codebase knowledge graph (nodes, typed edges, migrations). |
 | `graph_context.py` | `build_context_pack()` — traverses import graph for pre-review context. |
+| `ignore.py` | `.grippyignore` loading, diff filtering, `# nogrip` pragma parsing. |
 | `imports.py` | Python AST import extraction for knowledge graph edges. |
 | `embedder.py` | Embedder factory for OpenAI-compatible embedding models. |
 | `rules/` | Deterministic security rule engine. 10 rules, 3 profiles, diff parsing. |

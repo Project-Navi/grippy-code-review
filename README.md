@@ -247,6 +247,41 @@ When the knowledge graph is available (CI with caching, or MCP with persistent `
 - **False positive suppression** — import-aware suppression (e.g., SQL injection suppressed when file imports SQLAlchemy)
 - **Finding velocity** — how often this rule fires across recent reviews
 
+## Suppression
+
+### `.grippyignore` — file-level suppression
+
+Create a `.grippyignore` file in your repo root to exclude files from review. Uses gitignore syntax (comments, negation, wildcards):
+
+```
+# Exclude generated code
+vendor/
+*.generated.py
+
+# Exclude test fixtures that contain intentional anti-patterns
+tests/test_rule_*.py
+
+# But keep the hostile environment tests
+!tests/test_hostile_environment.py
+```
+
+Excluded files are stripped from the diff before either the rule engine or the LLM sees them.
+
+### `# nogrip` — line-level pragma
+
+Suppress deterministic rule findings on specific lines:
+
+```python
+password = os.environ["DB_PASS"]  # nogrip
+conn = f"postgres://{user}:{password}@host/db"  # nogrip: hardcoded-credentials
+h = hashlib.md5(data)  # nogrip: weak-crypto, hardcoded-credentials
+```
+
+- Bare `# nogrip` suppresses all rules on that line
+- `# nogrip: rule-id` suppresses only the named rule
+- `# nogrip: id1, id2` suppresses multiple rules
+- **Rules only** — the LLM reviewer still sees the line and may comment on it
+
 ## Review modes
 
 | Mode | Trigger | Focus |
