@@ -336,3 +336,72 @@ class TestMain:
         with patch("grippy.mcp_server.mcp") as mock_mcp:
             main()
             mock_mcp.run.assert_called_once_with(transport="stdio")
+
+
+# ---------------------------------------------------------------------------
+# .grippyignore integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestGrippyignoreIntegration:
+    """Tests for .grippyignore integration in MCP tools."""
+
+    def test_scan_filters_ignored_files(self, monkeypatch: Any, tmp_path: Any) -> None:
+        """Files matching .grippyignore should not produce findings."""
+        (tmp_path / ".grippyignore").write_text("tests/\n")
+
+        diff = (
+            "diff --git a/tests/test_rule.py b/tests/test_rule.py\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/tests/test_rule.py\n"
+            "@@ -0,0 +1,1 @@\n"
+            '+PASSWORD = "hunter2"\n'  # pragma: allowlist secret
+        )
+        monkeypatch.setattr("grippy.mcp_server.get_local_diff", lambda _: diff)
+        monkeypatch.setattr("grippy.mcp_server.get_repo_root", lambda: tmp_path)
+
+        result = json.loads(_run_scan(scope="staged", profile="security"))
+        assert result["findings"] == []
+
+    def test_scan_stats_reflect_filtered_diff(self, monkeypatch: Any, tmp_path: Any) -> None:
+        """diff_stats must be computed from the filtered diff, not the raw diff."""
+        (tmp_path / ".grippyignore").write_text("tests/\n")
+
+        diff = (
+            "diff --git a/src/app.py b/src/app.py\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/src/app.py\n"
+            "@@ -0,0 +1,1 @@\n"
+            "+x = 1\n"
+            "diff --git a/tests/test_rule.py b/tests/test_rule.py\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/tests/test_rule.py\n"
+            "@@ -0,0 +1,1 @@\n"
+            '+PASSWORD = "hunter2"\n'  # pragma: allowlist secret
+        )
+        monkeypatch.setattr("grippy.mcp_server.get_local_diff", lambda _: diff)
+        monkeypatch.setattr("grippy.mcp_server.get_repo_root", lambda: tmp_path)
+
+        result = json.loads(_run_scan(scope="staged", profile="security"))
+        # Stats should show 1 file (src/app.py), not 2
+        assert result["diff_stats"]["files"] == 1
+
+    def test_audit_all_excluded_returns_error(self, monkeypatch: Any, tmp_path: Any) -> None:
+        """All files excluded should return an error, not proceed to LLM."""
+        (tmp_path / ".grippyignore").write_text("*\n")
+
+        diff = (
+            "diff --git a/app.py b/app.py\n"
+            "--- a/app.py\n"
+            "+++ b/app.py\n"
+            "@@ -1 +1 @@\n"
+            "+x = 1\n"
+        )
+        monkeypatch.setattr("grippy.mcp_server.get_local_diff", lambda _: diff)
+        monkeypatch.setattr("grippy.mcp_server.get_repo_root", lambda: tmp_path)
+
+        result = json.loads(_run_audit(scope="staged", profile="security"))
+        assert "error" in result

@@ -11,7 +11,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from grippy.graph_store import SQLiteGraphStore
-from grippy.local_diff import DiffError, diff_stats, get_local_diff
+from grippy.ignore import filter_diff, load_grippyignore
+from grippy.local_diff import DiffError, diff_stats, get_local_diff, get_repo_root
 from grippy.mcp_response import serialize_audit, serialize_scan
 from grippy.review import _format_rule_findings, truncate_diff
 from grippy.rules import check_gate, load_profile, run_rules
@@ -62,6 +63,11 @@ def _run_scan(scope: str = "staged", profile: str = "security") -> str:
     except DiffError as exc:
         return _json_error(str(exc))
 
+    # Filter ignored files
+    repo_root = get_repo_root()
+    spec = load_grippyignore(repo_root)
+    diff, _excluded = filter_diff(diff, spec)
+
     stats = diff_stats(diff)
 
     findings: list[RuleResult] = []
@@ -87,6 +93,11 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
         diff = get_local_diff(scope)
     except DiffError as exc:
         return _json_error(str(exc))
+
+    # Filter ignored files
+    repo_root = get_repo_root()
+    spec = load_grippyignore(repo_root)
+    diff, _excluded = filter_diff(diff, spec)
 
     if not diff:
         return _json_error("Empty diff — nothing to review")
