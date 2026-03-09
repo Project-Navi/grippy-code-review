@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from pathlib import Path
 
 
 class DiffError(Exception):
@@ -89,6 +90,23 @@ def get_local_diff(scope: str = "staged") -> str:
     if result.returncode != 0:
         raise DiffError(result.stderr.strip())
     return result.stdout
+
+
+def get_repo_root() -> Path | None:
+    """Return the git repo root, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            shell=False,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
 
 
 def diff_stats(diff: str) -> dict[str, int]:
