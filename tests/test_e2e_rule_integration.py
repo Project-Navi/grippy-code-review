@@ -11,26 +11,14 @@ Run with:  uv run pytest tests/test_e2e_rule_integration.py -v -m e2e
 
 from __future__ import annotations
 
-import socket
-from pathlib import Path
-
 import pytest
 
-from grippy.agent import DEFAULT_PROMPTS_DIR, create_reviewer, format_pr_context
+from grippy.agent import create_reviewer, format_pr_context
 from grippy.retry import run_review
 from grippy.rules import RuleResult, RuleSeverity, run_rules
 from grippy.rules.config import PROFILES, ProfileConfig
 from grippy.schema import GrippyReview
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-PROMPTS_DIR: Path = DEFAULT_PROMPTS_DIR
-_HOMELAB_HOST = "100.72.243.82"
-_HOMELAB_PORT = 1234
-_HOMELAB_URL = f"http://{_HOMELAB_HOST}:{_HOMELAB_PORT}/v1"
-_HOMELAB_MODEL = "devstral-small-2-24b-instruct-2512"
+from tests.e2e_fixtures import LLM_BASE_URL, LLM_MODEL_ID, PROMPTS_DIR, skip_no_llm
 
 SECURITY_PROFILE: ProfileConfig = PROFILES["security"]
 
@@ -102,26 +90,6 @@ def _format_rule_findings(results: list[RuleResult]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Skip conditions
-# ---------------------------------------------------------------------------
-
-
-def _homelab_reachable() -> bool:
-    """Return True if the homelab LM Studio endpoint responds."""
-    try:
-        with socket.create_connection((_HOMELAB_HOST, _HOMELAB_PORT), timeout=2):
-            return True
-    except OSError:
-        return False
-
-
-skip_no_homelab = pytest.mark.skipif(
-    not _homelab_reachable(),
-    reason=f"Homelab LM Studio not reachable at {_HOMELAB_HOST}:{_HOMELAB_PORT}",
-)
-
-
-# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
@@ -168,7 +136,7 @@ class TestRuleEngineDetection:
         assert len(error_findings) > 0, "Expected ERROR severity for expanded write permissions"
 
 
-@skip_no_homelab
+@skip_no_llm
 @pytest.mark.timeout(180)
 class TestRuleFindingsInjection:
     """Test 2: Rule findings make it into LLM context and are acknowledged."""
@@ -196,8 +164,8 @@ class TestRuleFindingsInjection:
         # Step 4: Create reviewer with rule findings enabled
         agent = create_reviewer(
             transport="local",
-            model_id=_HOMELAB_MODEL,
-            base_url=_HOMELAB_URL,
+            model_id=LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
             prompts_dir=PROMPTS_DIR,
             mode="pr_review",
             include_rule_findings=True,
@@ -231,7 +199,7 @@ class TestRuleFindingsInjection:
         )
 
 
-@skip_no_homelab
+@skip_no_llm
 @pytest.mark.timeout(300)
 class TestRuleCoverageValidation:
     """Test 3: rule_id cross-reference validates LLM acknowledges rule findings."""
@@ -270,8 +238,8 @@ class TestRuleCoverageValidation:
         # Step 4: Create reviewer
         agent = create_reviewer(
             transport="local",
-            model_id=_HOMELAB_MODEL,
-            base_url=_HOMELAB_URL,
+            model_id=LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
             prompts_dir=PROMPTS_DIR,
             mode="pr_review",
             include_rule_findings=True,
