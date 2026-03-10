@@ -2027,3 +2027,66 @@ class TestCheckAlreadyReviewed:
         pr.get_issue_comments.return_value = [self._make_comment()]
         result = _check_already_reviewed(pr, "abc1234", pr_number=42)
         assert result is None
+
+
+class TestMainSameCommitGuard:
+    """main() skips the full pipeline when _check_already_reviewed returns metadata."""
+
+    def _write_event_file(self, tmp_path: Path) -> Path:
+        """Write a minimal PR event JSON file."""
+        event = {
+            "pull_request": {
+                "number": 42,
+                "title": "Test PR",
+                "user": {"login": "dev"},
+                "head": {"ref": "feat/x", "sha": "abc1234"},
+                "base": {"ref": "main"},
+                "body": "test",
+            },
+            "repository": {"full_name": "owner/repo"},
+            "before": "",
+        }
+        p = tmp_path / "event.json"
+        p.write_text(json.dumps(event))
+        return p
+
+    @patch("grippy.review._check_already_reviewed")
+    @patch("github.Github")
+    def test_skips_pipeline_when_already_reviewed(
+        self, mock_gh_cls: MagicMock, mock_check: MagicMock, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        event_path = self._write_event_file(tmp_path)
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
+        monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+        monkeypatch.setenv("GITHUB_OUTPUT", "")
+        monkeypatch.delenv("CI", raising=False)
+
+        mock_check.return_value = {"score": 85, "verdict": "PASS"}
+
+        from grippy.review import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
+        mock_check.assert_called_once()
+
+    @patch("grippy.review._check_already_reviewed")
+    def test_workflow_dispatch_bypasses_guard(
+        self, mock_check: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        event_path = self._write_event_file(tmp_path)
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
+        monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+        monkeypatch.setenv("GITHUB_OUTPUT", "")
+        monkeypatch.delenv("CI", raising=False)
+
+        from grippy.review import main
+
+        try:
+            main()
+        except (SystemExit, Exception):
+            pass
+        mock_check.assert_not_called()

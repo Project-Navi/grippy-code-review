@@ -323,6 +323,39 @@ def main(*, profile: str | None = None) -> None:
         f"({pr_event['head_ref']} → {pr_event['base_ref']})"
     )
 
+    # 1a. Same-commit early exit — skip if grippy already reviewed this SHA
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    head_sha_early = pr_event.get("head_sha", "")
+    if event_name != "workflow_dispatch" and head_sha_early:
+        try:
+            from github import Github as GhClient
+
+            gh_early = GhClient(token)
+            pr_early = gh_early.get_repo(pr_event["repo"]).get_pull(pr_event["pr_number"])
+            existing = _check_already_reviewed(
+                pr_early, head_sha_early, pr_number=pr_event["pr_number"],
+            )
+            if existing:
+                print(
+                    f"Already reviewed {head_sha_early[:7]}, skipping"
+                    f" (score={existing['score']})"
+                )
+                github_output = os.environ.get("GITHUB_OUTPUT", "")
+                if github_output:
+                    with open(github_output, "a") as f:
+                        f.write(f"score={existing['score']}\n")
+                        f.write(f"verdict={existing['verdict']}\n")
+                        f.write("findings-count=0\n")
+                        f.write("merge-blocking=false\n")
+                        f.write("rule-findings-count=0\n")
+                        f.write("rule-gate-failed=false\n")
+                        f.write("profile=security\n")
+                sys.exit(0)
+        except SystemExit:
+            raise  # don't catch our own sys.exit(0)
+        except Exception as exc:
+            print(f"::warning::Same-commit check failed (non-fatal): {exc}")
+
     # 2. Validate transport early (before expensive diff fetch)
     from grippy.agent import _resolve_transport
 
