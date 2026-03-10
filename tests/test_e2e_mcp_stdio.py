@@ -23,6 +23,8 @@ from typing import Any
 
 import pytest
 
+from tests.e2e_fixtures import LLM_BASE_URL, LLM_MODEL_ID, llm_reachable
+
 mcp_mod = pytest.importorskip("mcp", reason="mcp package required for MCP e2e tests")
 
 from mcp.client.session import ClientSession  # noqa: E402
@@ -268,24 +270,11 @@ class TestMcpStdioE2E:
 # audit_diff e2e tests (requires reachable LLM)
 # ---------------------------------------------------------------------------
 
-_HOMELAB_HOST = "100.72.243.82"
-_HOMELAB_PORT = 1234
 _AUDIT_TIMEOUT_SECONDS = 180
 
 
-def _homelab_reachable() -> bool:
-    """Return True if the homelab LM Studio endpoint is reachable."""
-    import socket
-
-    try:
-        with socket.create_connection((_HOMELAB_HOST, _HOMELAB_PORT), timeout=2):
-            return True
-    except OSError:
-        return False
-
-
 def _audit_server_params() -> StdioServerParameters:
-    """Return ``StdioServerParameters`` with homelab LLM env vars for audit_diff."""
+    """Return ``StdioServerParameters`` with LLM env vars for audit_diff."""
     import os
 
     # Start from the current environment so PATH, HOME, etc. are inherited
@@ -293,8 +282,8 @@ def _audit_server_params() -> StdioServerParameters:
     env.update(
         {
             "GRIPPY_TRANSPORT": "local",
-            "GRIPPY_BASE_URL": f"http://{_HOMELAB_HOST}:{_HOMELAB_PORT}/v1",
-            "GRIPPY_MODEL_ID": "devstral-small-2-24b-instruct-2512",
+            "GRIPPY_BASE_URL": LLM_BASE_URL,
+            "GRIPPY_MODEL_ID": LLM_MODEL_ID,
             "GRIPPY_API_KEY": "lm-studio",  # pragma: allowlist secret
         }
     )
@@ -322,7 +311,7 @@ class TestMcpAuditDiffE2E:
 
     # -- Test 1: full audit_diff with local LLM ------------------------------
 
-    @pytest.mark.skipif(not _homelab_reachable(), reason="Homelab LLM not reachable")
+    @pytest.mark.skipif(not llm_reachable(), reason="LLM not reachable")
     def test_audit_diff_with_local_llm(self) -> None:
         """Call audit_diff with scope='commit:HEAD' against the homelab LLM.
 
@@ -374,7 +363,7 @@ class TestMcpAuditDiffE2E:
 
     # -- Test 2: deeper structural validation --------------------------------
 
-    @pytest.mark.skipif(not _homelab_reachable(), reason="Homelab LLM not reachable")
+    @pytest.mark.skipif(not llm_reachable(), reason="LLM not reachable")
     def test_audit_diff_returns_structured_json(self) -> None:
         """Validate the full audit_diff response structure in detail.
 

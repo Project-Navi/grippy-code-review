@@ -12,19 +12,13 @@ Run with:  uv run pytest tests/test_e2e_llm_smoke.py -v -m e2e
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 
-from grippy.agent import DEFAULT_PROMPTS_DIR, create_reviewer, format_pr_context
+from grippy.agent import create_reviewer, format_pr_context
 from grippy.retry import run_review
 from grippy.schema import GrippyReview, Severity, VerdictStatus
-
-# ---------------------------------------------------------------------------
-# Shared fixtures
-# ---------------------------------------------------------------------------
-
-PROMPTS_DIR: Path = DEFAULT_PROMPTS_DIR
+from tests.e2e_fixtures import LLM_BASE_URL, LLM_MODEL_ID, PROMPTS_DIR, llm_reachable, skip_no_llm
 
 SMALL_DIFF: str = """\
 diff --git a/utils/math.py b/utils/math.py
@@ -49,9 +43,6 @@ index 0000000..a1b2c3d
 +        return default
 +    return a / b
 """
-
-
-_HOMELAB_URL = "http://100.72.243.82:1234/v1"
 
 
 def _run_pipeline(
@@ -104,28 +95,12 @@ skip_no_google = pytest.mark.skipif(
 )
 
 
-def _homelab_reachable() -> bool:
-    """Return True if the homelab LM Studio endpoint responds."""
-    import socket
-
-    try:
-        with socket.create_connection(("100.72.243.82", 1234), timeout=2):
-            return True
-    except OSError:
-        return False
-
-
-skip_no_homelab = pytest.mark.skipif(
-    not _homelab_reachable(),
-    reason="Homelab LM Studio not reachable at 100.72.243.82:1234",
-)
-
 _ANY_KEY_AVAILABLE = any(
     os.environ.get(k)
     for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "GOOGLE_API_KEY")
 )
 
-_ANY_PROVIDER_AVAILABLE = _ANY_KEY_AVAILABLE or _homelab_reachable()
+_ANY_PROVIDER_AVAILABLE = _ANY_KEY_AVAILABLE or llm_reachable()
 
 skip_no_any_key = pytest.mark.skipif(
     not _ANY_PROVIDER_AVAILABLE,
@@ -143,8 +118,8 @@ def _pick_available_provider() -> tuple[str, str, str | None]:
         return ("groq", "llama-3.3-70b-versatile", None)
     if os.environ.get("GOOGLE_API_KEY"):
         return ("google", "gemini-2.0-flash", None)
-    if _homelab_reachable():
-        return ("local", "devstral-small-2-24b-instruct-2512", _HOMELAB_URL)
+    if llm_reachable():
+        return ("local", LLM_MODEL_ID, LLM_BASE_URL)
     msg = "No LLM provider available"
     raise RuntimeError(msg)
 
@@ -209,7 +184,7 @@ class TestGoogleSmoke:
         _assert_basic_review(review)
 
 
-@skip_no_homelab
+@skip_no_llm
 @pytest.mark.timeout(180)
 class TestLocalHomelabSmoke:
     """Smoke test against homelab LM Studio (devstral-small 24B Q4)."""
@@ -217,8 +192,8 @@ class TestLocalHomelabSmoke:
     def test_local_review(self) -> None:
         review = _run_pipeline(
             "local",
-            "devstral-small-2-24b-instruct-2512",
-            base_url=_HOMELAB_URL,
+            LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
         )
         _assert_basic_review(review)
 
@@ -341,7 +316,7 @@ index 0000000..d4e5f6a
 # ---------------------------------------------------------------------------
 
 
-@skip_no_homelab
+@skip_no_llm
 class TestRetryRecoveryE2E:
     """E2E tests exercising the retry/recovery path with real LLM calls."""
 
@@ -350,8 +325,8 @@ class TestRetryRecoveryE2E:
         """Verify that run_review can recover through retries on schema edge cases."""
         agent = create_reviewer(
             transport="local",
-            model_id="devstral-small-2-24b-instruct-2512",
-            base_url=_HOMELAB_URL,
+            model_id=LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
             prompts_dir=PROMPTS_DIR,
             mode="pr_review",
         )
@@ -382,8 +357,8 @@ class TestRetryRecoveryE2E:
         """Verify the on_validation_error callback mechanism works end-to-end."""
         agent = create_reviewer(
             transport="local",
-            model_id="devstral-small-2-24b-instruct-2512",
-            base_url=_HOMELAB_URL,
+            model_id=LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
             prompts_dir=PROMPTS_DIR,
             mode="pr_review",
         )
@@ -419,8 +394,8 @@ class TestRetryRecoveryE2E:
         """Verify the schema handles real multi-finding output from a buggy diff."""
         agent = create_reviewer(
             transport="local",
-            model_id="devstral-small-2-24b-instruct-2512",
-            base_url=_HOMELAB_URL,
+            model_id=LLM_MODEL_ID,
+            base_url=LLM_BASE_URL,
             prompts_dir=PROMPTS_DIR,
             mode="pr_review",
         )
