@@ -333,12 +333,13 @@ def main(*, profile: str | None = None) -> None:
             gh_early = GhClient(token)
             pr_early = gh_early.get_repo(pr_event["repo"]).get_pull(pr_event["pr_number"])
             existing = _check_already_reviewed(
-                pr_early, head_sha_early, pr_number=pr_event["pr_number"],
+                pr_early,
+                head_sha_early,
+                pr_number=pr_event["pr_number"],
             )
             if existing:
                 print(
-                    f"Already reviewed {head_sha_early[:7]}, skipping"
-                    f" (score={existing['score']})"
+                    f"Already reviewed {head_sha_early[:7]}, skipping (score={existing['score']})"
                 )
                 github_output = os.environ.get("GITHUB_OUTPUT", "")
                 if github_output:

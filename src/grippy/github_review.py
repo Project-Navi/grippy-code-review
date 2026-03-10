@@ -618,7 +618,10 @@ def post_review(
     if new_review is not None:
         is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
         dismissed = _dismiss_prior_verdicts(
-            pr, head_sha, force=is_manual, exclude_review_id=new_review.id,
+            pr,
+            head_sha,
+            force=is_manual,
+            exclude_review_id=new_review.id,
         )
         if dismissed:
             print(f"  Dismissed {dismissed} prior verdict(s)")

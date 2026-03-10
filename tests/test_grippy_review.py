@@ -2053,7 +2053,10 @@ class TestMainSameCommitGuard:
     @patch("grippy.review._check_already_reviewed")
     @patch("github.Github")
     def test_skips_pipeline_when_already_reviewed(
-        self, mock_gh_cls: MagicMock, mock_check: MagicMock, tmp_path: Path,
+        self,
+        mock_gh_cls: MagicMock,
+        mock_check: MagicMock,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         event_path = self._write_event_file(tmp_path)
@@ -2074,7 +2077,10 @@ class TestMainSameCommitGuard:
 
     @patch("grippy.review._check_already_reviewed")
     def test_workflow_dispatch_bypasses_guard(
-        self, mock_check: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        mock_check: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         event_path = self._write_event_file(tmp_path)
         monkeypatch.setenv("GITHUB_TOKEN", "fake-token")

@@ -1791,8 +1791,7 @@ class TestPostReviewVerdictLifecycle:
         )
         # Find the APPROVE call (not COMMENT)
         approve_calls = [
-            c for c in mock_pr.create_review.call_args_list
-            if c.kwargs.get("event") == "APPROVE"
+            c for c in mock_pr.create_review.call_args_list if c.kwargs.get("event") == "APPROVE"
         ]
         assert len(approve_calls) >= 1
         body = approve_calls[0].kwargs.get("body", "")
