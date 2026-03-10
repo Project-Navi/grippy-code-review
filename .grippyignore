@@ -1,3 +1,20 @@
 # Grippy test fixtures contain intentional security anti-patterns
-# that exercise the rule engine - exclude them from self-review.
+# that exercise the rule engine — exclude them from self-review.
+#
+# Files with fake creds inside triple-quoted diff strings cannot use
+# # nogrip line pragmas (# becomes string content, not a comment).
+# All other test files use # nogrip on specific lines instead.
+
+# E2E fixture module — 20+ embedded diffs with fake creds, injection payloads
+# inside triple-quoted strings that cannot take line pragmas
+tests/e2e_fixtures.py
+
+# E2E rule integration — inline SECRET_DIFF / WORKFLOW_DIFF string constants
+tests/test_e2e_rule_integration.py
+
+# Rule engine unit tests — fake keys/patterns in string literals for rule validation
 tests/test_grippy_rule_*.py
+
+# Integration tests with fake creds inside triple-quoted diff strings
+tests/test_grippy_agent.py
+tests/test_grippy_mcp_server.py

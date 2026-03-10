@@ -954,7 +954,7 @@ class TestMainOrchestration:
         event_path = self._make_event_file(tmp_path)
         self._setup_env(monkeypatch, event_path, tmp_path)
         monkeypatch.setenv("GRIPPY_TRANSPORT", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")  # nogrip: secrets-in-diff
 
         mock_fetch.return_value = "diff --git a/f.py b/f.py\n-old\n+new"
         mock_run_review.return_value = _make_review()
@@ -1267,7 +1267,7 @@ class TestMainRuleEngine:
             message="AWS key found",
             file="config.py",
             line=10,
-            evidence="AKIA...",
+            evidence="AKIA...",  # nogrip: secrets-in-diff
         )
         mock_run_rules.return_value = [rule_result]
         mock_gate.return_value = False
@@ -1454,13 +1454,13 @@ class TestFormatRuleFindings:
                 message="AWS key in diff",
                 file="config.py",
                 line=42,
-                evidence="AKIA1234567890ABCDEF",  # pragma: allowlist secret
+                evidence="AKIA1234567890ABCDEF",  # pragma: allowlist secret  # nogrip: secrets-in-diff
             )
         ]
         text = _format_rule_findings(results)
         assert "[CRITICAL] secrets-in-diff @ config.py:42" in text
         assert "AWS key in diff" in text
-        assert "evidence: AKIA1234567890ABCDEF" in text
+        assert "evidence: AKIA1234567890ABCDEF" in text  # nogrip: secrets-in-diff
 
     def test_formats_finding_without_evidence(self) -> None:
         """Finding without evidence omits the evidence suffix."""
