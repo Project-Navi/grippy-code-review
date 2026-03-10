@@ -152,9 +152,7 @@ class TestRunReviewSuccess:
         """When content is non-empty, reasoning_content is ignored."""
         agent = MagicMock()
         agent.run = MagicMock(
-            return_value=_make_agent_response(
-                VALID_REVIEW_JSON, reasoning_content="garbage"
-            )
+            return_value=_make_agent_response(VALID_REVIEW_JSON, reasoning_content="garbage")
         )
         result = run_review(agent, "Review this PR")
         assert isinstance(result, GrippyReview)
