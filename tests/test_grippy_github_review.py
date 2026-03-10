@@ -1583,7 +1583,7 @@ class TestVerdictMarkers:
         from grippy.github_review import build_verdict_body
 
         body = build_verdict_body(
-            score=85, verdict="PASS", head_sha="abc1234def5678", base_text="Grippy approves"
+            score=85, verdict="PASS", head_sha="abc1234def5678", base_text="Grippy approves"  # pragma: allowlist secret
         )
         assert "<!-- grippy-verdict abc1234def5678 -->" in body
 
@@ -1591,7 +1591,7 @@ class TestVerdictMarkers:
         from grippy.github_review import build_verdict_body
 
         body = build_verdict_body(
-            score=42, verdict="FAIL", head_sha="deadbeef12345678", base_text="Grippy rejects"
+            score=42, verdict="FAIL", head_sha="deadbeef12345678", base_text="Grippy rejects"  # pragma: allowlist secret
         )
         assert '<!-- grippy-meta {"score": 42, "verdict": "FAIL"} -->' in body
 
@@ -1784,7 +1784,7 @@ class TestPostReviewVerdictLifecycle:
             repo="owner/repo",
             pr_number=1,
             findings=[],
-            head_sha="abc1234def",
+            head_sha="abc1234def",  # pragma: allowlist secret
             diff="",
             score=85,
             verdict="PASS",
