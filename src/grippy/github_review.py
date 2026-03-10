@@ -680,7 +680,7 @@ def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
                 "graphql",
                 "-f",
                 f"query={_nodes_query}",
-                "-f",
+                "-F",
                 f"ids={json.dumps(thread_ids)}",
             ],
             capture_output=True,

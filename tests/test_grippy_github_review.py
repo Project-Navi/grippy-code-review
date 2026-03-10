@@ -1854,3 +1854,36 @@ class TestPostReviewVerdictLifecycle:
             verdict="PASS",
         )
         mock_dismiss.assert_not_called()
+
+
+# --- fetch_thread_states -F fix ---
+
+
+class TestFetchThreadStatesFix:
+    """fetch_thread_states must use -F (JSON) not -f (string) for the ids parameter."""
+
+    @patch("subprocess.run")
+    def test_uses_dash_cap_f_for_ids(self, mock_run) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='{"data":{"nodes":[]}}',
+            stderr="",
+        )
+        from grippy.github_review import fetch_thread_states
+
+        fetch_thread_states(["PRRT_abc123"])
+        args = mock_run.call_args[0][0]
+        for i, arg in enumerate(args):
+            if arg.startswith("ids="):
+                assert args[i - 1] == "-F", f"Expected -F before ids=, got {args[i - 1]}"
+                break
+        else:
+            pytest.fail("ids= argument not found in subprocess call")
+
+    @patch("subprocess.run")
+    def test_empty_thread_ids_skips_call(self, mock_run) -> None:
+        from grippy.github_review import fetch_thread_states
+
+        result = fetch_thread_states([])
+        assert result == {}
+        mock_run.assert_not_called()
