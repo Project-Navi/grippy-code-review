@@ -1749,3 +1749,108 @@ class TestDismissPriorVerdicts:
         count = _dismiss_prior_verdicts(pr, "new_sha")
         assert count == 2
         human.dismiss.assert_not_called()
+
+
+# --- post_review verdict lifecycle ---
+
+
+class TestPostReviewVerdictLifecycle:
+    """post_review uses markers and dismiss-after-post ordering."""
+
+    def _setup_mocks(self) -> tuple[MagicMock, MagicMock, MagicMock]:
+        """Create mock Github, repository, and PR objects."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_pr = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_reviews.return_value = []
+        mock_review = MagicMock()
+        mock_review.id = 999
+        mock_pr.create_review.return_value = mock_review
+        return mock_gh, mock_repo, mock_pr
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review.Github")
+    def test_verdict_body_contains_markers(self, mock_gh_cls, mock_fetch) -> None:
+        mock_gh, _, mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234def",
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        # Find the APPROVE call (not COMMENT)
+        approve_calls = [
+            c for c in mock_pr.create_review.call_args_list
+            if c.kwargs.get("event") == "APPROVE"
+        ]
+        assert len(approve_calls) >= 1
+        body = approve_calls[0].kwargs.get("body", "")
+        assert "<!-- grippy-verdict abc1234def -->" in body
+        assert "grippy-meta" in body
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review._dismiss_prior_verdicts", return_value=0)
+    @patch("grippy.github_review.Github")
+    def test_dismiss_called_after_verdict_post(self, mock_gh_cls, mock_dismiss, mock_fetch) -> None:
+        mock_gh, _, _mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234",
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        mock_dismiss.assert_called_once()
+        call_kwargs = mock_dismiss.call_args.kwargs
+        assert "exclude_review_id" in call_kwargs
+        assert call_kwargs["exclude_review_id"] == 999
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review._dismiss_prior_verdicts", return_value=0)
+    @patch("grippy.github_review.Github")
+    def test_verdict_failure_skips_dismiss(self, mock_gh_cls, mock_dismiss, mock_fetch) -> None:
+        mock_gh, _, mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+        from github import GithubException
+
+        def selective_fail(**kwargs):
+            event = kwargs.get("event", "")
+            if event in ("APPROVE", "REQUEST_CHANGES"):
+                raise GithubException(500, {}, {})
+            mock_result = MagicMock()
+            mock_result.id = 999
+            return mock_result
+
+        mock_pr.create_review.side_effect = selective_fail
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234",
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        mock_dismiss.assert_not_called()

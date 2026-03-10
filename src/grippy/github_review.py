@@ -8,7 +8,7 @@ post only genuinely new findings, resolve threads for absent findings.
 from __future__ import annotations
 
 import json
-import os  # noqa: F401 — used by _check_already_reviewed (Task 3)
+import os
 import re
 import subprocess
 from typing import Any, NamedTuple
@@ -592,16 +592,36 @@ def post_review(
             print(f"::warning::Thread resolution failed: {exc}")
 
     # 6. Submit APPROVE / REQUEST_CHANGES review verdict (non-fatal)
+    #    Post new verdict FIRST, then dismiss old ones (post-first ordering).
+    new_review = None
     try:
         if verdict == "PASS":
-            pr.create_review(event="APPROVE", body=f"Grippy approves — **PASS** ({score}/100)")
-        elif verdict == "FAIL":
-            pr.create_review(
-                event="REQUEST_CHANGES",
-                body=f"Grippy requests changes — **FAIL** ({score}/100)",
+            body = build_verdict_body(
+                score=score,
+                verdict=verdict,
+                head_sha=head_sha,
+                base_text=f"Grippy approves \u2014 **PASS** ({score}/100)",
             )
+            new_review = pr.create_review(event="APPROVE", body=body)
+        elif verdict == "FAIL":
+            body = build_verdict_body(
+                score=score,
+                verdict=verdict,
+                head_sha=head_sha,
+                base_text=f"Grippy requests changes \u2014 **FAIL** ({score}/100)",
+            )
+            new_review = pr.create_review(event="REQUEST_CHANGES", body=body)
     except GithubException as exc:
         print(f"::warning::Verdict review ({verdict}) failed: {exc.status}")
+
+    # 6a. Dismiss prior grippy verdicts AFTER new one lands
+    if new_review is not None:
+        is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        dismissed = _dismiss_prior_verdicts(
+            pr, head_sha, force=is_manual, exclude_review_id=new_review.id,
+        )
+        if dismissed:
+            print(f"  Dismissed {dismissed} prior verdict(s)")
 
     # 7. Build summary comment
     summary = format_summary_comment(
