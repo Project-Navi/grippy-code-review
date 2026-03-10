@@ -223,6 +223,46 @@ def _escape_rule_field(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _check_already_reviewed(
+    pr: Any,
+    head_sha: str,
+    *,
+    pr_number: int,
+) -> dict[str, Any] | None:
+    """Check if grippy already fully reviewed this commit.
+
+    A review is complete when BOTH exist:
+    1. A verdict (APPROVED/CHANGES_REQUESTED) with ``<!-- grippy-verdict -->`` marker
+    2. A summary comment with ``<!-- grippy-summary-N -->`` marker
+
+    Returns:
+        Parsed grippy-meta dict (score, verdict) if complete review exists, else None.
+    """
+    from grippy.github_review import GRIPPY_VERDICT_MARKER, parse_grippy_meta
+
+    meta = None
+    for review in pr.get_reviews():
+        if review.state not in ("APPROVED", "CHANGES_REQUESTED"):
+            continue
+        if GRIPPY_VERDICT_MARKER not in (review.body or ""):
+            continue
+        if review.commit_id != head_sha:
+            continue
+        meta = parse_grippy_meta(review.body or "")
+        if meta is not None:
+            break
+
+    if meta is None:
+        return None
+
+    summary_marker = f"<!-- grippy-summary-{pr_number} -->"
+    for comment in pr.get_issue_comments():
+        if summary_marker in (comment.body or ""):
+            return meta
+
+    return None
+
+
 def _format_rule_findings(results: list[RuleResult]) -> str:
     """Format rule findings as text for the LLM context."""
     lines: list[str] = []

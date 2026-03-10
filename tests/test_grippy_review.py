@@ -1942,3 +1942,88 @@ class TestMainNestedErrorHandlers:
         from grippy.review import main
 
         main()  # Should not raise — non-blocking verdict
+
+
+class TestCheckAlreadyReviewed:
+    """_check_already_reviewed implements the same-commit early exit guard."""
+
+    def _make_review(
+        self,
+        *,
+        state: str = "APPROVED",
+        body: str = '<!-- grippy-verdict abc1234 -->\n<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->',
+        commit_id: str = "abc1234",
+    ) -> MagicMock:
+        review = MagicMock()
+        review.state = state
+        review.body = body
+        review.commit_id = commit_id
+        return review
+
+    def _make_comment(self, body: str = "<!-- grippy-summary-42 -->") -> MagicMock:
+        comment = MagicMock()
+        comment.body = body
+        return comment
+
+    def test_returns_meta_when_complete_review_exists(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review()]
+        pr.get_issue_comments.return_value = [self._make_comment()]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is not None
+        assert result["score"] == 85
+        assert result["verdict"] == "PASS"
+
+    def test_returns_none_when_no_verdict(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = []
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_when_verdict_but_no_summary(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review()]
+        pr.get_issue_comments.return_value = []
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_different_sha(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review(commit_id="different_sha")]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_non_verdict_state(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review(state="COMMENTED")]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_human_review(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        human = self._make_review(body="LGTM — looks good")
+        pr.get_reviews.return_value = [human]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_malformed_meta(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        bad = self._make_review(body="<!-- grippy-verdict abc1234 -->\n<!-- grippy-meta {bad} -->")
+        pr.get_reviews.return_value = [bad]
+        pr.get_issue_comments.return_value = [self._make_comment()]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
