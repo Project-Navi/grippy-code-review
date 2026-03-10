@@ -2076,10 +2076,12 @@ class TestMainSameCommitGuard:
         mock_check.assert_called_once()
 
     @patch("grippy.review._check_already_reviewed")
+    @patch("grippy.review.fetch_pr_diff", side_effect=Exception("bail"))
     @patch("github.Github")
     def test_workflow_dispatch_bypasses_guard(
         self,
         mock_gh_cls: MagicMock,
+        mock_diff: MagicMock,
         mock_check: MagicMock,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
