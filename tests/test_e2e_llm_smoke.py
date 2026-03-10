@@ -18,7 +18,14 @@ import pytest
 from grippy.agent import create_reviewer, format_pr_context
 from grippy.retry import run_review
 from grippy.schema import GrippyReview, Severity, VerdictStatus
-from tests.e2e_fixtures import LLM_BASE_URL, LLM_MODEL_ID, PROMPTS_DIR, llm_reachable, skip_no_llm
+from tests.e2e_fixtures import (
+    E2E_TIMEOUT,
+    LLM_BASE_URL,
+    LLM_MODEL_ID,
+    PROMPTS_DIR,
+    llm_reachable,
+    skip_no_llm,
+)
 
 SMALL_DIFF: str = """\
 diff --git a/utils/math.py b/utils/math.py
@@ -145,7 +152,7 @@ pytestmark = pytest.mark.e2e
 
 
 @skip_no_openai
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestOpenAISmoke:
     """Smoke test against OpenAI (gpt-4.1-mini)."""
 
@@ -155,7 +162,7 @@ class TestOpenAISmoke:
 
 
 @skip_no_anthropic
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestAnthropicSmoke:
     """Smoke test against Anthropic (claude-sonnet-4-20250514)."""
 
@@ -165,7 +172,7 @@ class TestAnthropicSmoke:
 
 
 @skip_no_groq
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestGroqSmoke:
     """Smoke test against Groq (llama-3.3-70b-versatile)."""
 
@@ -175,7 +182,7 @@ class TestGroqSmoke:
 
 
 @skip_no_google
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestGoogleSmoke:
     """Smoke test against Google (gemini-2.0-flash)."""
 
@@ -185,7 +192,7 @@ class TestGoogleSmoke:
 
 
 @skip_no_llm
-@pytest.mark.timeout(180)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestLocalHomelabSmoke:
     """Smoke test against homelab LM Studio (devstral-small 24B Q4)."""
 
@@ -320,7 +327,7 @@ index 0000000..d4e5f6a
 class TestRetryRecoveryE2E:
     """E2E tests exercising the retry/recovery path with real LLM calls."""
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_retry_succeeds_after_validation_errors(self) -> None:
         """Verify that run_review can recover through retries on schema edge cases."""
         agent = create_reviewer(
@@ -352,7 +359,7 @@ class TestRetryRecoveryE2E:
         # retry_errors may be empty (first attempt succeeded) or non-empty (retries fired)
         assert isinstance(retry_errors, list)
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_retry_callback_fires_on_error(self) -> None:
         """Verify the on_validation_error callback mechanism works end-to-end."""
         agent = create_reviewer(
@@ -389,7 +396,7 @@ class TestRetryRecoveryE2E:
             assert attempt_num >= 1
             assert isinstance(error_name, str)
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_review_with_multiple_findings(self) -> None:
         """Verify the schema handles real multi-finding output from a buggy diff."""
         agent = create_reviewer(
@@ -432,7 +439,7 @@ class TestRetryRecoveryE2E:
 
 
 @skip_no_any_key
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestSchemaCompleteness:
     """Deep schema validation using whichever provider is available."""
 

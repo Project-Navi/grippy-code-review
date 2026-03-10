@@ -17,6 +17,7 @@ import pytest
 
 from tests.e2e_fixtures import (
     DIFFS,
+    E2E_TIMEOUT,
     assert_valid_review,
     generate_massive_diff,
     run_pipeline,
@@ -30,7 +31,7 @@ pytestmark = [pytest.mark.e2e_stress]
 class TestScoreCharacterization:
     """Characterize score distributions. Loose bounds — log, don't gate."""
 
-    @pytest.mark.timeout(600)
+    @pytest.mark.timeout(E2E_TIMEOUT * 3)
     def test_score_variance_across_runs(self) -> None:
         """Same diff 3x — log score spread. Warn if > 30, fail if > 50."""
         scores: list[int] = []
@@ -52,7 +53,7 @@ class TestScoreCharacterization:
         # Loose gate: > 50 point spread is unreliable
         assert spread <= 50, f"Score spread {spread} exceeds 50: {scores}"
 
-    @pytest.mark.timeout(180)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_clean_code_scores_above_70(self) -> None:
         """Clean code should score well. Warn below 70, fail below 50."""
         review = run_pipeline(
@@ -66,7 +67,7 @@ class TestScoreCharacterization:
             f"Clean code scored {review.score.overall} — below 50 is alarm territory"
         )
 
-    @pytest.mark.timeout(180)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_vulnerable_code_scores_below_70(self) -> None:
         """Multi-vuln code should score poorly. Warn above 60, fail above 80."""
         review = run_pipeline(
@@ -86,7 +87,7 @@ class TestScoreCharacterization:
 class TestFindingQuality:
     """Characterize finding quality — are findings grounded in the diff?"""
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_multi_vuln_finding_count(self) -> None:
         """Payment diff should produce multiple findings. Log actual count."""
         review = run_pipeline(
@@ -103,7 +104,7 @@ class TestFindingQuality:
         # Loose: at least 2 findings for a diff with 6+ real issues
         assert len(review.findings) >= 2, f"Expected >=2 findings, got {len(review.findings)}"
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_findings_reference_correct_files(self) -> None:
         """Findings should reference files from the actual diff, not hallucinated paths."""
         review = run_pipeline(
@@ -131,7 +132,7 @@ class TestFindingQuality:
 class TestPersonalityCharacterization:
     """Characterize personality field population. Model-dependent, loosely gated."""
 
-    @pytest.mark.timeout(180)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_personality_fields_populated(self) -> None:
         """Personality fields should be non-empty strings."""
         review = run_pipeline(DIFFS["clean_python"], title="Clean code")
@@ -152,7 +153,7 @@ class TestPersonalityCharacterization:
 class TestTruncationCharacterization:
     """Characterize behavior on large diffs."""
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_massive_diff_completes(self) -> None:
         """120K char diff — verify review completes. Log truncation behavior."""
         review = run_pipeline(
@@ -166,7 +167,7 @@ class TestTruncationCharacterization:
         print(f"  Files reviewed: {review.scope.files_reviewed}")
         print(f"  Coverage: {review.scope.coverage_percentage}%")
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(E2E_TIMEOUT)
     def test_500k_diff_completes(self) -> None:
         """500K char diff — beyond normal limits. Should truncate and review."""
         huge = generate_massive_diff(500_000)

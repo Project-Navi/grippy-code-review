@@ -42,8 +42,8 @@ from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
 from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
-# Max diff size sent to the LLM — ~500K chars ≈ 125K tokens
-MAX_DIFF_CHARS = 500_000
+# Max diff size sent to the LLM — configurable for local models with smaller context
+MAX_DIFF_CHARS = int(os.environ.get("GRIPPY_MAX_DIFF_CHARS", "500000"))
 
 
 _ERROR_HINTS: dict[str, str] = {

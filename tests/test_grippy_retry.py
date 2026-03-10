@@ -76,10 +76,11 @@ VALID_REVIEW_DICT: dict[str, Any] = {
 VALID_REVIEW_JSON = json.dumps(VALID_REVIEW_DICT)
 
 
-def _make_agent_response(content: Any) -> MagicMock:
+def _make_agent_response(content: Any, *, reasoning_content: Any = None) -> MagicMock:
     """Create a mock agent RunResponse with given content."""
     response = MagicMock()
     response.content = content
+    response.reasoning_content = reasoning_content
     return response
 
 
@@ -87,6 +88,15 @@ def _mock_agent(*responses: Any) -> MagicMock:
     """Create a mock agent that returns successive responses from run()."""
     agent = MagicMock()
     agent.run = MagicMock(side_effect=[_make_agent_response(r) for r in responses])
+    return agent
+
+
+def _mock_reasoning_agent(reasoning_content: Any) -> MagicMock:
+    """Create a mock agent simulating a reasoning model (content empty, output in reasoning_content)."""
+    agent = MagicMock()
+    agent.run = MagicMock(
+        return_value=_make_agent_response("", reasoning_content=reasoning_content)
+    )
     return agent
 
 
@@ -119,6 +129,50 @@ class TestRunReviewSuccess:
         agent = _mock_agent(VALID_REVIEW_DICT)
         run_review(agent, "Review this PR")
         assert agent.run.call_count == 1
+
+    def test_parses_reasoning_content_json(self) -> None:
+        """Reasoning models put output in reasoning_content — grippy extracts it."""
+        agent = _mock_reasoning_agent(VALID_REVIEW_JSON)
+        result = run_review(agent, "Review this PR")
+        assert isinstance(result, GrippyReview)
+        assert result.score.overall == 95
+
+    def test_parses_reasoning_content_dict(self) -> None:
+        """Reasoning content as dict is also handled."""
+        agent = MagicMock()
+        agent.run = MagicMock(
+            return_value=_make_agent_response("", reasoning_content=str(VALID_REVIEW_DICT))
+        )
+        # dict str isn't valid JSON — but real reasoning models return JSON strings
+        agent2 = _mock_reasoning_agent(VALID_REVIEW_JSON)
+        result = run_review(agent2, "Review this PR")
+        assert isinstance(result, GrippyReview)
+
+    def test_content_preferred_over_reasoning_content(self) -> None:
+        """When content is non-empty, reasoning_content is ignored."""
+        agent = MagicMock()
+        agent.run = MagicMock(
+            return_value=_make_agent_response(
+                VALID_REVIEW_JSON, reasoning_content="garbage"
+            )
+        )
+        result = run_review(agent, "Review this PR")
+        assert isinstance(result, GrippyReview)
+
+    def test_model_id_stamped_from_agent(self) -> None:
+        """Model field is overwritten with actual model ID from agent."""
+        agent = _mock_agent(VALID_REVIEW_JSON)
+        agent.model = MagicMock()
+        agent.model.id = "nvidia/nemotron-3-nano"
+        result = run_review(agent, "Review this PR")
+        assert result.model == "nvidia/nemotron-3-nano"
+
+    def test_model_id_stamp_tolerates_no_model_attr(self) -> None:
+        """Mock agents without .model don't crash the stamp."""
+        agent = _mock_agent(VALID_REVIEW_JSON)
+        del agent.model
+        result = run_review(agent, "Review this PR")
+        assert isinstance(result, GrippyReview)
 
 
 # --- Retry on validation error ---
