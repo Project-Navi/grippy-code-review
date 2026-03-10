@@ -9,8 +9,8 @@
 # inside triple-quoted strings that cannot take line pragmas
 tests/e2e_fixtures.py
 
-# E2E rule integration — inline SECRET_DIFF / WORKFLOW_DIFF string constants
-tests/test_e2e_rule_integration.py
+# E2E test suites — embedded diffs with intentional vulnerabilities in strings
+tests/test_e2e_*.py
 
 # Rule engine unit tests — fake keys/patterns in string literals for rule validation
 tests/test_grippy_rule_*.py
