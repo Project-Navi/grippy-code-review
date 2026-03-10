@@ -1571,3 +1571,55 @@ class TestCommentSanitization:
         result = _sanitize_comment_text(text)
         assert "<SCRIPT>" not in result
         assert "<script>" not in result.lower()
+
+
+# --- Verdict markers ---
+
+
+class TestVerdictMarkers:
+    """Grippy verdict markers identify bot reviews and store machine-readable metadata."""
+
+    def test_build_verdict_body_contains_marker(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=85, verdict="PASS", head_sha="abc1234def5678", base_text="Grippy approves"
+        )
+        assert "<!-- grippy-verdict abc1234def5678 -->" in body
+
+    def test_build_verdict_body_contains_meta(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=42, verdict="FAIL", head_sha="deadbeef12345678", base_text="Grippy rejects"
+        )
+        assert '<!-- grippy-meta {"score": 42, "verdict": "FAIL"} -->' in body
+
+    def test_build_verdict_body_preserves_base_text(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=85,
+            verdict="PASS",
+            head_sha="abc1234",
+            base_text="Grippy approves — **PASS** (85/100)",
+        )
+        assert "Grippy approves — **PASS** (85/100)" in body
+
+    def test_parse_grippy_meta_extracts_score_and_verdict(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        body = 'Some text\n<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->\nmore'
+        result = parse_grippy_meta(body)
+        assert result == {"score": 85, "verdict": "PASS"}
+
+    def test_parse_grippy_meta_returns_none_for_missing(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        assert parse_grippy_meta("no markers here") is None
+
+    def test_parse_grippy_meta_returns_none_for_malformed_json(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        body = "<!-- grippy-meta {bad json} -->"
+        assert parse_grippy_meta(body) is None

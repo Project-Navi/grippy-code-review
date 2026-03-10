@@ -7,6 +7,8 @@ post only genuinely new findings, resolve threads for absent findings.
 
 from __future__ import annotations
 
+import json
+import os  # noqa: F401 — used by _check_already_reviewed (Task 3)
 import re
 import subprocess
 from typing import Any, NamedTuple
@@ -418,6 +420,38 @@ def format_summary_comment(
 
 _REVIEW_BATCH_SIZE = 25
 
+GRIPPY_VERDICT_MARKER = "<!-- grippy-verdict"
+
+_GRIPPY_META_RE = re.compile(r"<!-- grippy-meta ({.*?}) -->")
+
+
+def build_verdict_body(*, score: int, verdict: str, head_sha: str, base_text: str) -> str:
+    """Build verdict review body with machine-readable markers.
+
+    Appends ``<!-- grippy-verdict {sha} -->`` for identity and
+    ``<!-- grippy-meta {...} -->`` for structured score/verdict extraction.
+    """
+    return (
+        f"{base_text}\n\n"
+        f"<!-- grippy-verdict {head_sha} -->\n"
+        f"<!-- grippy-meta {json.dumps({'score': score, 'verdict': verdict})} -->"
+    )
+
+
+def parse_grippy_meta(body: str) -> dict[str, Any] | None:
+    """Extract structured metadata from a grippy verdict body.
+
+    Returns:
+        Dict with "score" and "verdict" keys, or None if not found/malformed.
+    """
+    match = _GRIPPY_META_RE.search(body)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return None
+
 
 def post_review(
     *,
@@ -577,8 +611,6 @@ def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
         Dict mapping thread_id to ``{"isOutdated": bool, "isResolved": bool}``.
         Missing/failed IDs are omitted from the result.
     """
-    import json
-
     if not thread_ids:
         return {}
 
