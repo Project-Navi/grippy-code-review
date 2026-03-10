@@ -453,6 +453,39 @@ def parse_grippy_meta(body: str) -> dict[str, Any] | None:
         return None
 
 
+def _dismiss_prior_verdicts(
+    pr: Any,
+    head_sha: str,
+    *,
+    force: bool = False,
+    exclude_review_id: int | None = None,
+) -> int:
+    """Dismiss prior grippy verdicts. Returns count dismissed.
+
+    Args:
+        pr: PyGithub PullRequest object.
+        head_sha: Current commit SHA.
+        force: If True, dismiss same-SHA verdicts too (workflow_dispatch).
+        exclude_review_id: Review ID to never dismiss (the just-posted verdict).
+    """
+    dismissed = 0
+    for review in pr.get_reviews():
+        if review.id == exclude_review_id:
+            continue
+        if review.state not in ("APPROVED", "CHANGES_REQUESTED"):
+            continue
+        if GRIPPY_VERDICT_MARKER not in (review.body or ""):
+            continue
+        if not force and review.commit_id == head_sha:
+            continue
+        try:
+            review.dismiss(f"Superseded by review of {head_sha[:7]}")
+            dismissed += 1
+        except GithubException:
+            pass
+    return dismissed
+
+
 def post_review(
     *,
     token: str,
