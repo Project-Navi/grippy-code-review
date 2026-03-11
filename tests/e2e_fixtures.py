@@ -113,7 +113,10 @@ def run_pipeline(
         rule_findings=rule_findings,
     )
     return run_review(
-        agent, message, max_retries=max_retries, on_validation_error=on_validation_error,
+        agent,
+        message,
+        max_retries=max_retries,
+        on_validation_error=on_validation_error,
     )
 
 
@@ -791,7 +794,7 @@ def generate_massive_diff(target_chars: int = 120_000) -> str:
             f"@@ -0,0 +1,20 @@\n"
         )
         for j in range(20):
-            chunk += f'+def func_{file_num}_{j}(x): return x + {j}  # handler logic\n'
+            chunk += f"+def func_{file_num}_{j}(x): return x + {j}  # handler logic\n"
         chunks.append(chunk)
         total += len(chunk)
     return "".join(chunks)
