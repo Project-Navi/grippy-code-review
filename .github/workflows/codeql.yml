@@ -16,18 +16,15 @@ permissions:
   contents: read
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
+  # CONTRACT: org ruleset requires this exact check name 'codeql'
+  # Do NOT add a 'name:' override or matrix strategy
+  codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
       security-events: write
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ["python"]
 
     steps:
       - name: Harden runner
@@ -40,7 +37,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@0d579ffd059c29b07949a3cce3983f0780820c98  # v4.32.6
         with:
-          languages: ${{ matrix.language }}
+          languages: python
           queries: +security-extended
 
       - name: Autobuild
@@ -49,4 +46,4 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@0d579ffd059c29b07949a3cce3983f0780820c98  # v4.32.6
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:python"

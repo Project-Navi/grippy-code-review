@@ -14,7 +14,8 @@ concurrency:
 permissions: {}
 
 jobs:
-  test:
+  # ── Test matrix (NOT a required check) ──────────────────────────────
+  test-run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -72,10 +73,23 @@ jobs:
           files: coverage.xml
           fail_ci_if_error: false
 
-      - name: Check quality gate
-        if: matrix.python-version == '3.12'
-        run: uv run python scripts/quality_gate.py check
+  # ── Required check: test (aggregator) ───────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
+  test:
+    needs: test-run
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check matrix results
+        run: |
+          if [ "${{ needs.test-run.result }}" != "success" ]; then
+            echo "::error::Test matrix failed"
+            exit 1
+          fi
 
+  # ── Required check: lint ────────────────────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -108,13 +122,9 @@ jobs:
       - name: Format check
         run: uv run ruff format --check src/grippy/ tests/
 
-      - name: Type check
-        run: uv run mypy src/grippy/
-
-      - name: Security scan
-        run: uv run bandit -c pyproject.toml -r src/grippy/
-
-  audit:
+  # ── Required check: typecheck ───────────────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
+  typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -140,7 +150,41 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Audit dependencies
+      - name: Type check
+        run: uv run mypy src/grippy/
+
+  # ── Required check: security ────────────────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc  # v2.15.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Security scan (bandit)
+        run: uv run bandit -c pyproject.toml -r src/grippy/
+
+      - name: Audit dependencies (pip-audit)
         run: uv run pip-audit --desc --output=pip-audit-report.json --format=json --skip-editable
 
       - name: Upload audit report
@@ -151,10 +195,88 @@ jobs:
           path: pip-audit-report.json
           retention-days: 30
 
+  # ── Required check: semgrep ─────────────────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
+  # NOTE: no 'name:' override — check name = job key 'semgrep'
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc  # v2.15.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install semgrep
+        run: pipx install semgrep==1.153.1
+
+      - name: Run semgrep
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/owasp-top-ten \
+            --sarif \
+            --output semgrep-results.sarif \
+            src/
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98  # v4.32.6
+        with:
+          sarif_file: semgrep-results.sarif
+
+  # ── Required check: quality-gate ────────────────────────────────────
+  # CONTRACT: org ruleset requires this exact check name
+  quality-gate:
+    needs: test-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc  # v2.15.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Download test metrics
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3  # v8
+        with:
+          name: test-metrics
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Check quality gate
+        run: uv run python scripts/quality_gate.py check
+
+  # ── Non-required: bump quality gate (main only) ─────────────────────
   quality-gate-bump:
     name: Bump quality gate
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: test
+    needs: test-run
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -214,6 +336,7 @@ jobs:
           git commit -m "chore: update quality gate and coverage badge [skip ci]"
           git push || echo "::warning::Push blocked by branch protection — badge update skipped"
 
+  # ── Non-required: test file parity ──────────────────────────────────
   test-file-parity:
     name: Test file parity
     runs-on: ubuntu-latest
@@ -236,44 +359,7 @@ jobs:
       - name: Check test parity
         run: python scripts/check_test_parity.py check
 
-  semgrep:
-    name: Semgrep SAST
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc  # v2.15.1
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
-        with:
-          python-version: "3.12"
-
-      - name: Install semgrep
-        run: pipx install semgrep==1.153.1
-
-      - name: Run semgrep
-        run: |
-          semgrep scan \
-            --config p/python \
-            --config p/owasp-top-ten \
-            --sarif \
-            --output semgrep-results.sarif \
-            src/
-
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98  # v4.32.6
-        with:
-          sarif_file: semgrep-results.sarif
-
+  # ── Non-required: thread safety scan ────────────────────────────────
   thread-safety:
     name: Thread safety scan
     runs-on: ubuntu-latest
