@@ -18,7 +18,7 @@ from grippy.retry import run_review
 from grippy.rules import RuleResult, RuleSeverity, run_rules
 from grippy.rules.config import PROFILES, ProfileConfig
 from grippy.schema import GrippyReview
-from tests.e2e_fixtures import LLM_BASE_URL, LLM_MODEL_ID, PROMPTS_DIR, skip_no_llm
+from tests.e2e_fixtures import E2E_TIMEOUT, LLM_BASE_URL, LLM_MODEL_ID, PROMPTS_DIR, skip_no_llm
 
 SECURITY_PROFILE: ProfileConfig = PROFILES["security"]
 
@@ -137,7 +137,7 @@ class TestRuleEngineDetection:
 
 
 @skip_no_llm
-@pytest.mark.timeout(180)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestRuleFindingsInjection:
     """Test 2: Rule findings make it into LLM context and are acknowledged."""
 
@@ -200,7 +200,7 @@ class TestRuleFindingsInjection:
 
 
 @skip_no_llm
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(E2E_TIMEOUT)
 class TestRuleCoverageValidation:
     """Test 3: rule_id cross-reference validates LLM acknowledges rule findings."""
 

@@ -35,7 +35,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         item_markers = item.keywords.keys() & _E2E_MARKERS
         if not item_markers:
             continue
-        if not expr.evaluate(lambda name, _item=item: name in _item.keywords):
+        if not expr.evaluate(lambda name, _kw=item.keywords: name in _kw):
             item.add_marker(skip)
 
 

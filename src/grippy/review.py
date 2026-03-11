@@ -42,8 +42,8 @@ from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
 from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
-# Max diff size sent to the LLM — ~500K chars ≈ 125K tokens
-MAX_DIFF_CHARS = 500_000
+# Max diff size sent to the LLM — configurable for local models with smaller context
+MAX_DIFF_CHARS = int(os.environ.get("GRIPPY_MAX_DIFF_CHARS", "500000"))
 
 
 _ERROR_HINTS: dict[str, str] = {
@@ -223,6 +223,46 @@ def _escape_rule_field(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _check_already_reviewed(
+    pr: Any,
+    head_sha: str,
+    *,
+    pr_number: int,
+) -> dict[str, Any] | None:
+    """Check if grippy already fully reviewed this commit.
+
+    A review is complete when BOTH exist:
+    1. A verdict (APPROVED/CHANGES_REQUESTED) with ``<!-- grippy-verdict -->`` marker
+    2. A summary comment with ``<!-- grippy-summary-N -->`` marker
+
+    Returns:
+        Parsed grippy-meta dict (score, verdict) if complete review exists, else None.
+    """
+    from grippy.github_review import GRIPPY_VERDICT_MARKER, parse_grippy_meta
+
+    meta = None
+    for review in pr.get_reviews():
+        if review.state not in ("APPROVED", "CHANGES_REQUESTED"):
+            continue
+        if GRIPPY_VERDICT_MARKER not in (review.body or ""):
+            continue
+        if review.commit_id != head_sha:
+            continue
+        meta = parse_grippy_meta(review.body or "")
+        if meta is not None:
+            break
+
+    if meta is None:
+        return None
+
+    summary_marker = f"<!-- grippy-summary-{pr_number} -->"
+    for comment in pr.get_issue_comments():
+        if summary_marker in (comment.body or ""):
+            return meta
+
+    return None
+
+
 def _format_rule_findings(results: list[RuleResult]) -> str:
     """Format rule findings as text for the LLM context."""
     lines: list[str] = []
@@ -282,6 +322,40 @@ def main(*, profile: str | None = None) -> None:
         f"PR #{pr_event['pr_number']}: {safe_title} "
         f"({pr_event['head_ref']} → {pr_event['base_ref']})"
     )
+
+    # 1a. Same-commit early exit — skip if grippy already reviewed this SHA
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    head_sha_early = pr_event.get("head_sha", "")
+    if event_name != "workflow_dispatch" and head_sha_early:
+        try:
+            from github import Github as GhClient
+
+            gh_early = GhClient(token)
+            pr_early = gh_early.get_repo(pr_event["repo"]).get_pull(pr_event["pr_number"])
+            existing = _check_already_reviewed(
+                pr_early,
+                head_sha_early,
+                pr_number=pr_event["pr_number"],
+            )
+            if existing:
+                print(
+                    f"Already reviewed {head_sha_early[:7]}, skipping (score={existing['score']})"
+                )
+                github_output = os.environ.get("GITHUB_OUTPUT", "")
+                if github_output:
+                    with open(github_output, "a") as f:
+                        f.write(f"score={existing['score']}\n")
+                        f.write(f"verdict={existing['verdict']}\n")
+                        f.write("findings-count=0\n")
+                        f.write("merge-blocking=false\n")
+                        f.write("rule-findings-count=0\n")
+                        f.write("rule-gate-failed=false\n")
+                        f.write("profile=security\n")
+                sys.exit(0)
+        except SystemExit:
+            raise  # don't catch our own sys.exit(0)
+        except Exception as exc:
+            print(f"::warning::Same-commit check failed (non-fatal): {exc}")
 
     # 2. Validate transport early (before expensive diff fetch)
     from grippy.agent import _resolve_transport

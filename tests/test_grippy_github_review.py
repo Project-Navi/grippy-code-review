@@ -1571,3 +1571,324 @@ class TestCommentSanitization:
         result = _sanitize_comment_text(text)
         assert "<SCRIPT>" not in result
         assert "<script>" not in result.lower()
+
+
+# --- Verdict markers ---
+
+
+class TestVerdictMarkers:
+    """Grippy verdict markers identify bot reviews and store machine-readable metadata."""
+
+    def test_build_verdict_body_contains_marker(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=85,
+            verdict="PASS",
+            head_sha="abc1234def5678",  # pragma: allowlist secret
+            base_text="Grippy approves",
+        )
+        assert "<!-- grippy-verdict abc1234def5678 -->" in body
+
+    def test_build_verdict_body_contains_meta(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=42,
+            verdict="FAIL",
+            head_sha="deadbeef12345678",  # pragma: allowlist secret
+            base_text="Grippy rejects",
+        )
+        assert '<!-- grippy-meta {"score": 42, "verdict": "FAIL"} -->' in body
+
+    def test_build_verdict_body_preserves_base_text(self) -> None:
+        from grippy.github_review import build_verdict_body
+
+        body = build_verdict_body(
+            score=85,
+            verdict="PASS",
+            head_sha="abc1234",
+            base_text="Grippy approves — **PASS** (85/100)",
+        )
+        assert "Grippy approves — **PASS** (85/100)" in body
+
+    def test_parse_grippy_meta_extracts_score_and_verdict(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        body = 'Some text\n<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->\nmore'
+        result = parse_grippy_meta(body)
+        assert result == {"score": 85, "verdict": "PASS"}
+
+    def test_parse_grippy_meta_returns_none_for_missing(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        assert parse_grippy_meta("no markers here") is None
+
+    def test_parse_grippy_meta_returns_none_for_malformed_json(self) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        body = "<!-- grippy-meta {bad json} -->"
+        assert parse_grippy_meta(body) is None
+
+
+# --- _dismiss_prior_verdicts ---
+
+
+class TestDismissPriorVerdicts:
+    """_dismiss_prior_verdicts manages verdict lifecycle with marker-based identity."""
+
+    def _make_review(
+        self,
+        *,
+        review_id: int = 1,
+        state: str = "APPROVED",
+        body: str = "<!-- grippy-verdict abc123 -->",
+        commit_id: str = "old_sha",
+        dismiss_ok: bool = True,
+    ) -> MagicMock:
+        review = MagicMock()
+        review.id = review_id
+        review.state = state
+        review.body = body
+        review.commit_id = commit_id
+        if not dismiss_ok:
+            from github import GithubException
+
+            review.dismiss.side_effect = GithubException(403, {}, {})
+        return review
+
+    def test_dismisses_old_sha_grippy_verdicts(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        old = self._make_review(review_id=1, commit_id="old_sha")
+        pr.get_reviews.return_value = [old]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 1
+        old.dismiss.assert_called_once()
+
+    def test_skips_same_sha_in_normal_mode(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        same = self._make_review(review_id=1, commit_id="new_sha")
+        pr.get_reviews.return_value = [same]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 0
+        same.dismiss.assert_not_called()
+
+    def test_dismisses_same_sha_in_force_mode(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        same = self._make_review(review_id=1, commit_id="new_sha")
+        pr.get_reviews.return_value = [same]
+        count = _dismiss_prior_verdicts(pr, "new_sha", force=True)
+        assert count == 1
+        same.dismiss.assert_called_once()
+
+    def test_excludes_review_id(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        fresh = self._make_review(review_id=99, commit_id="new_sha")
+        old = self._make_review(review_id=50, commit_id="new_sha")
+        pr.get_reviews.return_value = [fresh, old]
+        count = _dismiss_prior_verdicts(pr, "new_sha", force=True, exclude_review_id=99)
+        assert count == 1
+        fresh.dismiss.assert_not_called()
+        old.dismiss.assert_called_once()
+
+    def test_skips_human_reviews(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        human = self._make_review(review_id=1, body="LGTM", commit_id="old_sha")
+        pr.get_reviews.return_value = [human]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 0
+        human.dismiss.assert_not_called()
+
+    def test_skips_non_verdict_states(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        comment = self._make_review(review_id=1, state="COMMENTED", commit_id="old_sha")
+        pr.get_reviews.return_value = [comment]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 0
+
+    def test_dismiss_exception_is_non_fatal(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        failing = self._make_review(review_id=1, commit_id="old_sha", dismiss_ok=False)
+        ok = self._make_review(review_id=2, commit_id="old_sha2")
+        pr.get_reviews.return_value = [failing, ok]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 1
+
+    def test_multiple_stacked_verdicts_all_dismissed(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        reviews = [self._make_review(review_id=i, commit_id=f"sha_{i}") for i in range(5)]
+        pr.get_reviews.return_value = reviews
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 5
+        for r in reviews:
+            r.dismiss.assert_called_once()
+
+    def test_mixed_actors_only_grippy_dismissed(self) -> None:
+        from grippy.github_review import _dismiss_prior_verdicts
+
+        pr = MagicMock()
+        grippy = self._make_review(review_id=1, commit_id="old_sha")
+        human = self._make_review(review_id=2, body="Looks good", commit_id="old_sha")
+        changes = self._make_review(
+            review_id=3,
+            state="CHANGES_REQUESTED",
+            body="<!-- grippy-verdict old_sha -->\nFail",
+            commit_id="old_sha",
+        )
+        pr.get_reviews.return_value = [grippy, human, changes]
+        count = _dismiss_prior_verdicts(pr, "new_sha")
+        assert count == 2
+        human.dismiss.assert_not_called()
+
+
+# --- post_review verdict lifecycle ---
+
+
+class TestPostReviewVerdictLifecycle:
+    """post_review uses markers and dismiss-after-post ordering."""
+
+    def _setup_mocks(self) -> tuple[MagicMock, MagicMock, MagicMock]:
+        """Create mock Github, repository, and PR objects."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_pr = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.get_reviews.return_value = []
+        mock_review = MagicMock()
+        mock_review.id = 999
+        mock_pr.create_review.return_value = mock_review
+        return mock_gh, mock_repo, mock_pr
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review.Github")
+    def test_verdict_body_contains_markers(self, mock_gh_cls, mock_fetch) -> None:
+        mock_gh, _, mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234def",  # pragma: allowlist secret
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        # Find the APPROVE call (not COMMENT)
+        approve_calls = [
+            c for c in mock_pr.create_review.call_args_list if c.kwargs.get("event") == "APPROVE"
+        ]
+        assert len(approve_calls) >= 1
+        body = approve_calls[0].kwargs.get("body", "")
+        assert "<!-- grippy-verdict abc1234def -->" in body
+        assert "grippy-meta" in body
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review._dismiss_prior_verdicts", return_value=0)
+    @patch("grippy.github_review.Github")
+    def test_dismiss_called_after_verdict_post(self, mock_gh_cls, mock_dismiss, mock_fetch) -> None:
+        mock_gh, _, _mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234",
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        mock_dismiss.assert_called_once()
+        call_kwargs = mock_dismiss.call_args.kwargs
+        assert "exclude_review_id" in call_kwargs
+        assert call_kwargs["exclude_review_id"] == 999
+
+    @patch("grippy.github_review.fetch_grippy_comments", return_value={})
+    @patch("grippy.github_review._dismiss_prior_verdicts", return_value=0)
+    @patch("grippy.github_review.Github")
+    def test_verdict_failure_skips_dismiss(self, mock_gh_cls, mock_dismiss, mock_fetch) -> None:
+        mock_gh, _, mock_pr = self._setup_mocks()
+        mock_gh_cls.return_value = mock_gh
+        from github import GithubException
+
+        def selective_fail(**kwargs):
+            event = kwargs.get("event", "")
+            if event in ("APPROVE", "REQUEST_CHANGES"):
+                raise GithubException(500, {}, {})
+            mock_result = MagicMock()
+            mock_result.id = 999
+            return mock_result
+
+        mock_pr.create_review.side_effect = selective_fail
+
+        from grippy.github_review import post_review
+
+        post_review(
+            token="fake",
+            repo="owner/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc1234",
+            diff="",
+            score=85,
+            verdict="PASS",
+        )
+        mock_dismiss.assert_not_called()
+
+
+# --- fetch_thread_states -F fix ---
+
+
+class TestFetchThreadStatesFix:
+    """fetch_thread_states must use -F (JSON) not -f (string) for the ids parameter."""
+
+    @patch("subprocess.run")
+    def test_uses_dash_cap_f_for_ids(self, mock_run) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='{"data":{"nodes":[]}}',
+            stderr="",
+        )
+        from grippy.github_review import fetch_thread_states
+
+        fetch_thread_states(["PRRT_abc123"])
+        args = mock_run.call_args[0][0]
+        for i, arg in enumerate(args):
+            if arg.startswith("ids="):
+                assert args[i - 1] == "-F", f"Expected -F before ids=, got {args[i - 1]}"
+                break
+        else:
+            pytest.fail("ids= argument not found in subprocess call")
+
+    @patch("subprocess.run")
+    def test_empty_thread_ids_skips_call(self, mock_run) -> None:
+        from grippy.github_review import fetch_thread_states
+
+        result = fetch_thread_states([])
+        assert result == {}
+        mock_run.assert_not_called()

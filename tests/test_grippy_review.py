@@ -954,7 +954,7 @@ class TestMainOrchestration:
         event_path = self._make_event_file(tmp_path)
         self._setup_env(monkeypatch, event_path, tmp_path)
         monkeypatch.setenv("GRIPPY_TRANSPORT", "openai")
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")  # nogrip: secrets-in-diff
 
         mock_fetch.return_value = "diff --git a/f.py b/f.py\n-old\n+new"
         mock_run_review.return_value = _make_review()
@@ -1267,7 +1267,7 @@ class TestMainRuleEngine:
             message="AWS key found",
             file="config.py",
             line=10,
-            evidence="AKIA...",
+            evidence="AKIA...",  # nogrip: secrets-in-diff
         )
         mock_run_rules.return_value = [rule_result]
         mock_gate.return_value = False
@@ -1454,13 +1454,13 @@ class TestFormatRuleFindings:
                 message="AWS key in diff",
                 file="config.py",
                 line=42,
-                evidence="AKIA1234567890ABCDEF",  # pragma: allowlist secret
+                evidence="AKIA1234567890ABCDEF",  # pragma: allowlist secret  # nogrip: secrets-in-diff
             )
         ]
         text = _format_rule_findings(results)
         assert "[CRITICAL] secrets-in-diff @ config.py:42" in text
         assert "AWS key in diff" in text
-        assert "evidence: AKIA1234567890ABCDEF" in text
+        assert "evidence: AKIA1234567890ABCDEF" in text  # nogrip: secrets-in-diff
 
     def test_formats_finding_without_evidence(self) -> None:
         """Finding without evidence omits the evidence suffix."""
@@ -1942,3 +1942,161 @@ class TestMainNestedErrorHandlers:
         from grippy.review import main
 
         main()  # Should not raise — non-blocking verdict
+
+
+class TestCheckAlreadyReviewed:
+    """_check_already_reviewed implements the same-commit early exit guard."""
+
+    def _make_review(
+        self,
+        *,
+        state: str = "APPROVED",
+        body: str = '<!-- grippy-verdict abc1234 -->\n<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->',
+        commit_id: str = "abc1234",
+    ) -> MagicMock:
+        review = MagicMock()
+        review.state = state
+        review.body = body
+        review.commit_id = commit_id
+        return review
+
+    def _make_comment(self, body: str = "<!-- grippy-summary-42 -->") -> MagicMock:
+        comment = MagicMock()
+        comment.body = body
+        return comment
+
+    def test_returns_meta_when_complete_review_exists(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review()]
+        pr.get_issue_comments.return_value = [self._make_comment()]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is not None
+        assert result["score"] == 85
+        assert result["verdict"] == "PASS"
+
+    def test_returns_none_when_no_verdict(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = []
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_when_verdict_but_no_summary(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review()]
+        pr.get_issue_comments.return_value = []
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_different_sha(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review(commit_id="different_sha")]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_non_verdict_state(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        pr.get_reviews.return_value = [self._make_review(state="COMMENTED")]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_human_review(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        human = self._make_review(body="LGTM — looks good")
+        pr.get_reviews.return_value = [human]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+    def test_returns_none_for_malformed_meta(self) -> None:
+        from grippy.review import _check_already_reviewed
+
+        pr = MagicMock()
+        bad = self._make_review(body="<!-- grippy-verdict abc1234 -->\n<!-- grippy-meta {bad} -->")
+        pr.get_reviews.return_value = [bad]
+        pr.get_issue_comments.return_value = [self._make_comment()]
+        result = _check_already_reviewed(pr, "abc1234", pr_number=42)
+        assert result is None
+
+
+class TestMainSameCommitGuard:
+    """main() skips the full pipeline when _check_already_reviewed returns metadata."""
+
+    def _write_event_file(self, tmp_path: Path) -> Path:
+        """Write a minimal PR event JSON file."""
+        event = {
+            "pull_request": {
+                "number": 42,
+                "title": "Test PR",
+                "user": {"login": "dev"},
+                "head": {"ref": "feat/x", "sha": "abc1234"},
+                "base": {"ref": "main"},
+                "body": "test",
+            },
+            "repository": {"full_name": "owner/repo"},
+            "before": "",
+        }
+        p = tmp_path / "event.json"
+        p.write_text(json.dumps(event))
+        return p
+
+    @patch("grippy.review._check_already_reviewed")
+    @patch("github.Github")
+    def test_skips_pipeline_when_already_reviewed(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_check: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        event_path = self._write_event_file(tmp_path)
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
+        monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+        monkeypatch.setenv("GITHUB_OUTPUT", "")
+        monkeypatch.delenv("CI", raising=False)
+
+        mock_check.return_value = {"score": 85, "verdict": "PASS"}
+
+        from grippy.review import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
+        mock_check.assert_called_once()
+
+    @patch("grippy.review._check_already_reviewed")
+    @patch("grippy.review.fetch_pr_diff", side_effect=Exception("bail"))
+    @patch("github.Github")
+    def test_workflow_dispatch_bypasses_guard(
+        self,
+        mock_gh_cls: MagicMock,
+        mock_diff: MagicMock,
+        mock_check: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        event_path = self._write_event_file(tmp_path)
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_path))
+        monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+        monkeypatch.setenv("GITHUB_OUTPUT", "")
+        monkeypatch.delenv("CI", raising=False)
+
+        from grippy.review import main
+
+        try:
+            main()
+        except (SystemExit, Exception):
+            pass
+        mock_check.assert_not_called()

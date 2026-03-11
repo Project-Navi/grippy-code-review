@@ -7,6 +7,8 @@ post only genuinely new findings, resolve threads for absent findings.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 from typing import Any, NamedTuple
@@ -418,6 +420,71 @@ def format_summary_comment(
 
 _REVIEW_BATCH_SIZE = 25
 
+GRIPPY_VERDICT_MARKER = "<!-- grippy-verdict"
+
+_GRIPPY_META_RE = re.compile(r"<!-- grippy-meta ({.*?}) -->")
+
+
+def build_verdict_body(*, score: int, verdict: str, head_sha: str, base_text: str) -> str:
+    """Build verdict review body with machine-readable markers.
+
+    Appends ``<!-- grippy-verdict {sha} -->`` for identity and
+    ``<!-- grippy-meta {...} -->`` for structured score/verdict extraction.
+    """
+    return (
+        f"{base_text}\n\n"
+        f"<!-- grippy-verdict {head_sha} -->\n"
+        f"<!-- grippy-meta {json.dumps({'score': score, 'verdict': verdict})} -->"
+    )
+
+
+def parse_grippy_meta(body: str) -> dict[str, Any] | None:
+    """Extract structured metadata from a grippy verdict body.
+
+    Returns:
+        Dict with "score" and "verdict" keys, or None if not found/malformed.
+    """
+    match = _GRIPPY_META_RE.search(body)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _dismiss_prior_verdicts(
+    pr: Any,
+    head_sha: str,
+    *,
+    force: bool = False,
+    exclude_review_id: int | None = None,
+) -> int:
+    """Dismiss prior grippy verdicts. Returns count dismissed.
+
+    Args:
+        pr: PyGithub PullRequest object.
+        head_sha: Current commit SHA.
+        force: If True, dismiss same-SHA verdicts too (workflow_dispatch).
+        exclude_review_id: Review ID to never dismiss (the just-posted verdict).
+    """
+    dismissed = 0
+    for review in pr.get_reviews():
+        if review.id == exclude_review_id:
+            continue
+        if review.state not in ("APPROVED", "CHANGES_REQUESTED"):
+            continue
+        if GRIPPY_VERDICT_MARKER not in (review.body or ""):
+            continue
+        if not force and review.commit_id == head_sha:
+            continue
+        try:
+            review.dismiss(f"Superseded by review of {head_sha[:7]}")
+            dismissed += 1
+        except GithubException:
+            pass
+    return dismissed
+
 
 def post_review(
     *,
@@ -525,16 +592,39 @@ def post_review(
             print(f"::warning::Thread resolution failed: {exc}")
 
     # 6. Submit APPROVE / REQUEST_CHANGES review verdict (non-fatal)
+    #    Post new verdict FIRST, then dismiss old ones (post-first ordering).
+    new_review = None
     try:
         if verdict == "PASS":
-            pr.create_review(event="APPROVE", body=f"Grippy approves — **PASS** ({score}/100)")
-        elif verdict == "FAIL":
-            pr.create_review(
-                event="REQUEST_CHANGES",
-                body=f"Grippy requests changes — **FAIL** ({score}/100)",
+            body = build_verdict_body(
+                score=score,
+                verdict=verdict,
+                head_sha=head_sha,
+                base_text=f"Grippy approves \u2014 **PASS** ({score}/100)",
             )
+            new_review = pr.create_review(event="APPROVE", body=body)
+        elif verdict == "FAIL":
+            body = build_verdict_body(
+                score=score,
+                verdict=verdict,
+                head_sha=head_sha,
+                base_text=f"Grippy requests changes \u2014 **FAIL** ({score}/100)",
+            )
+            new_review = pr.create_review(event="REQUEST_CHANGES", body=body)
     except GithubException as exc:
         print(f"::warning::Verdict review ({verdict}) failed: {exc.status}")
+
+    # 6a. Dismiss prior grippy verdicts AFTER new one lands
+    if new_review is not None:
+        is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        dismissed = _dismiss_prior_verdicts(
+            pr,
+            head_sha,
+            force=is_manual,
+            exclude_review_id=new_review.id,
+        )
+        if dismissed:
+            print(f"  Dismissed {dismissed} prior verdict(s)")
 
     # 7. Build summary comment
     summary = format_summary_comment(
@@ -577,8 +667,6 @@ def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
         Dict mapping thread_id to ``{"isOutdated": bool, "isResolved": bool}``.
         Missing/failed IDs are omitted from the result.
     """
-    import json
-
     if not thread_ids:
         return {}
 
@@ -595,7 +683,7 @@ def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
                 "graphql",
                 "-f",
                 f"query={_nodes_query}",
-                "-f",
+                "-F",
                 f"ids={json.dumps(thread_ids)}",
             ],
             capture_output=True,

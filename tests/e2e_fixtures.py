@@ -31,6 +31,10 @@ LLM_BASE_URL: str = os.environ.get("GRIPPY_TEST_LLM_URL", "http://localhost:1234
 LLM_MODEL_ID: str = os.environ.get("GRIPPY_MODEL_ID", "devstral-small-2-24b-instruct-2512")
 PROMPTS_DIR: Path = Path(__file__).parent.parent / "src" / "grippy" / "prompts_data"
 
+# Local models need more time — detect via base URL pointing to localhost/LM Studio
+_is_local_model: bool = any(h in LLM_BASE_URL for h in ("localhost", "127.0.0.1", "192.168."))
+E2E_TIMEOUT: int = 600 if _is_local_model else 120
+
 
 def _parse_host_port(url: str) -> tuple[str, int]:
     """Extract host and port from a URL."""

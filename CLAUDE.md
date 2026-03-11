@@ -132,6 +132,7 @@ Graph enrichment: `enrich_results()` (rules/enrichment.py) post-processes findin
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` |
 | `GRIPPY_DATA_DIR` | Persistence directory | `./grippy-data` |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds (0 = none) | `300` |
+| `GRIPPY_MAX_DIFF_CHARS` | Max diff chars sent to LLM | `500000` |
 | `GRIPPY_PROFILE` | Security profile | `security` |
 | `GRIPPY_MODE` | Review mode override | `pr_review` |
 | `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | — |

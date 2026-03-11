@@ -60,7 +60,12 @@ You should see both models listed in the response.
 
 ### Which model?
 
-We recommend **Devstral-Small 24B at Q4 quantization or higher** --- that's what Grippy was validated with for local inference. It runs on consumer GPUs with 16GB+ VRAM and handles Grippy's structured output requirements well. For other options, see the [Model Recommendations](configuration.md#model-recommendations) section in the Configuration page.
+Two local models are validated with Grippy's full e2e test suite:
+
+- **Devstral-Small 24B** (Q4_K_S+) --- recommended for 16GB+ VRAM GPUs. Strong structured output compliance.
+- **Nvidia Nemotron-3-Nano** (Q3_K_L+) --- 30B MoE (A3B active params) reasoning model. Grippy handles its `reasoning_content` output automatically.
+
+For other options, see the [Model Recommendations](configuration.md#model-recommendations) section in the Configuration page.
 
 ---
 
@@ -341,6 +346,7 @@ The Cloudflare Access policy is blocking the request. Check:
 The model is too slow to complete the review within `GRIPPY_TIMEOUT` seconds. Options:
 
 - Increase `GRIPPY_TIMEOUT` (e.g., `600` for 10 minutes)
+- Lower `GRIPPY_MAX_DIFF_CHARS` to reduce the diff sent to the LLM (default is `500000`; try `100000` for models with 32K context or `200000` for 128K context)
 - Use a faster model or upgrade your GPU
 - Reduce the PR diff size by splitting large PRs
 

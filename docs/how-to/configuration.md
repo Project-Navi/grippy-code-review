@@ -15,6 +15,7 @@ All configuration is through environment variables, with one CLI flag (`--profil
 | `GRIPPY_API_KEY` | API key for non-OpenAI endpoints | `lm-studio` | Embedding auth fallback for local endpoints |
 | `GRIPPY_DATA_DIR` | Persistence directory for vector index and graph DB | `./grippy-data` | Created automatically if it doesn't exist |
 | `GRIPPY_TIMEOUT` | Review timeout in seconds | `300` | Set to `0` to disable the timeout |
+| `GRIPPY_MAX_DIFF_CHARS` | Max diff chars sent to LLM | `500000` | Lower this for local models with smaller context windows (e.g. `100000` for 32K context) |
 | `GRIPPY_PROFILE` | Security rule engine profile | `security` | See [Security Profiles](#security-profiles) below |
 | `GRIPPY_MODE` | Review mode | `pr_review` | One of: `pr_review`, `security_audit`, `governance_check`, `surprise_audit`, `cli`, `github_app` |
 | `GRIPPY_FORCE_REINDEX` | Force codebase index rebuild | --- | Set to `1`, `true`, or `yes` to force re-index |
@@ -101,12 +102,13 @@ When the rule engine activates, it runs 10 deterministic rules on the full diff 
 
 ### Chat models
 
-| Use case | Model | Notes |
-|---|---|---|
-| Recommended | `gpt-4.1` | Best balance of cost, speed, and structured output quality |
-| Fast / cheap | `gpt-4.1-mini` | Good for rapid iteration on smaller PRs |
-| Fast / local | `devstral-small-2-24b-instruct-2512` | **Recommended local model.** Validated with Q4 quantization and above. Runs on consumer GPUs with 16GB+ VRAM. |
-| Thorough | `claude-sonnet-4-20250514` | First-class provider via `GRIPPY_TRANSPORT=anthropic`. Requires `pip install "grippy-mcp[anthropic]"`. |
+| Use case | Model | Quant | Notes |
+|---|---|---|---|
+| Recommended | `gpt-4.1` | — | Best balance of cost, speed, and structured output quality |
+| Fast / cheap | `gpt-4.1-mini` | — | Good for rapid iteration on smaller PRs |
+| Fast / local | `devstral-small-2-24b-instruct-2512` | Q4_K_S+ | **Recommended local model.** Validated with full e2e test suite. Runs on consumer GPUs with 16GB+ VRAM. |
+| Reasoning / local | `nvidia/nemotron-3-nano` | Q3_K_L+ | 30B (A3B active) reasoning model. Validated with full e2e test suite. Grippy handles `reasoning_content` output automatically. |
+| Thorough | `claude-sonnet-4-20250514` | — | First-class provider via `GRIPPY_TRANSPORT=anthropic`. Requires `pip install "grippy-mcp[anthropic]"`. |
 
 ### Embedding models
 
