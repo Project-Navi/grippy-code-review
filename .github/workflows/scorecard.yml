@@ -14,42 +14,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  analysis:
-    name: Scorecard analysis
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  scorecard:
+    uses: Project-Navi/.github/.github/workflows/scorecard.yml@6c4c2d8f200b1b9c3bd651ebc297425e45d5934e
     permissions:
       contents: read
       security-events: write
       id-token: write
       actions: read
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc  # v2.15.1
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Run Scorecard
-        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
-        with:
-          repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-
-      - name: Upload SARIF to Security tab
-        uses: github/codeql-action/upload-sarif@0d579ffd059c29b07949a3cce3983f0780820c98  # v4.32.6
-        with:
-          sarif_file: results.sarif
+    secrets: inherit
 
   badge:
     name: Update scorecard badge
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: analysis
+    needs: scorecard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
