@@ -136,6 +136,9 @@ def run_review(
     for attempt in range(1, max_retries + 2):  # +2 because range is exclusive and we start at 1
         response = agent.run(current_message)
         content = response.content
+        # Reasoning models (e.g. nemotron) put output in reasoning_content, not content.
+        if not content and getattr(response, "reasoning_content", None):
+            content = response.reasoning_content
         last_raw = str(content)[:2000] if content is not None else "<None>"
 
         try:
@@ -161,6 +164,10 @@ def run_review(
                         f"missing {', '.join(missing)}",
                         stacklevel=2,
                     )
+            # Stamp actual model ID — LLMs hallucinate this field
+            _model_id = getattr(getattr(agent, "model", None), "id", None)
+            if _model_id:
+                review.model = _model_id
             return review
         except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as e:
             error_str = str(e)

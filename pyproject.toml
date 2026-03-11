@@ -96,7 +96,11 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["e2e: end-to-end tests requiring external services (LLM APIs, MCP server)"]
+markers = [
+    "e2e: LLM system contract tests (schema, injection, isolation)",
+    "e2e_fast: deterministic e2e edge cases (no LLM, CI-safe)",
+    "e2e_stress: LLM model characterization and stress tests (long-running)",
+]
 
 [tool.mypy]
 python_version = "3.12"
