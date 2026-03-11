@@ -56,7 +56,7 @@ def llm_reachable() -> bool:
         base = LLM_BASE_URL.rstrip("/")
         if not base.endswith("/v1"):
             base += "/v1"
-        resp = urlopen(f"{base}/models", timeout=5)  # noqa: S310
+        resp = urlopen(f"{base}/models", timeout=5)
         data = json.loads(resp.read())
         model_ids = {m["id"] for m in data.get("data", [])}
         return LLM_MODEL_ID in model_ids
