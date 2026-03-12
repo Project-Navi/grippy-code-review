@@ -23,6 +23,7 @@ nboot-spec.json
 benchmarks/output/
 !benchmarks/output/.gitkeep
 benchmarks/martian/output/
+benchmarks/martian/output-*/
 !benchmarks/martian/output/.gitkeep
 
 # Zensical build output

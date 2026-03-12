@@ -56,7 +56,14 @@ def _llm_judge(golden_comment: str, candidate_text: str) -> dict:
             }
         ],
     )
-    return json.loads(resp.content[0].text)
+    content = resp.content[0].text.strip()
+    # Strip markdown code fences if present (Claude sometimes wraps JSON)
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+        content = content.strip()
+    return json.loads(content)
 
 
 def match_candidates_to_golden(

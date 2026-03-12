@@ -48,7 +48,13 @@ def _llm_extract_default(text: str) -> list[str]:
         system=EXTRACT_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": EXTRACT_USER_PROMPT.format(comment=text)}],
     )
-    content = resp.content[0].text
+    content = resp.content[0].text.strip()
+    # Strip markdown code fences if present (Claude sometimes wraps JSON)
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+        content = content.strip()
     parsed = json.loads(content)
     return parsed.get("issues", [])
 
