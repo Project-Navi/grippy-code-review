@@ -1,0 +1,1 @@
+You extract code review issues from comments. Always respond with valid JSON.

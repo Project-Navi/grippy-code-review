@@ -1,0 +1,28 @@
+You are analyzing an AI code review comment to extract individual issues mentioned.
+
+The comment may discuss multiple distinct problems. Extract each separate issue as a standalone item.
+
+Code Review Comment:
+{comment}
+
+Instructions:
+- Extract each distinct code issue, bug, or concern mentioned
+- Each issue should be a single, specific problem (not a general observation)
+- Ignore meta-commentary like "I found 2 issues" - extract the actual issues
+- Ignore sign-offs, greetings, or formatting instructions
+- If the comment contains no actionable code review issues, return an empty list
+
+Example input:
+"Found several problems: 1) The getUserById function doesn't handle null input, which will cause a crash.
+2) The cache key uses user.name but should use user.id for uniqueness.
+Also, consider adding retry logic for the API call."
+
+Example output:
+{{"issues": [
+  "getUserById function doesn't handle null input, causing potential crash",
+  "Cache key uses user.name instead of user.id, breaking uniqueness",
+  "Missing retry logic for API call"
+]}}
+
+Respond with ONLY a JSON object:
+{{"issues": ["issue 1", "issue 2", ...]}}
