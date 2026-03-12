@@ -244,6 +244,15 @@ def create_reviewer(
         model_cls = getattr(mod, class_name)
         model = model_cls(id=model_id)
 
+    # Only pass output_schema when the provider supports it natively or has a
+    # response_format stripping mechanism (_LocalModel).  For other providers
+    # (Anthropic, Google, Groq, Mistral) the prompt chain (output-schema.md)
+    # already contains the full JSON schema, and retry.py handles parsing +
+    # Pydantic validation independently.  Passing output_schema to Agno for
+    # these providers causes a "compiled grammar is too large" API error
+    # because Agno sends the schema as response_format.
+    output_schema = GrippyReview if (structured or resolved_transport == "local") else None
+
     # Security: session history is NEVER re-injected into the LLM context,
     # regardless of whether a session db is configured.  Prior run responses
     # may contain attacker-controlled PR content echoed by the model —
@@ -258,7 +267,7 @@ def create_reviewer(
             mode=mode,
             include_rule_findings=include_rule_findings,
         ),
-        output_schema=GrippyReview,
+        output_schema=output_schema,
         structured_outputs=structured,
         add_history_to_context=False,
         markdown=False,
