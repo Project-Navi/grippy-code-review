@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from grippy.agent import _escape_xml, _LocalModel, format_pr_context
+from grippy.agent import _escape_xml, _LocalModel, create_reviewer, format_pr_context
 
 # --- Sample diff for testing ---
 
@@ -271,6 +271,41 @@ class TestEscapeXml:
 
     def test_empty_string(self) -> None:
         assert _escape_xml("") == ""
+
+
+class TestOutputSchemaConditional:
+    """Verify output_schema is suppressed for non-structured, non-local providers."""
+
+    def test_local_transport_gets_output_schema(self) -> None:
+        """Local transport uses _LocalModel which handles response_format stripping."""
+        from grippy.schema import GrippyReview
+
+        agent = create_reviewer(transport="local")
+        assert agent.output_schema == GrippyReview
+
+    def test_openai_transport_gets_output_schema(self) -> None:
+        """OpenAI supports native structured outputs — output_schema should be set."""
+        import os
+
+        from grippy.schema import GrippyReview
+
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            agent = create_reviewer(transport="openai", model_id="gpt-4o")
+            assert agent.output_schema == GrippyReview
+        finally:
+            del os.environ["OPENAI_API_KEY"]
+
+    def test_anthropic_transport_skips_output_schema(self) -> None:
+        """Anthropic rejects large compiled grammars — output_schema must be None."""
+        import os
+
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        try:
+            agent = create_reviewer(transport="anthropic", model_id="claude-sonnet-4-5-20250929")
+            assert agent.output_schema is None
+        finally:
+            del os.environ["ANTHROPIC_API_KEY"]
 
 
 class TestLocalModel:
