@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: MIT
-"""Tests for Grippy agent utilities (format_pr_context)."""
+"""Tests for Grippy agent utilities (format_pr_context, _LocalModel)."""
 
 from __future__ import annotations
 
-from grippy.agent import _escape_xml, format_pr_context
+from grippy.agent import _escape_xml, _LocalModel, format_pr_context
 
 # --- Sample diff for testing ---
 
@@ -271,3 +271,55 @@ class TestEscapeXml:
 
     def test_empty_string(self) -> None:
         assert _escape_xml("") == ""
+
+
+class TestLocalModel:
+    """Regression tests for _LocalModel tool + structured-output conflict fix."""
+
+    def test_strips_response_format_when_tools_present(self) -> None:
+        """LM Studio cannot combine response_format with tool grammars."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=[{"type": "function", "function": {"name": "read_file"}}],
+        )
+        assert "response_format" not in params
+        assert "tools" in params
+
+    def test_keeps_response_format_when_no_tools(self) -> None:
+        """Without tools, response_format should pass through normally."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=None,
+        )
+        assert params["response_format"] == {"type": "json_object"}
+
+    def test_strips_response_format_with_pydantic_schema(self) -> None:
+        """JSON schema response_format (Pydantic class) also stripped with tools."""
+        from grippy.schema import GrippyReview
+
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format=GrippyReview,
+            tools=[{"type": "function", "function": {"name": "grep_code"}}],
+        )
+        assert "response_format" not in params
+        assert "tools" in params
+
+    def test_no_tools_no_response_format_passthrough(self) -> None:
+        """Neither tools nor response_format — clean passthrough."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params()
+        assert "response_format" not in params
+        assert "tools" not in params
+
+    def test_empty_tools_list_preserves_response_format(self) -> None:
+        """Empty tools list should not trigger stripping."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=[],
+        )
+        # Empty list → OpenAIChat doesn't add "tools" to params
+        assert params.get("response_format") == {"type": "json_object"}

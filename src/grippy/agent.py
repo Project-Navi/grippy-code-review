@@ -19,6 +19,44 @@ from grippy.schema import GrippyReview
 
 DEFAULT_PROMPTS_DIR = Path(__file__).parent / "prompts_data"
 
+
+# ---------------------------------------------------------------------------
+# Local-endpoint model subclass — fixes tool + structured-output conflict
+# ---------------------------------------------------------------------------
+
+
+class _LocalModel(OpenAILike):
+    """OpenAILike variant that suppresses response_format when tools are active.
+
+    Local inference servers (LM Studio, Ollama, vLLM) cannot combine structured
+    output grammars (response_format) with tool-calling grammars in the same
+    request.  This subclass strips response_format from the API params when
+    tools are present, relying instead on:
+
+      1. Agno's system-prompt JSON output instructions (auto-injected when
+         supports_native_structured_outputs is False), and
+      2. The retry layer in retry.py for JSON parsing + Pydantic validation.
+
+    When no tools are present, response_format passes through normally.
+    """
+
+    def get_request_params(
+        self,
+        response_format: Any = None,
+        tools: Any = None,
+        tool_choice: Any = None,
+        run_response: Any = None,
+    ) -> dict[str, Any]:
+        params = super().get_request_params(
+            response_format=response_format,
+            tools=tools,
+            tool_choice=tool_choice,
+            run_response=run_response,
+        )
+        if "tools" in params:
+            params.pop("response_format", None)
+        return params
+
 # ---------------------------------------------------------------------------
 # Provider registry — maps transport names to agno model classes.
 # Each entry: (module_path, class_name, supports_native_structured_outputs)
@@ -191,7 +229,13 @@ def create_reviewer(
     log.info("Grippy transport=%s (source: %s)", resolved_transport, source)
 
     if resolved_transport == "local":
-        model = OpenAILike(id=model_id, api_key=api_key, base_url=base_url)
+        model = _LocalModel(id=model_id, api_key=api_key, base_url=base_url)
+        # Local endpoints do not support native structured outputs. Setting
+        # this to False makes Agno inject JSON schema instructions into the
+        # system prompt instead.  _LocalModel.get_request_params() separately
+        # strips response_format when tools are active to avoid the grammar
+        # conflict (LM Studio cannot combine both in one request).
+        model.supports_native_structured_outputs = False
         structured = False
     else:
         # Deferred import from provider registry
