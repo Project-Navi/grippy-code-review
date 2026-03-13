@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-13
+**Last updated:** 2026-03-13 (pilot audit complete)
 
 ## Status Legend
 
@@ -34,7 +34,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| schema | — | — | — | — | NEVER |
+| schema | 2026-03-13 | cebbcab | 7.7/10 | 0 | CURRENT |
 | ignore | — | — | — | — | NEVER |
 | imports | — | — | — | — | NEVER |
 | embedder | — | — | — | — | NEVER |
@@ -45,7 +45,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|---|---|
 | rule-engine | — | — | — | — | NEVER |
 | rule-enrichment | — | — | — | — | NEVER |
-| rule-secrets | — | — | — | — | NEVER |
+| rule-secrets | 2026-03-13 | 259d0b8 | 7.2/10 | 0 | CURRENT |
 | rule-workflows | — | — | — | — | NEVER |
 | rule-sinks | — | — | — | — | NEVER |
 | rule-traversal | — | — | — | — | NEVER |
@@ -72,7 +72,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
 | agent | — | — | — | — | NEVER |
-| retry | — | — | — | — | NEVER |
+| retry | 2026-03-13 | 259d0b8 | 7.9/10 | 0 | CURRENT |
 | mcp-response | — | — | — | — | NEVER |
 
 ### Phase 4 -- Integration (5 units)
@@ -95,7 +95,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Date | Units | Auditor | Reference |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-03-13 | schema, rule-secrets, retry | Claude Opus 4.6 / Nelson Spence | `pilot/PHASE-2-ADJUDICATION.md` |
 
 ## Superset Analysis
 
