@@ -289,7 +289,7 @@ class TestOutputSchemaConditional:
 
         from grippy.schema import GrippyReview
 
-        os.environ["OPENAI_API_KEY"] = "test-key"
+        os.environ["OPENAI_API_KEY"] = "test-key"  # pragma: allowlist secret
         try:
             agent = create_reviewer(transport="openai", model_id="gpt-4o")
             assert agent.output_schema == GrippyReview
@@ -300,7 +300,7 @@ class TestOutputSchemaConditional:
         """Anthropic rejects large compiled grammars — output_schema must be None."""
         import os
 
-        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"  # pragma: allowlist secret
         try:
             agent = create_reviewer(transport="anthropic", model_id="claude-sonnet-4-5-20250929")
             assert agent.output_schema is None
