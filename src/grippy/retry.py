@@ -151,9 +151,11 @@ def run_review(
                     errors.append(f"Attempt {attempt}: {error_str}")
                     if attempt <= max_retries:
                         current_message = (
-                            f"Your output is missing findings for these rule-detected issues: "
-                            f"{', '.join(missing)}. "
-                            f"Every rule finding MUST appear with its rule_id set."
+                            f"CORRECTION: Your output is missing findings for these "
+                            f"rule-detected issues: {', '.join(missing)}. "
+                            f"Every rule finding MUST appear with its rule_id set.\n\n"
+                            f"Review the PR again and produce a complete response:\n\n"
+                            f"{message}"
                         )
                         continue
                     # Final attempt still missing — warn but return what we have
@@ -187,10 +189,11 @@ def run_review(
                     safe_summary = "Value error in response"
 
                 current_message = (
-                    f"Your previous output failed validation. "
+                    f"CORRECTION: Your previous output failed validation. "
                     f"Error: {safe_summary}\n\n"
-                    f"Please fix the errors and output a valid JSON object "
-                    f"matching the GrippyReview schema. Output ONLY the JSON."
+                    f"Fix the errors and produce a valid JSON object matching "
+                    f"the GrippyReview schema. Review the PR again:\n\n"
+                    f"{message}"
                 )
 
     raise ReviewParseError(
