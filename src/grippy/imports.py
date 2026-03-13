@@ -58,10 +58,16 @@ def _resolve_relative_import(
         parts = module.split(".")
         candidate = pkg_dir / Path(*parts).with_suffix(".py")
         if candidate.is_file():
-            return str(candidate.relative_to(repo_root))
+            try:
+                return str(candidate.relative_to(repo_root))
+            except ValueError:
+                return None
         candidate = pkg_dir / Path(*parts) / "__init__.py"
         if candidate.is_file():
-            return str(candidate.relative_to(repo_root))
+            try:
+                return str(candidate.relative_to(repo_root))
+            except ValueError:
+                return None
     return None
 
 

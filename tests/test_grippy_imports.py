@@ -151,3 +151,54 @@ class TestExtractImports:
         (pkg / "mod.py").write_text("from .nonexistent import X\n")
         result = extract_imports(pkg / "mod.py", tmp_path)
         assert result == []
+
+    def test_relative_import_level_exceeds_depth(self, tmp_path: Path) -> None:
+        """Level traversal that escapes repo root returns None, not ValueError."""
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        # level=5 far exceeds directory depth — would escape repo root
+        (pkg / "mod.py").write_text("from .....deep import X\n")
+        result = extract_imports(pkg / "mod.py", tmp_path)
+        assert result == []
+
+    def test_relative_import_outside_repo(self, tmp_path: Path) -> None:
+        """Resolved candidate outside repo root is safely ignored."""
+        # Create a file outside repo root that could be resolved
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "target.py").write_text("")
+        repo = tmp_path / "repo"
+        pkg = repo / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        # level=3 escapes repo/ into tmp_path, could find outside/target.py
+        (pkg / "mod.py").write_text("from ...outside.target import X\n")
+        result = extract_imports(pkg / "mod.py", repo)
+        assert result == []
+
+    def test_from_dot_import_none_module(self, tmp_path: Path) -> None:
+        """'from . import X' has module=None — should not crash."""
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "mod.py").write_text("from . import something\n")
+        # module is None for bare relative imports — _resolve_relative_import
+        # short-circuits on the `if module:` guard
+        result = extract_imports(pkg / "mod.py", tmp_path)
+        # "something" doesn't exist as a file, so nothing resolves
+        assert result == []
+
+    def test_extract_imports_empty_file(self, tmp_path: Path) -> None:
+        """Empty Python file produces no imports."""
+        f = tmp_path / "empty.py"
+        f.write_text("")
+        result = extract_imports(f, tmp_path)
+        assert result == []
+
+    def test_extract_imports_os_error(self, tmp_path: Path) -> None:
+        """Unreadable file returns empty list, not an exception."""
+        f = tmp_path / "missing.py"
+        # File doesn't exist — triggers OSError in read_text()
+        result = extract_imports(f, tmp_path)
+        assert result == []
