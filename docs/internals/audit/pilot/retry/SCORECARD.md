@@ -139,7 +139,7 @@
 **Score:** 7/10
 **Evidence:**
 - `ReviewParseError` carries full error chain: `attempts` count, `last_raw` (actual LLM output for debugging), `errors` list with per-attempt detail (Tier A: `test_error_contains_attempt_count`, `test_error_redacts_raw_output`).
-- `on_validation_error` callback provides monitoring hook for each failure (Tier A: `TestRunReviewCallback`, 3 tests).
+- `on_validation_error` callback provides monitoring hook for parse/validation failures (Tier A: `TestRunReviewCallback`, 3 tests). Note: callback does not fire for rule coverage failures — those follow a separate retry path.
 - `warnings.warn()` on rule coverage exhaustion provides runtime observability (Tier A: `test_warns_on_exhausted_retries_with_missing_rules`).
 - Deterministic parsing: same agent output → same parsed result. Reproducible.
 - Not 9: No structured logging. No correlation IDs linking retry attempts to specific PR reviews. Error chain is carried in exception attributes, not logged.
@@ -152,7 +152,7 @@
 
 **Score:** 7/10
 **Evidence:**
-- 35 tests across 7 test classes (Tier A: `test_grippy_retry.py`).
+- 35 tests across 8 test classes (Tier A: `test_grippy_retry.py`).
 - Test:source ratio: 2.61:1 (529 LOC tests / 203 LOC source). Highest ratio in the pilot.
 - **Positive tests:** 9 success parsing tests covering dict, JSON, model instance, reasoning content, model ID stamp.
 - **Negative/retry tests:** 4 retry tests (invalid JSON, invalid schema, error context, multi-retry). 4 exhaustion tests.

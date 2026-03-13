@@ -13,11 +13,11 @@
 
 1. **Complete positive fixture coverage.** All 10 regex patterns have corresponding positive test fixtures: AWS, GitHub (classic + fine-grained + 4 token types), OpenAI, private key header, generic secret assignment, .env file addition. 14 tests, all passing.
 
-2. **Clean static analysis trifecta.** ruff, mypy strict, and bandit all pass with zero issues. 106 lines of code, no skipped checks.
+2. **Clean static analysis trifecta.** ruff, mypy strict, and bandit all pass with zero issues. 138 lines of code, no skipped checks.
 
 3. **Built-in redaction.** `_redact()` (secrets_in_diff.py:133-138) ensures finding evidence never contains full secret values. Only the first 4-8 characters are preserved. Proven by `test_evidence_is_redacted`.
 
-4. **Multi-layer false positive reduction.** Three independent filters prevent false positives: `_is_comment_line()` skips hash/slash/star comments (line 60-63), `_is_placeholder()` checks against 15 known placeholder values (line 66-69), `_in_tests_dir()` skips test files entirely (line 72-74). Each has dedicated test coverage.
+4. **Multi-layer false positive reduction.** Three independent filters prevent false positives: `_is_comment_line()` skips hash/slash/star comments (line 60-63), `_is_placeholder()` checks against 14 known placeholder values (line 66-69), `_in_tests_dir()` skips test files entirely (line 72-74). Each has dedicated test coverage.
 
 5. **Efficient early-exit design.** `break` statements at lines 106-107 (one finding per .env file) and line 129 (one finding per diff line) prevent finding spam. `line.type != "add"` check at line 112 skips non-addition lines immediately.
 
@@ -35,7 +35,7 @@
 | SR-02 | No catastrophic backtracking | C | Manual regex analysis (see F-RS-001) — no Tier A adversarial tests exist | **GAP** |
 | SR-03 | Severity matches profile gates | A + C | All 10 patterns assign CRITICAL (secrets_in_diff.py:14-36). .env assigns WARN (line 99). Severity assignment is unconditional — profile gating is engine-level. | **PASS** |
 | SR-04 | Only fires on added lines | A | test_context_line_not_flagged (line 97-108): context line with secret pattern produces no finding. Code guard at line 112: `if line.type != "add"`. | **PASS** |
-| SR-05 | Finding evidence preserves triage context | C | RuleResult fields populated: rule_id (line 98/119), severity (line 99/122), message (line 100/123), file (line 101/124), line (line 102/125), evidence (line 103/126). All fields present and meaningful. | **PASS** |
+| SR-05 | Finding evidence preserves triage context | A + C | RuleResult fields populated: rule_id (line 98/119), severity (line 99/122), message (line 100/123), file (line 101/124), line (line 102/125), evidence (line 103/126). All fields present and meaningful. | **PASS** |
 | SR-06 | Rule respects profile activation | C | Rule has no profile-awareness — activation is engine-level (registry.py imports, engine selects per profile). N/A at rule level — see friction log. | **N/A (engine scope)** |
 | SR-07 | Finding messages never contain raw secrets | A | test_evidence_is_redacted (line 110-116): proves evidence ends with "..." and length < 20. `_redact()` shows only first 4-8 chars. | **PASS** |
 | SR-08 | Findings compatible with enrichment | C | Rule returns `list[RuleResult]` which is the standard type consumed by `enrich_results()`. No integration test at rule level. | **PASS (structural)** |

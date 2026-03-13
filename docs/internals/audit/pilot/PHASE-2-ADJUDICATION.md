@@ -57,9 +57,9 @@
 
 ### schema
 
-**Final status: Adequate**
+**Final status: Adequate (provisional)**
 
-No changes from Phase 1. The Phase 2 friction items (SR-06 engine scope, RP-07/08/09 N/A) do not touch the data-model checklist or schema's score logic. Schema completed cleanly with no friction and no ambiguity.
+Schema's scores are unchanged from Phase 1. The `(provisional)` suffix is applied for consistency: dimensions 2, 5, 8, 9 are supported only by Tier C evidence, which meets the template's trigger condition ("any dimension with Tier C only"). This was not applied in Phase 1 — see Friction Log item #3 for the ambiguity that led to the correction.
 
 ### rule-secrets
 
@@ -87,7 +87,7 @@ No changes from Phase 1. The Phase 2 friction items (SR-06 engine scope, RP-07/0
 | Base vs ceiling | Adequate > Needs Attention → **downgrade to Needs Attention** |
 | Suffixes | None (Tier C evidence is supplementary on gate dimensions) |
 
-**Unresolved findings:** F-RY-001 (HIGH), F-RY-002 (INFO)
+**Unresolved findings:** F-RY-001 (HIGH), F-RY-002 (LOW)
 
 ---
 
@@ -98,7 +98,7 @@ No changes from Phase 1. The Phase 2 friction items (SR-06 engine scope, RP-07/0
 | 1 | rule-secrets | SR-06 profile activation is engine-level | Clarification | Marked N/A with justification. No scoring impact. | Clarify in security-rule checklist that SR-06 tests belong to rule-engine, or split. |
 | 2 | retry | RP-07/08/09 N/A for retry scope (3/9 items) | Structural | Evaluated 6 applicable items. B6.5 still satisfied (67%). | Split/sub-scope review-pipeline checklist by unit responsibility. |
 
-**Would Phase 2 friction have changed schema's Phase 1 result?** No. The friction items concern security-rule and review-pipeline checklists. Neither touches the data-model checklist or schema's scoring logic. Schema's Adequate status stands.
+**Would Phase 2 friction have changed schema's Phase 1 result?** Yes — suffix only. Cross-unit review (Friction #3) revealed that the `(provisional)` suffix was applied inconsistently: rule-secrets applied it (4 has Tier C only), but schema declined it despite 4 Tier-C-only dimensions. Applying the template rule consistently, schema becomes Adequate (provisional). The base status (Adequate) and all scores are unchanged.
 
 ---
 
@@ -108,6 +108,8 @@ No changes from Phase 1. The Phase 2 friction items (SR-06 engine scope, RP-07/0
 |---|--------|---------------|----------|
 | 1 | Friction #1 | Clarify SR-06 as engine-scope or split out of individual rule audits | Medium |
 | 2 | Friction #2 | Split/sub-scope review-pipeline checklist so retry doesn't carry 3 predictable N/As | Medium |
+| 3 | Friction #3 | Define when `(provisional)` suffix applies — template says "any dimension with Tier C only" but Phase 1 schema audit declined it despite 4 Tier-C-only dimensions. Ambiguity between "any dimension" and "gate dimensions only" needs resolution. | Medium |
+| 4 | Friction #3 | Codify severity taxonomy as CRITICAL/HIGH/MEDIUM/LOW only. INFO was used in pilot findings (F-RY-002, F-SCH-002, F-SCH-003) but is not in the methodology's severity definitions. Reclassified to LOW during adjudication. | Low |
 
 ---
 

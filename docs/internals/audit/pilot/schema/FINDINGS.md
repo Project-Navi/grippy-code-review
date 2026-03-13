@@ -85,7 +85,7 @@ No code change required. Documentation-only.
 
 ### F-SCH-002: No test for missing required field rejection on GrippyReview
 
-**Severity:** INFO
+**Severity:** LOW
 **Status:** OPEN
 **File:** `tests/test_grippy_schema.py`
 **Evidence tier:** C (test gap analysis)
@@ -117,7 +117,7 @@ Approximately 5 LOC. Low priority.
 
 ### F-SCH-003: Finding.id and Escalation.id use bare str (intentional)
 
-**Severity:** INFO
+**Severity:** LOW
 **Status:** OPEN
 **File:** `src/grippy/schema.py:97, :121`
 **Evidence tier:** C (code inspection + design rationale)

@@ -121,7 +121,7 @@
 
 **Score:** 5/10
 **Evidence:**
-- Placeholder filtering blocks 15 known non-secret values from triggering findings (Tier A: 2 tests).
+- Placeholder filtering blocks 14 known non-secret values from triggering findings (Tier A: 2 tests).
 - Redaction prevents secret leakage through findings (Tier A: 1 test).
 - No adversarial test fixtures: no long-input tests, no Unicode tests, no nested pattern tests (F-RS-001, F-RS-002).
 - Manual regex analysis indicates patterns are structurally safe from ReDoS (Tier C: see F-RS-001), but no Tier A evidence exists.
@@ -203,7 +203,7 @@
 - Regex patterns compiled once at module load via `re.compile()` (Tier C: line 12-37). No per-invocation recompilation.
 - Linear scan: O(files × hunks × lines × patterns). Each line tested against 10 patterns with early break on first match (line 129).
 - Early exits: test directory files skipped entirely (line 88-89). Non-add lines skipped (line 112). Comment lines skipped (line 114).
-- Placeholder check is O(placeholders) per match but `_PLACEHOLDERS` is a small frozenset (15 items) — negligible.
+- Placeholder check is O(placeholders) per match but `_PLACEHOLDERS` is a small frozenset (14 items) — negligible.
 - Not 9: No profiling data. "Efficient for workload" by structural argument, not measurement.
 
 ---

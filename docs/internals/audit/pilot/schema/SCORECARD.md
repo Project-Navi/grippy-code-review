@@ -54,13 +54,13 @@ These rules override average-based health status. See METHODOLOGY.md Section C f
 | 11. Dependency Hygiene | 10/10 | A | Zero internal deps, minimal external (enum, typing, pydantic) |
 | **Overall** | **7.7/10** | | **Average of 11 dimensions** |
 
-**Health status:** Adequate
+**Health status:** Adequate (provisional)
 
 **Determination:**
 1. Average-based status: 7.7/10 falls in 6.0-7.9 range = **Adequate**
 2. Override gates: None fired.
 3. Ceiling gates: None fired. Average stands.
-4. Suffixes: No accepted risks. Dimensions 2, 5, 8, 9 rely partly on Tier C evidence, but all are non-gate dimensions and the scores are conservative. No provisional suffix warranted -- Tier C evidence is supplementary to Tier A evidence on gate dimensions (3, 4).
+4. Suffixes: `(provisional)` — Dimensions 2, 5, 8, 9 are supported only by Tier C evidence. Per template rule: "any dimension with Tier C only" triggers the provisional suffix. Gate dimensions (3, 4) have Tier A support, so the provisional suffix does not indicate gate-level uncertainty.
 
 **Override gates fired:** None
 **Ceiling gates fired:** None

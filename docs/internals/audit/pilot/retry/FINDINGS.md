@@ -12,13 +12,13 @@
 
 ## Strengths
 
-1. **Excellent test:source ratio (2.61:1).** 529 LOC of tests covering 203 LOC of source. 35 tests across 7 test classes with positive, negative, edge case, adversarial sanitization, and integration categories.
+1. **Excellent test:source ratio (2.61:1).** 529 LOC of tests covering 203 LOC of source. 35 tests across 8 test classes with positive, negative, edge case, adversarial sanitization, and integration categories.
 
-2. **Clean static analysis trifecta.** ruff, mypy strict, and bandit all pass with zero issues on 163 lines of code.
+2. **Clean static analysis trifecta.** ruff, mypy strict, and bandit all pass with zero issues on 203 lines of code.
 
 3. **Defense-in-depth on retry messages.** `_safe_error_summary()` (retry.py:35-45) extracts only field paths and error type codes from `ValidationError`, never echoing raw values. This prevents attacker-controlled PR content from being re-injected into the LLM context via retry prompts. Three dedicated adversarial tests prove this property (`TestRetrySanitization`).
 
-4. **Multi-format response parsing.** `_parse_response()` (retry.py:56-82) handles 5 input formats: `GrippyReview` instance (passthrough), `dict` (Pydantic validation), JSON string (parse + validate), markdown-fenced JSON (strip fences + parse), and reasoning model content. Robust against LLM output format variation. 9+ tests cover these paths.
+4. **Multi-format response parsing.** `_parse_response()` (retry.py:56-82) handles 4 input formats: `GrippyReview` instance (passthrough), `dict` (Pydantic validation), JSON string (parse + validate), and markdown-fenced JSON (strip fences + parse). Robust against LLM output format variation. 9+ tests cover these paths.
 
 5. **Rule coverage validation prevents hallucination and omission.** `_validate_rule_coverage()` (retry.py:85-106) cross-references LLM findings against deterministic rule engine results by both count and file set. Prevents the LLM from silently dropping known findings or fabricating findings that reference wrong files. 8 dedicated tests.
 
@@ -95,7 +95,7 @@ def test_fabricated_file_detected(self) -> None:
 
 ### F-RY-002: `import warnings` is a lazy import inside function body
 
-**Severity:** INFO
+**Severity:** LOW
 **Status:** OPEN
 **File:** `src/grippy/retry.py:162`
 **Evidence tier:** C (code inspection)
@@ -131,7 +131,7 @@ warnings.warn(...)
 |---------|----------|----------|------------|
 | Structural validation | `_parse_response()` | JSON parse + Pydantic `GrippyReview.model_validate()`. 9+ tests. | Catches structurally invalid fabrication (wrong schema). |
 | Format normalization | `_strip_markdown_fences()` | Strips markdown code fences before JSON parse. 1 test. | Prevents markdown-wrapped injection. |
-| Type dispatch | `_parse_response()` | Handles 5 content types deterministically. | No type-confusion attack possible. |
+| Type dispatch | `_parse_response()` | Handles 4 content types deterministically. | No type-confusion attack possible. |
 
 **TB-5 verdict:** Structurally sound. Cannot detect semantically valid fabricated findings — that is TB-8's responsibility.
 

@@ -64,7 +64,7 @@ Test:source ratio: 0.84:1
 | `_is_placeholder` | `(match_text: str) -> bool` |
 | `_in_tests_dir` | `(path: str) -> bool` |
 | `_SECRET_PATTERNS` | `list[tuple[str, re.Pattern, RuleSeverity]]` — 10 patterns |
-| `_PLACEHOLDERS` | `frozenset[str]` — 15 placeholder values |
+| `_PLACEHOLDERS` | `frozenset[str]` — 14 placeholder values |
 
 ---
 
@@ -90,7 +90,7 @@ Test:source ratio: 0.84:1
 | Name | Type | Source |
 |------|------|--------|
 | `_SECRET_PATTERNS` | `list[tuple]` | Hardcoded — 10 regex patterns, all CRITICAL |
-| `_PLACEHOLDERS` | `frozenset` | Hardcoded — 15 placeholder strings |
+| `_PLACEHOLDERS` | `frozenset` | Hardcoded — 14 placeholder strings |
 
 No environment variables. No Settings classes.
 
