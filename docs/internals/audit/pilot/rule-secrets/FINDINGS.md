@@ -60,7 +60,7 @@ No test exercises the 10 regex patterns with adversarial-length input (100K+ cha
 
 | Pattern | ReDoS Risk | Rationale |
 |---------|:----------:|-----------|
-| `-----BEGIN.*PRIVATE KEY-----` | Low | `.*` is greedy but bounded by literal anchors. Applied per-line, not multi-line. | <!-- # nogrip: secrets-in-diff -->
+| `-----BEGIN.*PRIVATE KEY-----` | Low | `.*` is greedy but bounded by literal anchors. Applied per-line, not multi-line. | # nogrip: secrets-in-diff
 | `AKIA[0-9A-Z]{16}` | None | Fixed-width character class. |
 | `ghp_[a-zA-Z0-9]{36}` (and 5 similar) | None | Fixed-width character class. |
 | `sk-[a-zA-Z0-9]{20,}` | None | Single character class, no ambiguity. |
