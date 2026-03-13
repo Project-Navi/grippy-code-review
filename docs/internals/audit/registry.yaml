@@ -322,6 +322,10 @@ units:
         mode: literal
     type_primary: infrastructure
     subprofile_primary: boundary
+    # No secondary llm-agent: _run_audit() delegates to create_reviewer()/run_review()
+    # in the agent and retry units. Only ~2/8 LA checklist items are auditable from
+    # this file — well under the 50% N/A reclassification threshold (B6.5).
+    # The LLM-agent surface is audited through the agent unit instead.
     type_secondary: null
     subprofile_secondary: null
     phase: 4
