@@ -47,7 +47,7 @@
 
 ### F-RS-001: No adversarial/ReDoS test coverage for regex patterns (SR-02)
 
-**Severity:** HIGH
+**Severity:** MEDIUM (downgraded from HIGH during adjudication — gap is absence of Tier A proof, not a demonstrated correctness/security failure)
 **Status:** OPEN
 **File:** `tests/test_grippy_rule_secrets.py`
 **Evidence tier:** C (manual regex analysis; Tier A requires test evidence)

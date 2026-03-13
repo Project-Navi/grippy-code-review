@@ -53,7 +53,7 @@
 **Severity:** HIGH
 **Status:** OPEN
 **File:** `src/grippy/retry.py:102-105`, `tests/test_grippy_retry.py`
-**Evidence tier:** A (confirmed by grep — zero matches for `expected_rule_files` in test file)
+**Evidence tier:** B (corrected during adjudication — grep + code-path trace is deterministic repro, not machine-verifiable proof; Tier A would require a test that fails when the code path is broken)
 
 **Current behavior:**
 

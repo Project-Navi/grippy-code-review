@@ -1,8 +1,6 @@
 <!-- SPDX-License-Identifier: MIT -->
 
-# DRAFT — Audit Scorecard: retry
-
-> **This scorecard is a DRAFT.** Final health status determination will be performed during Phase 2 adjudication (Task 14). Scores may be adjusted for cross-unit calibration.
+# Audit Scorecard: retry
 
 **Audit date:** 2026-03-13
 **Commit:** 259d0b8
@@ -54,10 +52,10 @@
 | 11. Dependency Hygiene | 9/10 | A | 1 internal dep (schema, Phase 0). Clean dependency graph. |
 | **Overall** | **7.9/10** | | **Average of 11 dimensions** |
 
-**Health status:** DRAFT — determination pending adjudication
+**Health status:** Needs Attention
 
-**Preliminary assessment:**
-1. Average-based status: 7.9/10 → Adequate (6.0-7.9 range). Note: 7.9 is at the boundary; adjudication may round up to Healthy depending on calibration.
+**Determination:**
+1. Average-based status: 7.9/10 → Adequate (6.0-7.9 range).
 2. Override gates: None fired.
 3. Ceiling gates: Severity cap fired (F-RY-001 HIGH) → ceiling: Needs Attention.
 4. Since base (Adequate) is better than strictest ceiling (Needs Attention): **downgrade to Needs Attention**.

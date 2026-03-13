@@ -1,8 +1,6 @@
 <!-- SPDX-License-Identifier: MIT -->
 
-# DRAFT — Audit Scorecard: rule-secrets
-
-> **This scorecard is a DRAFT.** Final health status determination will be performed during Phase 2 adjudication (Task 14). Scores may be adjusted for cross-unit calibration.
+# Audit Scorecard: rule-secrets
 
 **Audit date:** 2026-03-13
 **Commit:** 259d0b8
@@ -19,7 +17,7 @@
 | Override Gate | Condition | Fired? |
 |---|---|---|
 | Critical finding | Any unresolved CRITICAL finding | No |
-| Multi-HIGH block | 2+ unresolved HIGH findings (including provisional) | No (1 HIGH: F-RS-001) |
+| Multi-HIGH block | 2+ unresolved HIGH findings (including provisional) | No (0 HIGH findings) |
 | Security collapse | Security Posture < 2 | No (score: 7) |
 | Adversarial collapse | Adversarial Resilience < 2 | No (score: 5) |
 
@@ -27,7 +25,7 @@
 
 | Ceiling Gate | Condition | Fired? |
 |---|---|---|
-| Severity cap | Any unresolved HIGH finding | **Yes** (F-RS-001) — ceiling: Needs Attention |
+| Severity cap | Any unresolved HIGH finding | No (F-RS-001 downgraded to MEDIUM during adjudication) |
 | Security hard floor | Security Posture < 4 | No (score: 7) |
 | Adversarial hard floor | Adversarial Resilience < 4 | No (score: 5) |
 | Security soft floor | Security Posture < 6 | No (score: 7) |
@@ -54,17 +52,17 @@
 | 11. Dependency Hygiene | 9/10 | A | 2 internal deps (rules.base, rules.context) — same phase. No circular deps. |
 | **Overall** | **7.2/10** | | **Average of 11 dimensions** |
 
-**Health status:** DRAFT — determination pending adjudication
+**Health status:** Adequate (provisional)
 
-**Preliminary assessment:**
+**Determination:**
 1. Average-based status: 7.2/10 → Adequate (6.0-7.9 range)
 2. Override gates: None fired.
-3. Ceiling gates: Severity cap fired (F-RS-001 HIGH) → ceiling: Needs Attention. Adversarial soft floor fired (5 < 6) → ceiling: Adequate. Strictest ceiling: Needs Attention.
-4. Since base (Adequate) is better than strictest ceiling (Needs Attention): **downgrade to Needs Attention**.
-5. Suffixes: Adversarial Resilience (dim 4) supported only by Tier C → `(provisional)` may apply.
+3. Ceiling gates: Adversarial soft floor fired (dim 4 = 5 < 6) → ceiling: Adequate. Severity cap no longer fires (F-RS-001 downgraded to MEDIUM during adjudication).
+4. Base (Adequate) = ceiling (Adequate) → no change.
+5. Suffixes: `(provisional)` — Adversarial Resilience (dim 4) supported only by Tier C evidence.
 
 **Override gates fired:** None
-**Ceiling gates fired:** Severity cap (F-RS-001 HIGH), Adversarial soft floor (dim 4 = 5)
+**Ceiling gates fired:** Adversarial soft floor (dim 4 = 5)
 
 ---
 
