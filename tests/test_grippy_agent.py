@@ -291,7 +291,7 @@ class TestOutputSchemaConditional:
 
         from grippy.schema import GrippyReview
 
-        os.environ["OPENAI_API_KEY"] = "test-key"
+        os.environ["OPENAI_API_KEY"] = "test-key"  # pragma: allowlist secret
         try:
             agent = create_reviewer(transport="openai", model_id="gpt-4o")
             assert agent.output_schema == GrippyReview
@@ -303,7 +303,7 @@ class TestOutputSchemaConditional:
         import importlib
         import os
 
-        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"  # pragma: allowlist secret
         try:
             if importlib.util.find_spec("anthropic") is None:
                 # SDK not installed — verify clear error message
