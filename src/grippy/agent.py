@@ -19,6 +19,45 @@ from grippy.schema import GrippyReview
 
 DEFAULT_PROMPTS_DIR = Path(__file__).parent / "prompts_data"
 
+
+# ---------------------------------------------------------------------------
+# Local-endpoint model subclass — fixes tool + structured-output conflict
+# ---------------------------------------------------------------------------
+
+
+class _LocalModel(OpenAILike):
+    """OpenAILike variant that suppresses response_format when tools are active.
+
+    Local inference servers (LM Studio, Ollama, vLLM) cannot combine structured
+    output grammars (response_format) with tool-calling grammars in the same
+    request.  This subclass strips response_format from the API params when
+    tools are present, relying instead on:
+
+      1. Agno's system-prompt JSON output instructions (auto-injected when
+         supports_native_structured_outputs is False), and
+      2. The retry layer in retry.py for JSON parsing + Pydantic validation.
+
+    When no tools are present, response_format passes through normally.
+    """
+
+    def get_request_params(
+        self,
+        response_format: Any = None,
+        tools: Any = None,
+        tool_choice: Any = None,
+        run_response: Any = None,
+    ) -> dict[str, Any]:
+        params = super().get_request_params(
+            response_format=response_format,
+            tools=tools,
+            tool_choice=tool_choice,
+            run_response=run_response,
+        )
+        if "tools" in params:
+            params.pop("response_format", None)
+        return params
+
+
 # ---------------------------------------------------------------------------
 # Provider registry — maps transport names to agno model classes.
 # Each entry: (module_path, class_name, supports_native_structured_outputs)
@@ -191,14 +230,35 @@ def create_reviewer(
     log.info("Grippy transport=%s (source: %s)", resolved_transport, source)
 
     if resolved_transport == "local":
-        model = OpenAILike(id=model_id, api_key=api_key, base_url=base_url)
+        model = _LocalModel(id=model_id, api_key=api_key, base_url=base_url)
+        # Local endpoints do not support native structured outputs. Setting
+        # this to False makes Agno inject JSON schema instructions into the
+        # system prompt instead.  _LocalModel.get_request_params() separately
+        # strips response_format when tools are active to avoid the grammar
+        # conflict (LM Studio cannot combine both in one request).
+        model.supports_native_structured_outputs = False
         structured = False
     else:
-        # Deferred import from provider registry
+        # Deferred import from provider registry — extras are optional
         module_path, class_name, structured = _PROVIDERS[resolved_transport]
-        mod = importlib.import_module(module_path)
+        try:
+            mod = importlib.import_module(module_path)
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise ImportError(
+                f"Transport '{resolved_transport}' requires the optional extra: "
+                f"pip install grippy-mcp[{resolved_transport}]"
+            ) from exc
         model_cls = getattr(mod, class_name)
         model = model_cls(id=model_id)
+
+    # Only pass output_schema when the provider supports it natively or has a
+    # response_format stripping mechanism (_LocalModel).  For other providers
+    # (Anthropic, Google, Groq, Mistral) the prompt chain (output-schema.md)
+    # already contains the full JSON schema, and retry.py handles parsing +
+    # Pydantic validation independently.  Passing output_schema to Agno for
+    # these providers causes a "compiled grammar is too large" API error
+    # because Agno sends the schema as response_format.
+    output_schema = GrippyReview if (structured or resolved_transport == "local") else None
 
     # Security: session history is NEVER re-injected into the LLM context,
     # regardless of whether a session db is configured.  Prior run responses
@@ -214,7 +274,7 @@ def create_reviewer(
             mode=mode,
             include_rule_findings=include_rule_findings,
         ),
-        output_schema=GrippyReview,
+        output_schema=output_schema,
         structured_outputs=structured,
         add_history_to_context=False,
         markdown=False,
