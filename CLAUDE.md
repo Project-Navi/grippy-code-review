@@ -203,7 +203,7 @@ Disabled (`add_history_to_context = False`). Prior LLM responses may contain att
 | TB-4 | Tool-call boundary | `CodebaseToolkit` methods, `sanitize_tool_hook()` | codebase |
 | TB-5 | Model output boundary | `run_review()`, `_parse_response()`, `_strip_markdown_fences()` | retry |
 | TB-6 | GitHub posting boundary | `_sanitize_comment_text()`, `post_review()`, `build_review_comment()`, `resolve_threads()` | github-review |
-| TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS` dict (module paths + class names) | agent, cli, mcp-server |
+| TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS` dict (module paths + class names) | agent |
 | TB-8 | Rule coverage validation | `_validate_rule_coverage()`, `_safe_error_summary()` | retry |
 | TB-9 | Session history boundary | `add_history_to_context` setting in `Agent()` constructor | agent |
 

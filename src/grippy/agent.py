@@ -173,11 +173,6 @@ def create_reviewer(
         from agno.db.sqlite import SqliteDb
 
         kwargs["db"] = SqliteDb(db_file=str(db_path))
-        # Security: session history is NOT re-injected into the LLM context.
-        # Prior run responses may contain attacker-controlled PR content echoed
-        # by the model — re-injecting without sanitization enables history
-        # poisoning attacks.  Disabled until a sanitize_history filter is added.
-        kwargs["add_history_to_context"] = False
         kwargs["num_history_runs"] = num_history_runs
     if session_id is not None:
         kwargs["session_id"] = session_id
@@ -205,6 +200,11 @@ def create_reviewer(
         model_cls = getattr(mod, class_name)
         model = model_cls(id=model_id)
 
+    # Security: session history is NEVER re-injected into the LLM context,
+    # regardless of whether a session db is configured.  Prior run responses
+    # may contain attacker-controlled PR content echoed by the model —
+    # re-injecting without sanitization enables history poisoning (CH-5).
+    # Set unconditionally; do not gate on db_path.
     return Agent(
         name="grippy",
         model=model,
@@ -216,6 +216,7 @@ def create_reviewer(
         ),
         output_schema=GrippyReview,
         structured_outputs=structured,
+        add_history_to_context=False,
         markdown=False,
         **kwargs,
     )

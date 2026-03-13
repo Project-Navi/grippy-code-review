@@ -329,7 +329,7 @@ units:
     type_secondary: null
     subprofile_secondary: null
     phase: 4
-    boundaries: [TB-7]
+    boundaries: []  # Consumer of create_reviewer(), not an anchor owner for TB-7
 
   - id: mcp-config
     source_artifacts:
@@ -373,4 +373,4 @@ units:
     type_secondary: null
     subprofile_secondary: null
     phase: 4
-    boundaries: [TB-7]
+    boundaries: []  # Consumer of _resolve_transport() via create_reviewer(), not an anchor owner
