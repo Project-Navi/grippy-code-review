@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from grippy.agent import _escape_xml, _LocalModel, create_reviewer, format_pr_context
 
 # --- Sample diff for testing ---
@@ -298,12 +300,20 @@ class TestOutputSchemaConditional:
 
     def test_anthropic_transport_skips_output_schema(self) -> None:
         """Anthropic rejects large compiled grammars — output_schema must be None."""
+        import importlib
         import os
 
         os.environ["ANTHROPIC_API_KEY"] = "test-key"
         try:
-            agent = create_reviewer(transport="anthropic", model_id="claude-sonnet-4-5-20250929")
-            assert agent.output_schema is None
+            if importlib.util.find_spec("anthropic") is None:
+                # SDK not installed — verify clear error message
+                with pytest.raises(ImportError, match="grippy-mcp\\[anthropic\\]"):
+                    create_reviewer(transport="anthropic", model_id="claude-sonnet-4-5-20250929")
+            else:
+                agent = create_reviewer(
+                    transport="anthropic", model_id="claude-sonnet-4-5-20250929"
+                )
+                assert agent.output_schema is None
         finally:
             del os.environ["ANTHROPIC_API_KEY"]
 

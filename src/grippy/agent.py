@@ -57,6 +57,7 @@ class _LocalModel(OpenAILike):
             params.pop("response_format", None)
         return params
 
+
 # ---------------------------------------------------------------------------
 # Provider registry — maps transport names to agno model classes.
 # Each entry: (module_path, class_name, supports_native_structured_outputs)
@@ -238,9 +239,15 @@ def create_reviewer(
         model.supports_native_structured_outputs = False
         structured = False
     else:
-        # Deferred import from provider registry
+        # Deferred import from provider registry — extras are optional
         module_path, class_name, structured = _PROVIDERS[resolved_transport]
-        mod = importlib.import_module(module_path)
+        try:
+            mod = importlib.import_module(module_path)
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise ImportError(
+                f"Transport '{resolved_transport}' requires the optional extra: "
+                f"pip install grippy-mcp[{resolved_transport}]"
+            ) from exc
         model_cls = getattr(mod, class_name)
         model = model_cls(id=model_id)
 
