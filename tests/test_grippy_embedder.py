@@ -86,3 +86,36 @@ class TestCreateEmbedder:
 
         with pytest.raises(ValueError, match="Unknown transport"):
             create_embedder(transport="unknown", model="m", base_url="http://x")
+
+    def test_empty_string_transport_raises(self) -> None:
+        """Empty string transport hits the ValueError branch."""
+        import pytest
+
+        from grippy.embedder import create_embedder
+
+        with pytest.raises(ValueError, match="Unknown transport"):
+            create_embedder(transport="", model="m", base_url="http://x")
+
+    def test_empty_model_id_accepted(self) -> None:
+        """Empty model ID is passed through to Agno — not our validation."""
+        from grippy.embedder import create_embedder
+
+        embedder = create_embedder(
+            transport="local",
+            model="",
+            base_url="http://localhost:1234/v1",
+        )
+        assert isinstance(embedder, OpenAIEmbedder)
+        assert embedder.id == ""
+
+    def test_local_transport_empty_base_url(self) -> None:
+        """Empty base_url is passed through to Agno — not our validation."""
+        from grippy.embedder import create_embedder
+
+        embedder = create_embedder(
+            transport="local",
+            model="test-model",
+            base_url="",
+        )
+        assert isinstance(embedder, OpenAIEmbedder)
+        assert embedder.base_url == ""
