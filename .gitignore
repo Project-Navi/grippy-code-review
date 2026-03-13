@@ -12,6 +12,7 @@ coverage.xml
 test-results.xml
 .dev.vars
 .claude/
+.claude-flow/
 .serena/
 grippy-data/
 docs/internal/
