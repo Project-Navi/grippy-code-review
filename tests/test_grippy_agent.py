@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: MIT
-"""Tests for Grippy agent utilities (format_pr_context)."""
+"""Tests for Grippy agent utilities (format_pr_context, _LocalModel)."""
 
 from __future__ import annotations
 
-from grippy.agent import _escape_xml, format_pr_context
+from grippy.agent import _escape_xml, _LocalModel, create_reviewer, format_pr_context
 
 # --- Sample diff for testing ---
 
@@ -271,3 +271,90 @@ class TestEscapeXml:
 
     def test_empty_string(self) -> None:
         assert _escape_xml("") == ""
+
+
+class TestOutputSchemaConditional:
+    """Verify output_schema is suppressed for non-structured, non-local providers."""
+
+    def test_local_transport_gets_output_schema(self) -> None:
+        """Local transport uses _LocalModel which handles response_format stripping."""
+        from grippy.schema import GrippyReview
+
+        agent = create_reviewer(transport="local")
+        assert agent.output_schema == GrippyReview
+
+    def test_openai_transport_gets_output_schema(self) -> None:
+        """OpenAI supports native structured outputs — output_schema should be set."""
+        import os
+
+        from grippy.schema import GrippyReview
+
+        os.environ["OPENAI_API_KEY"] = "test-key"  # pragma: allowlist secret
+        try:
+            agent = create_reviewer(transport="openai", model_id="gpt-4o")
+            assert agent.output_schema == GrippyReview
+        finally:
+            del os.environ["OPENAI_API_KEY"]
+
+    def test_anthropic_transport_skips_output_schema(self) -> None:
+        """Anthropic rejects large compiled grammars — output_schema must be None."""
+        import os
+
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"  # pragma: allowlist secret
+        try:
+            agent = create_reviewer(transport="anthropic", model_id="claude-sonnet-4-5-20250929")
+            assert agent.output_schema is None
+        finally:
+            del os.environ["ANTHROPIC_API_KEY"]
+
+
+class TestLocalModel:
+    """Regression tests for _LocalModel tool + structured-output conflict fix."""
+
+    def test_strips_response_format_when_tools_present(self) -> None:
+        """LM Studio cannot combine response_format with tool grammars."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=[{"type": "function", "function": {"name": "read_file"}}],
+        )
+        assert "response_format" not in params
+        assert "tools" in params
+
+    def test_keeps_response_format_when_no_tools(self) -> None:
+        """Without tools, response_format should pass through normally."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=None,
+        )
+        assert params["response_format"] == {"type": "json_object"}
+
+    def test_strips_response_format_with_pydantic_schema(self) -> None:
+        """JSON schema response_format (Pydantic class) also stripped with tools."""
+        from grippy.schema import GrippyReview
+
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format=GrippyReview,
+            tools=[{"type": "function", "function": {"name": "grep_code"}}],
+        )
+        assert "response_format" not in params
+        assert "tools" in params
+
+    def test_no_tools_no_response_format_passthrough(self) -> None:
+        """Neither tools nor response_format — clean passthrough."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params()
+        assert "response_format" not in params
+        assert "tools" not in params
+
+    def test_empty_tools_list_preserves_response_format(self) -> None:
+        """Empty tools list should not trigger stripping."""
+        model = _LocalModel(id="test-model", api_key="test", base_url="http://localhost:1234/v1")
+        params = model.get_request_params(
+            response_format={"type": "json_object"},
+            tools=[],
+        )
+        # Empty list → OpenAIChat doesn't add "tools" to params
+        assert params.get("response_format") == {"type": "json_object"}
