@@ -77,6 +77,22 @@ class TestLoadGrippyignore:
     def test_none_root_returns_none(self) -> None:
         assert load_grippyignore(None) is None
 
+    def test_empty_grippyignore_returns_spec(self, tmp_path: Path) -> None:
+        """Empty .grippyignore produces a spec that matches nothing."""
+        (tmp_path / ".grippyignore").write_text("")
+        spec = load_grippyignore(tmp_path)
+        assert spec is not None
+        assert not spec.match_file("src/app.py")
+        assert not spec.match_file("vendor/lib.py")
+
+    def test_comments_only_grippyignore_matches_nothing(self, tmp_path: Path) -> None:
+        """File with only comments and blank lines matches nothing."""
+        (tmp_path / ".grippyignore").write_text("# ignore vendor\n\n# and tests\n")
+        spec = load_grippyignore(tmp_path)
+        assert spec is not None
+        assert not spec.match_file("vendor/lib.py")
+        assert not spec.match_file("tests/test_foo.py")
+
 
 def _two_file_diff() -> str:
     return (
