@@ -1,6 +1,6 @@
 # Infrastructure Checklist
 
-**Applies to:** ignore, imports, embedder, local-diff, graph-store, graph-context, mcp-config, mcp-response, mcp-server (primary), cli
+**Applies to:** ignore, imports, embedder, local-diff, graph-store, graph-context, mcp-config, mcp-response, mcp-server, cli
 
 ## Shared Items (All Subprofiles)
 

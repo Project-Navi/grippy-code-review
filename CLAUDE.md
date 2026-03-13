@@ -95,6 +95,7 @@ MCP client → scan_diff or audit_diff tool
 | `rules/base.py` | `RuleSeverity`, `RuleResult`, `Rule` protocol, `ResultEnrichment` dataclass. |
 | `rules/config.py` | `ProfileConfig`, `PROFILES` dict, `load_profile()` — security profile definitions. |
 | `rules/context.py` | `DiffLine`, `DiffHunk`, `ChangedFile`, `RuleContext`, `parse_diff()` — diff parser. |
+| `rules/__init__.py` | Public API: `run_rules()`, `check_gate()`, re-exports of core types. |
 | `rules/registry.py` | `RULE_REGISTRY` — explicit import list of all 10 rule classes. |
 | `rules/enrichment.py` | `enrich_results()` — blast radius, recurrence, import-based suppression, velocity. |
 | `rules/*.py` (10) | Individual security rules: secrets, sinks, workflows, traversal, llm-sinks, ci-risk, sql, crypto, creds, deser. |
@@ -198,11 +199,11 @@ Disabled (`add_history_to_context = False`). Prior LLM responses may contain att
 |---|---|---|---|
 | TB-1 | PR metadata ingress | `format_pr_context()`, `_escape_xml()`, `_escape_rule_field()` | agent, review |
 | TB-2 | Diff/content ingestion | `fetch_pr_diff()`, `filter_diff()`, `get_local_diff()`, `RuleEngine.run()` | local-diff, review, rule-engine |
-| TB-3 | Prompt composition | `load_identity()`, `load_instructions()`, `create_reviewer()` chain | agent, prompts |
+| TB-3 | Prompt composition | `load_identity()`, `load_instructions()`, `create_reviewer()` chain, `format_pr_context()` | agent, prompts |
 | TB-4 | Tool-call boundary | `CodebaseToolkit` methods, `sanitize_tool_hook()` | codebase |
 | TB-5 | Model output boundary | `run_review()`, `_parse_response()`, `_strip_markdown_fences()` | retry |
 | TB-6 | GitHub posting boundary | `_sanitize_comment_text()`, `post_review()`, `build_review_comment()`, `resolve_threads()` | github-review |
-| TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS`, provider imports | agent, cli, mcp-server |
+| TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS` dict (module paths + class names) | agent, cli, mcp-server |
 | TB-8 | Rule coverage validation | `_validate_rule_coverage()`, `_safe_error_summary()` | retry |
 | TB-9 | Session history boundary | `add_history_to_context` setting in `Agent()` constructor | agent |
 

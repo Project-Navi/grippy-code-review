@@ -20,11 +20,11 @@ Central hub for all audit documentation.
 | Checklist | Applies To |
 |-----------|-----------|
 | [security-rule.md](CHECKLISTS/security-rule.md) | rule-engine, rule-enrichment, 10 individual rule-* units |
-| [llm-agent.md](CHECKLISTS/llm-agent.md) | agent, prompts, mcp-server (secondary) |
+| [llm-agent.md](CHECKLISTS/llm-agent.md) | agent, prompts |
 | [llm-facing-tool.md](CHECKLISTS/llm-facing-tool.md) | codebase |
 | [review-pipeline.md](CHECKLISTS/review-pipeline.md) | retry, github-review, review |
 | [data-model.md](CHECKLISTS/data-model.md) | schema, graph-types |
-| [infrastructure.md](CHECKLISTS/infrastructure.md) | ignore, imports, embedder, local-diff, graph-store, graph-context, mcp-config, mcp-response, mcp-server (primary), cli |
+| [infrastructure.md](CHECKLISTS/infrastructure.md) | ignore, imports, embedder, local-diff, graph-store, graph-context, mcp-config, mcp-response, mcp-server, cli |
 
 ## Audit Phases (Dependency Order)
 

@@ -43,7 +43,7 @@ These rules override average-based health status. See METHODOLOGY.md Section C f
 
 1. **Compute average-based status** from dimension scores (8.0+ Healthy, 6.0-7.9 Adequate, 4.0-5.9 Needs Attention, <4.0 Critical).
 2. **Evaluate all override gates.** If any fire, base status = worst override. If override is worse than average, override wins.
-3. **Evaluate all ceiling gates.** Strictest (lowest) ceiling applies. If base status is better than ceiling, downgrade to ceiling. Ceilings never rescue -- they only restrict upward.
+3. **Evaluate all ceiling gates.** Strictest (lowest) ceiling applies. If base status is better than ceiling, downgrade to ceiling. Ceilings never rescue -- they only restrict upward. **Tiebreak:** If an override gate has already forced the status to Critical, no ceiling gate can soften that result. Ceilings only cap upward movement from the average; they do not override a forced-downward result.
 4. **Append suffixes independently:**
    - `(accepted risk)` if any ACCEPTED_RISK at HIGH or CRITICAL
    - `(provisional)` if any dimension supported only by tier C evidence

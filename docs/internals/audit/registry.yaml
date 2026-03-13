@@ -1,7 +1,8 @@
 # docs/internals/audit/registry.yaml
 # Single source of truth for audit unit metadata.
-# FRESHNESS.md, index.md, and SUPERSET-TEMPLATE.md derive from this file.
+# FRESHNESS.md, index.md, and SUPERSET-TEMPLATE.md must be kept in sync with this file.
 # Total unit count appears in all three — if it changes, all update in the same commit.
+# No CI check enforces this today; consistency is verified manually during audits.
 #
 # Schema:
 #   id:                   Stable hyphenated identifier. Used in paths, anchors, scripts, CI.
@@ -77,7 +78,7 @@ units:
       - path: src/grippy/rules/registry.py
         mode: literal
       - path: src/grippy/rules/__init__.py
-        mode: literal
+        mode: literal  # Public API surface: run_rules(), check_gate(), type re-exports
     type_primary: security-rule
     subprofile_primary: null
     type_secondary: null
@@ -321,7 +322,7 @@ units:
         mode: literal
     type_primary: infrastructure
     subprofile_primary: boundary
-    type_secondary: llm-agent
+    type_secondary: null
     subprofile_secondary: null
     phase: 4
     boundaries: [TB-7]

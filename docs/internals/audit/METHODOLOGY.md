@@ -301,7 +301,7 @@ New chains discovered during audit are assigned the next ID and added to this re
 | Type | Checklist | Units |
 |---|---|---|
 | Security Rule | `CHECKLISTS/security-rule.md` | rule-engine, rule-enrichment, 10x rule-* |
-| LLM Agent | `CHECKLISTS/llm-agent.md` | agent, prompts, mcp-server (secondary) |
+| LLM Agent | `CHECKLISTS/llm-agent.md` | agent, prompts |
 | LLM-Facing Tool | `CHECKLISTS/llm-facing-tool.md` | codebase |
 | Review Pipeline | `CHECKLISTS/review-pipeline.md` | retry, github-review, review |
 | Data Model | `CHECKLISTS/data-model.md` | schema, graph-types |
@@ -313,7 +313,7 @@ New chains discovered during audit are assigned the next ID and added to this re
 |---|---|---|---|
 | Config | Passive utilities, parsers, factories. No external I/O. | Input validation, error clarity, edge cases | ignore, imports, embedder, mcp-config, mcp-response |
 | State | Reads/writes persistent data. | Concurrent access, corruption, migration | graph-store, graph-context |
-| Boundary | Interfaces with external systems. | Subprocess safety, timeouts, sanitization, error opacity | local-diff, mcp-server (primary), cli |
+| Boundary | Interfaces with external systems. | Subprocess safety, timeouts, sanitization, error opacity | local-diff, mcp-server, cli |
 
 ---
 
