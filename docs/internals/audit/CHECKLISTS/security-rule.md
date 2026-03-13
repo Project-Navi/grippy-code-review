@@ -9,7 +9,7 @@
 | SR-03 | Rule severity assignment matches profile gate thresholds | HIGH | Profile activation test + gate behavior test | test |
 | SR-04 | Rule only fires on added lines, not removed or context lines | MEDIUM | Diff fixture with adds/removes/context; verify only adds match | test |
 | SR-05 | Finding evidence preserves enough context for human triage | MEDIUM | Inspect finding output for rule_id, file, line, evidence fields | manual |
-| SR-06 | Rule respects profile activation (`general` = disabled) | MEDIUM | Profile-gated test fixture | test |
+| SR-06 | Rule respects profile activation (`general` = disabled). **Scope: rule-engine unit only.** Individual `rule-*` units do not own profile logic — the engine selects which rules to run. Mark N/A when auditing individual rule units. | MEDIUM | Profile-gated test fixture | test |
 | SR-07 | Finding messages never contain raw secret values | LOW | Grep finding messages for credential patterns | test |
 | SR-08 | Findings are compatible with enrichment post-processing | LOW | Integration test through `enrich_results()` | test |
 | SR-09 | Fixture matrix covers: positive, negative, adversarial input, renamed/binary/submodule diffs, suppression by `.grippyignore` and `# nogrip` | MEDIUM | Test file review -- each category represented | manual |

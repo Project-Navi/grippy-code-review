@@ -46,7 +46,7 @@ These rules override average-based health status. See METHODOLOGY.md Section C f
 3. **Evaluate all ceiling gates.** Strictest (lowest) ceiling applies. If base status is better than ceiling, downgrade to ceiling. Ceilings never rescue -- they only restrict upward. **Tiebreak:** If an override gate has already forced the status to Critical, no ceiling gate can soften that result. Ceilings only cap upward movement from the average; they do not override a forced-downward result.
 4. **Append suffixes independently:**
    - `(accepted risk)` if any ACCEPTED_RISK at HIGH or CRITICAL
-   - `(provisional)` if any dimension supported only by tier C evidence
+   - `(provisional)` if any dimension supported only by tier C evidence. This is an **evidence-maturity signal**, not a health concern — it indicates the unit's score rests partly on manual traces that have not yet been promoted to machine-verifiable (Tier A) or deterministic repro (Tier B) evidence. The suffix drops when all dimensions have at least one Tier A or B evidence source. Most units will carry this suffix until test coverage is comprehensive; that is expected and does not indicate a problem with the unit itself.
 
 ---
 

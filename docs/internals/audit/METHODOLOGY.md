@@ -1,6 +1,6 @@
 # Per-Unit Audit Methodology — Grippy
 
-**Version:** 1.0
+**Version:** 1.1
 **Established:** 2026-03-13
 **Derived from:** Navi OS audit methodology v2.0 (20-module sweep, 178 findings, 11 remediation PRs)
 
@@ -172,6 +172,8 @@ Code path analysis using the applicable checklist(s) from `docs/internals/audit/
 
 ## Section C: Severity Taxonomy
 
+**Exhaustive list.** The four levels below are the only valid finding severities. There is no INFO, NOTE, or other level. Observations that do not meet the bar for LOW are recorded as hypotheses (Tier D evidence) in the Hypotheses section of FINDINGS.md, not as findings.
+
 ### CRITICAL — Actively Exploitable in Production
 
 Security bypass, data loss, or attacker-controlled behavior under normal conditions.
@@ -334,3 +336,4 @@ One scorecard per unit. Always.
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-03-13 | Initial Grippy adaptation from navi-os v2.0. 30 units, 11 dimensions, v4.1 gate model, trust boundary register, compound chain registry. |
+| 1.1 | 2026-03-13 | Pilot friction fixes: SR-06 scoped to rule-engine unit (Friction #1). Review-pipeline checklist gains Scope column — RP-07 to github-review, RP-08/09 to review (Friction #2). `(provisional)` suffix clarified as evidence-maturity signal (Friction #3). Severity taxonomy declared exhaustive — no INFO level (Friction #3 derivative). |
