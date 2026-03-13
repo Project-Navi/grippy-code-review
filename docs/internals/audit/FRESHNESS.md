@@ -37,7 +37,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | schema | 2026-03-13 | cebbcab | 7.7/10 | 0 | CURRENT |
 | ignore | 2026-03-13 | 6a85523 | 7.6/10 | 0 | CURRENT |
 | imports | 2026-03-13 | c606d0a | 7.4/10 | 0 | CURRENT |
-| embedder | 2026-03-13 | c606d0a | 7.6/10 | 0 | CURRENT |
+| embedder | 2026-03-13 | 44a6621 | 7.6/10 | 0 | CURRENT |
 
 ### Phase 1 -- Core Infra (14 units)
 
@@ -96,7 +96,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | Date | Units | Auditor | Reference |
 |---|---|---|---|
 | 2026-03-13 | schema, rule-secrets, retry | Claude Opus 4.6 / Nelson Spence | `pilot/PHASE-2-ADJUDICATION.md` |
-| 2026-03-13 | ignore, imports, embedder | Claude Opus 4.6 / Nelson Spence (pending) | `ignore/SCORECARD.md`, `imports/SCORECARD.md`, `embedder/SCORECARD.md` |
+| 2026-03-13 | ignore, imports, embedder | Claude Opus 4.6 / Nelson Spence | `ignore/SCORECARD.md`, `imports/SCORECARD.md`, `embedder/SCORECARD.md` |
 
 ## Superset Analysis
 

@@ -4,7 +4,7 @@
 
 **Audit date:** 2026-03-13
 **Commit:** 6a85523
-**Auditor:** Claude Opus 4.6 (AI draft) / Nelson Spence (human reviewer -- pending)
+**Auditor:** Claude Opus 4.6 (AI draft) / Nelson Spence (human reviewer)
 **Unit type:** infrastructure (primary)
 **Subprofile:** config
 
