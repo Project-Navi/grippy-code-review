@@ -23,7 +23,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | TB-3 | Prompt composition | `load_identity()`, `load_instructions()`, `create_reviewer()` chain, `format_pr_context()` | agent, prompts |
 | TB-4 | Tool-call boundary | `CodebaseToolkit.read_file/grep_code/list_files/search_code`, `sanitize_tool_hook()` | codebase |
 | TB-5 | Model output boundary | `run_review()`, `_parse_response()`, `_strip_markdown_fences()` | retry |
-| TB-6 | GitHub posting boundary | `_sanitize_text()`, `post_review()`, `_post_inline_comments()`, `_resolve_stale_threads()` | github-review |
+| TB-6 | GitHub posting boundary | `_sanitize_comment_text()`, `post_review()`, `build_review_comment()`, `resolve_threads()` | github-review |
 | TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS`, `importlib.import_module()` | agent, cli, mcp-server |
 | TB-8 | Rule coverage validation | `_validate_rule_coverage()`, `_safe_error_summary()` | retry |
 | TB-9 | Session history boundary | `add_history_to_context` setting | agent |
