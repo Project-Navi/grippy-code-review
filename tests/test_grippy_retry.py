@@ -425,9 +425,7 @@ class TestRuleCoverageCounts:
 class TestRuleCoverageFiles:
     """Verify _validate_rule_coverage checks finding-to-file mapping (TB-8)."""
 
-    def _review_with_file_findings(
-        self, rule_files: list[tuple[str, str]]
-    ) -> GrippyReview:
+    def _review_with_file_findings(self, rule_files: list[tuple[str, str]]) -> GrippyReview:
         """Create a review with findings having specified (rule_id, file) pairs."""
         import copy
 
@@ -475,10 +473,12 @@ class TestRuleCoverageFiles:
 
     def test_partial_file_overlap_passes(self) -> None:
         """At least one finding on a flagged file is sufficient."""
-        review = self._review_with_file_findings([
-            ("secrets-in-diff", "src/app.py"),
-            ("secrets-in-diff", "config.py"),
-        ])
+        review = self._review_with_file_findings(
+            [
+                ("secrets-in-diff", "src/app.py"),
+                ("secrets-in-diff", "config.py"),
+            ]
+        )
         missing = _validate_rule_coverage(
             review,
             {"secrets-in-diff": 1},
