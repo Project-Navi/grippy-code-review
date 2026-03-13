@@ -422,6 +422,81 @@ class TestRuleCoverageCounts:
         assert missing == []
 
 
+class TestRuleCoverageFiles:
+    """Verify _validate_rule_coverage checks finding-to-file mapping (TB-8)."""
+
+    def _review_with_file_findings(
+        self, rule_files: list[tuple[str, str]]
+    ) -> GrippyReview:
+        """Create a review with findings having specified (rule_id, file) pairs."""
+        import copy
+
+        data = copy.deepcopy(VALID_REVIEW_DICT)
+        data["findings"] = [
+            {
+                "id": f"F-{i:03d}",
+                "severity": "HIGH",
+                "confidence": 90,
+                "category": "security",
+                "file": file,
+                "line_start": 10,
+                "line_end": 15,
+                "title": f"Finding {i}",
+                "description": f"Description {i}",
+                "suggestion": f"Fix {i}",
+                "evidence": "...",
+                "grippy_note": "Grippy says.",
+                "rule_id": rule_id,
+            }
+            for i, (rule_id, file) in enumerate(rule_files)
+        ]
+        return GrippyReview.model_validate(data)
+
+    def test_correct_files_pass(self) -> None:
+        """Findings referencing expected files are not flagged."""
+        review = self._review_with_file_findings([("secrets-in-diff", "config.py")])
+        missing = _validate_rule_coverage(
+            review,
+            {"secrets-in-diff": 1},
+            {"secrets-in-diff": frozenset({"config.py"})},
+        )
+        assert missing == []
+
+    def test_fabricated_file_detected(self) -> None:
+        """Findings with correct rule_id but wrong files are caught."""
+        review = self._review_with_file_findings([("secrets-in-diff", "src/app.py")])
+        missing = _validate_rule_coverage(
+            review,
+            {"secrets-in-diff": 1},
+            {"secrets-in-diff": frozenset({"config.py"})},
+        )
+        assert len(missing) == 1
+        assert "flagged files" in missing[0]
+
+    def test_partial_file_overlap_passes(self) -> None:
+        """At least one finding on a flagged file is sufficient."""
+        review = self._review_with_file_findings([
+            ("secrets-in-diff", "src/app.py"),
+            ("secrets-in-diff", "config.py"),
+        ])
+        missing = _validate_rule_coverage(
+            review,
+            {"secrets-in-diff": 1},
+            {"secrets-in-diff": frozenset({"config.py"})},
+        )
+        assert missing == []
+
+    def test_no_expected_files_skips_check(self) -> None:
+        """When expected_rule_files is None, file-set check is skipped."""
+        review = self._review_with_file_findings([("secrets-in-diff", "wrong.py")])
+        missing = _validate_rule_coverage(
+            review,
+            {"secrets-in-diff": 1},
+            None,
+        )
+        assert missing == []
+
+
 # --- Rule coverage retry integration ---
 
 
