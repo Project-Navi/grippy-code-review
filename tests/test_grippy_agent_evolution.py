@@ -104,9 +104,9 @@ class TestSessionPersistence:
         assert agent.add_history_to_context is False
 
     def test_history_disabled_without_db(self) -> None:
-        """add_history_to_context stays False when no db."""
+        """add_history_to_context is unconditionally False — not gated on db_path."""
         agent = create_reviewer(prompts_dir=PROMPTS_DIR)
-        assert agent.add_history_to_context is not True
+        assert agent.add_history_to_context is False
 
 
 # --- Context injection ---

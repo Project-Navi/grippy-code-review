@@ -86,10 +86,19 @@ MCP client → scan_diff or audit_diff tool
 | `local_diff.py` | Git diff acquisition. Scope parsing, ref validation, subprocess with timeout. |
 | `graph_store.py` | `SQLiteGraphStore` — codebase knowledge graph (nodes, typed edges, migrations). |
 | `graph_context.py` | `build_context_pack()` — traverses import graph for pre-review context. |
+| `graph_types.py` | Graph node/edge type enums for the knowledge graph. |
+| `graph.py` | Backward-compat re-export shim for `graph_types.py` enums. |
 | `ignore.py` | `.grippyignore` loading, diff filtering, `# nogrip` pragma parsing. |
 | `imports.py` | Python AST import extraction for knowledge graph edges. |
 | `embedder.py` | Embedder factory for OpenAI-compatible embedding models. |
-| `rules/` | Deterministic security rule engine. 10 rules, 3 profiles, diff parsing. |
+| `rules/engine.py` | `RuleEngine` — orchestrates rule execution against parsed diffs. |
+| `rules/base.py` | `RuleSeverity`, `RuleResult`, `Rule` protocol, `ResultEnrichment` dataclass. |
+| `rules/config.py` | `ProfileConfig`, `PROFILES` dict, `load_profile()` — security profile definitions. |
+| `rules/context.py` | `DiffLine`, `DiffHunk`, `ChangedFile`, `RuleContext`, `parse_diff()` — diff parser. |
+| `rules/__init__.py` | Public API: `run_rules()`, `check_gate()`, re-exports of core types. |
+| `rules/registry.py` | `RULE_REGISTRY` — explicit import list of all 10 rule classes. |
+| `rules/enrichment.py` | `enrich_results()` — blast radius, recurrence, import-based suppression, velocity. |
+| `rules/*.py` (10) | Individual security rules: secrets, sinks, workflows, traversal, llm-sinks, ci-risk, sql, crypto, creds, deser. |
 
 ### Rules Engine
 
@@ -181,6 +190,62 @@ Disabled (`add_history_to_context = False`). Prior LLM responses may contain att
 ### Adversarial Test Suite
 
 `tests/test_hostile_environment.py` — 44 attack scenarios across 9 domains: Unicode input, prompt injection, tool output injection, output sanitization, codebase tool exploitation, information leakage, schema validation, session history poisoning, PR target advice.
+
+## Trust Boundaries
+
+9 named trust boundaries define where untrusted data enters, transforms, or exits the system. Changes to boundary anchor functions require security review and adversarial test verification.
+
+| ID | Boundary | Anchor Functions | Audit Units |
+|---|---|---|---|
+| TB-1 | PR metadata ingress | `format_pr_context()`, `_escape_xml()`, `_escape_rule_field()` | agent, review |
+| TB-2 | Diff/content ingestion | `fetch_pr_diff()`, `filter_diff()`, `get_local_diff()`, `RuleEngine.run()` | local-diff, review, rule-engine |
+| TB-3 | Prompt composition | `load_identity()`, `load_instructions()`, `create_reviewer()` chain, `format_pr_context()` | agent, prompts |
+| TB-4 | Tool-call boundary | `CodebaseToolkit` methods, `sanitize_tool_hook()` | codebase |
+| TB-5 | Model output boundary | `run_review()`, `_parse_response()`, `_strip_markdown_fences()` | retry |
+| TB-6 | GitHub posting boundary | `_sanitize_comment_text()`, `post_review()`, `build_review_comment()`, `resolve_threads()` | github-review |
+| TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS` dict (module paths + class names) | agent |
+| TB-8 | Rule coverage validation | `_validate_rule_coverage()`, `_safe_error_summary()` | retry |
+| TB-9 | Session history boundary | `add_history_to_context` setting in `Agent()` constructor | agent |
+
+**Critical data flow:** PR content → `_escape_xml` → agent prompt → LLM → `run_review` JSON parse → `_validate_rule_coverage` → `github_review` sanitization → GitHub API. Any code touching this path gets extra scrutiny.
+
+## Quality Standards
+
+These standards define the bar for this project. Some are fully met today; others are aspirational targets that all new work should meet.
+
+### Test Quality
+
+- **Fixture matrices:** Tests should cover positive, negative, adversarial, and edge case categories — not just happy paths
+- **Security paths require tests:** No merge without test for code touching auth, sanitization, validation, or trust boundaries. Non-negotiable.
+- **Adversarial coverage:** Any code processing untrusted input (PR content, LLM output, tool results) needs adversarial test fixtures
+- **Test parity:** Every `src/grippy/foo.py` has a `tests/test_grippy_foo.py` with ≥50 LOC (enforced by CI)
+
+### Security-First Development
+
+- **Think in invariants:** "All untrusted PR content is sanitized before prompt insertion" — not "call `_escape_xml()` on line 99"
+- **Defense in depth:** No single sanitization layer is trusted alone. The pipeline has multiple independent layers.
+- **Fail closed:** Error paths must not produce values that look like success. A review that fails to parse is an error, not a clean bill of health.
+- **Evidence over assertion:** When claiming a security property holds, cite the test, trace, or CI check that proves it.
+
+### Change Review
+
+- **Boundary changes** (touches trust boundary anchors from TB-1 through TB-9) → require security review + adversarial test verification
+- **Rule changes** (modifies detection patterns in `rules/*.py`) → require fixture matrix update covering positive/negative/adversarial
+- **Prompt changes** (modifies prompt chain in `prompts_data/` or `agent.py`) → require adversarial test review for injection resistance
+- **Infrastructure changes** (everything else) → standard review
+
+## Audit Framework
+
+The project maintains a formal audit framework at `docs/internals/audit/`. The single source of truth for unit metadata is `docs/internals/audit/registry.yaml`.
+
+**Key concepts:**
+- **30 audit units** tracked individually (individual security rules tracked separately because they drift independently)
+- **11 scorecard dimensions** including Adversarial Resilience and Auditability & Traceability as first-class concerns
+- **Gate semantics:** Override gates (force Critical) and ceiling gates (cap best status) — averages do not determine health
+- **Trust boundary triggers:** Changes to boundary anchor functions force re-audit regardless of commit count
+- **Evidence tiers:** A (machine-verifiable), B (deterministic repro), C (manual trace), D (hypothesis, not scored)
+
+**Framework documents:** methodology, scorecard template, superset template, freshness tracker, 6 invariant-based checklists, and the registry.
 
 ## CI / Quality Gates
 

@@ -2092,6 +2092,7 @@ class TestMainSameCommitGuard:
         monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
         monkeypatch.setenv("GITHUB_OUTPUT", "")
         monkeypatch.delenv("CI", raising=False)
+        monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
 
         from grippy.review import main
 
