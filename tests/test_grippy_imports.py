@@ -162,9 +162,8 @@ class TestExtractImports:
         result = extract_imports(pkg / "mod.py", tmp_path)
         assert result == []
 
-    def test_relative_import_outside_repo(self, tmp_path: Path) -> None:
-        """Resolved candidate outside repo root is safely ignored."""
-        # Create a file outside repo root that could be resolved
+    def test_relative_import_outside_repo_py_file(self, tmp_path: Path) -> None:
+        """Resolved .py candidate outside repo root is safely ignored."""
         outside = tmp_path / "outside"
         outside.mkdir()
         (outside / "target.py").write_text("")
@@ -174,6 +173,20 @@ class TestExtractImports:
         (pkg / "__init__.py").write_text("")
         # level=3 escapes repo/ into tmp_path, could find outside/target.py
         (pkg / "mod.py").write_text("from ...outside.target import X\n")
+        result = extract_imports(pkg / "mod.py", repo)
+        assert result == []
+
+    def test_relative_import_outside_repo_package(self, tmp_path: Path) -> None:
+        """Resolved __init__.py candidate outside repo root is safely ignored."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "__init__.py").write_text("")
+        repo = tmp_path / "repo"
+        pkg = repo / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        # level=3 escapes repo/ into tmp_path, resolves to outside/__init__.py
+        (pkg / "mod.py").write_text("from ...outside import X\n")
         result = extract_imports(pkg / "mod.py", repo)
         assert result == []
 
