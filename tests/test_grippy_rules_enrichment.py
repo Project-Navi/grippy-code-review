@@ -5,11 +5,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock
 
 from grippy.graph_store import SQLiteGraphStore
 from grippy.graph_types import EdgeType, NodeType, _record_id
-from grippy.rules.base import RuleResult, RuleSeverity
-from grippy.rules.enrichment import enrich_results
+from grippy.rules.base import ResultEnrichment, RuleResult, RuleSeverity
+from grippy.rules.config import PROFILES
+from grippy.rules.engine import RuleEngine
+from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
 
 def _make_graph(tmp: str) -> SQLiteGraphStore:
@@ -217,3 +220,160 @@ class TestMultipleResults:
             assert results[0].enrichment.blast_radius == 1
             assert results[1].enrichment is not None
             assert results[1].enrichment.blast_radius == 0
+
+
+# -- Suppression-gate integration (audit-critical) -------------------------
+
+
+class TestSuppressionGateIntegration:
+    """Prove that suppressed findings survive in the list but don't trigger the gate."""
+
+    def test_suppressed_finding_still_in_results(self) -> None:
+        """Suppressed findings must remain in the result list — not filtered out."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            results = enrich_results([_result(rule_id="weak-crypto", file="utils/cache.py")], store)
+            assert len(results) == 1
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is True
+            # Finding is still present, just marked
+            assert results[0].rule_id == "weak-crypto"
+
+    def test_suppressed_finding_does_not_trigger_gate(self) -> None:
+        """check_gate() must skip suppressed findings — the core semantic contract."""
+        engine = RuleEngine(rule_classes=[])
+        profile = PROFILES["security"]
+        # An ERROR finding that is suppressed should NOT trigger the gate
+        suppressed_result = RuleResult(
+            rule_id="sql-injection-risk",
+            severity=RuleSeverity.ERROR,
+            message="msg",
+            file="app.py",
+            enrichment=ResultEnrichment(
+                blast_radius=0,
+                is_recurring=False,
+                prior_count=0,
+                suppressed=True,
+                suppression_reason="file imports sqlalchemy",
+                velocity="",
+            ),
+        )
+        assert engine.check_gate([suppressed_result], profile) is False
+
+    def test_unsuppressed_finding_triggers_gate(self) -> None:
+        """Baseline: non-suppressed ERROR findings DO trigger the gate."""
+        engine = RuleEngine(rule_classes=[])
+        profile = PROFILES["security"]
+        normal_result = RuleResult(
+            rule_id="sql-injection-risk",
+            severity=RuleSeverity.ERROR,
+            message="msg",
+            file="app.py",
+            enrichment=ResultEnrichment(
+                blast_radius=0,
+                is_recurring=False,
+                prior_count=0,
+                suppressed=False,
+                suppression_reason="",
+                velocity="",
+            ),
+        )
+        assert engine.check_gate([normal_result], profile) is True
+
+
+# -- Evidence preservation --------------------------------------------------
+
+
+class TestEvidencePreservation:
+    """Prove enrichment doesn't mutate original finding fields."""
+
+    def test_original_fields_preserved(self) -> None:
+        """All original RuleResult fields must survive enrichment unchanged."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            original = RuleResult(
+                rule_id="test-rule",
+                severity=RuleSeverity.ERROR,
+                message="original message",
+                file="app.py",
+                line=42,
+                evidence="some evidence",
+            )
+            enriched = enrich_results([original], store)
+            assert enriched[0].rule_id == "test-rule"
+            assert enriched[0].severity == RuleSeverity.ERROR
+            assert enriched[0].message == "original message"
+            assert enriched[0].file == "app.py"
+            assert enriched[0].line == 42
+            assert enriched[0].evidence == "some evidence"
+            assert enriched[0].enrichment is not None
+
+
+# -- Error resilience -------------------------------------------------------
+
+
+class TestErrorResilience:
+    """Prove enrichment is non-fatal — graph failures return originals unchanged."""
+
+    def test_graph_exception_returns_originals(self) -> None:
+        """If graph store raises during enrichment, original results returned."""
+        broken_store = MagicMock(spec=SQLiteGraphStore)
+        broken_store.neighbors.side_effect = RuntimeError("db corrupted")
+        original = [_result()]
+        enriched = enrich_results(original, broken_store)
+        assert enriched is original  # same object — fallback path
+
+    def test_persist_nonfatal_on_error(self) -> None:
+        """persist_rule_findings must not raise on graph store errors."""
+        broken_store = MagicMock(spec=SQLiteGraphStore)
+        broken_store.upsert_node.side_effect = RuntimeError("db corrupted")
+        findings = [_result(rule_id="sql-injection-risk", file="app.py")]
+        # Should not raise
+        persist_rule_findings(broken_store, findings, "review-123")
+
+
+# -- Suppression specificity -----------------------------------------------
+
+
+class TestSuppressionSpecificity:
+    """Prove suppression maps only fire for documented rule_ids and patterns."""
+
+    def test_unregistered_rule_not_suppressed(self) -> None:
+        """Rules not in _SUPPRESSION_MAP or _PATH_SUPPRESSION_MAP should never be suppressed."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            # Even with a sqlalchemy import, a non-mapped rule shouldn't be suppressed
+            app_id = _record_id(NodeType.FILE, "app.py")
+            sa_id = _record_id(NodeType.FILE, "src/sqlalchemy/__init__.py")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "app.py"})
+            store.upsert_node(sa_id, NodeType.FILE, {"path": "src/sqlalchemy/__init__.py"})
+            store.upsert_edge(app_id, sa_id, EdgeType.IMPORTS)
+
+            results = enrich_results([_result(rule_id="secrets-in-diff", file="app.py")], store)
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is False
+
+    def test_path_suppression_case_insensitive(self) -> None:
+        """Path suppression uses lowercase comparison."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            results = enrich_results([_result(rule_id="weak-crypto", file="utils/Cache.py")], store)
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is True
+
+    def test_creds_suppressed_by_dynaconf_import(self) -> None:
+        """hardcoded-credentials suppressed when file imports dynaconf."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "config.py")
+            dy_id = _record_id(NodeType.FILE, "dynaconf/settings.py")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "config.py"})
+            store.upsert_node(dy_id, NodeType.FILE, {"path": "dynaconf/settings.py"})
+            store.upsert_edge(app_id, dy_id, EdgeType.IMPORTS)
+
+            results = enrich_results(
+                [_result(rule_id="hardcoded-credentials", file="config.py")], store
+            )
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is True
+            assert "dynaconf" in results[0].enrichment.suppression_reason
