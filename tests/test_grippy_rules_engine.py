@@ -124,6 +124,17 @@ class TestRuleEngine:
         engine = RuleEngine(rule_classes=[])
         assert engine.check_gate([], config) is False
 
+    def test_run_with_empty_diff(self) -> None:
+        """Empty diff through full rule pipeline produces no findings."""
+        ctx = RuleContext(
+            diff="",
+            files=[],
+            config=ProfileConfig(name="security", fail_on=RuleSeverity.ERROR),
+        )
+        engine = RuleEngine()  # default registry — all 10 rules
+        results = engine.run(ctx)
+        assert results == []
+
     def test_default_registry_loads(self) -> None:
         """Verify default engine loads all rules from the registry."""
         engine = RuleEngine()

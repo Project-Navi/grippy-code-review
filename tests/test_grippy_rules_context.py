@@ -189,6 +189,78 @@ class TestParseDiff:
         assert files[0].is_new is True
         assert len(files[0].hunks) == 0
 
+    @pytest.mark.timeout(5)
+    def test_parse_diff_redos_file_header(self) -> None:
+        """FILE_HEADER_RE must not backtrack catastrophically on adversarial input."""
+        payload = "diff --git a/" + "x" * 100_000 + " b/foo.py"
+        parse_diff(payload)
+
+    @pytest.mark.timeout(5)
+    def test_parse_diff_redos_hunk_header(self) -> None:
+        """HUNK_HEADER_RE must not backtrack catastrophically on adversarial input.
+
+        Uses a non-matching suffix so the regex must fail-fast across 100K digits
+        without triggering Python's int() conversion limit.
+        """
+        diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -" + "9" * 100_000 + "\n"
+        files = parse_diff(diff)
+        assert len(files) == 1
+        assert len(files[0].hunks) == 0
+
+    @pytest.mark.timeout(5)
+    def test_parse_diff_redos_rename_headers(self) -> None:
+        """RENAME_FROM_RE/RENAME_TO_RE must not backtrack on adversarial input."""
+        diff = (
+            "diff --git a/old.py b/new.py\n"
+            "similarity index 95%\n"
+            "rename from " + "a" * 100_000 + "\n"
+            "rename to " + "b" * 100_000 + "\n"
+        )
+        files = parse_diff(diff)
+        assert len(files) == 1
+        assert files[0].is_renamed is True
+
+    def test_parse_diff_malformed_line_in_hunk(self) -> None:
+        """Unexpected line in hunk triggers fallback re-processing, not crash."""
+        diff = (
+            "diff --git a/a.py b/a.py\n"
+            "--- a/a.py\n"
+            "+++ b/a.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            " existing\n"
+            "+added\n"
+            "diff --git a/b.py b/b.py\n"
+            "--- a/b.py\n"
+            "+++ b/b.py\n"
+            "@@ -1,1 +1,1 @@\n"
+            "-old\n"
+            "+new\n"
+        )
+        files = parse_diff(diff)
+        assert len(files) == 2
+        assert files[0].path == "a.py"
+        assert files[1].path == "b.py"
+        assert len(files[0].hunks) == 1
+        assert len(files[1].hunks) == 1
+
+    def test_parse_diff_extremely_long_added_line(self) -> None:
+        """Lines >1MB must not crash the parser."""
+        long_content = "x" * (1024 * 1024 + 1)
+        diff = (
+            "diff --git a/f.py b/f.py\n"
+            "--- a/f.py\n"
+            "+++ b/f.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            " existing\n"
+            f"+{long_content}\n"
+        )
+        files = parse_diff(diff)
+        assert len(files) == 1
+        assert len(files[0].hunks) == 1
+        added = [dl for dl in files[0].hunks[0].lines if dl.type == "add"]
+        assert len(added) == 1
+        assert len(added[0].content) > 1024 * 1024
+
 
 # --- RuleContext tests ---
 

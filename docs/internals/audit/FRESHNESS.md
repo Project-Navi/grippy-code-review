@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-13 (Wave 1 Phase 0 complete)
+**Last updated:** 2026-03-13 (Wave 1.5 shared substrate complete)
 
 ## Status Legend
 
@@ -43,7 +43,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| rule-engine | — | — | — | — | NEVER |
+| rule-engine | 2026-03-13 | aa19594 | 7.6/10 | 0 | CURRENT |
 | rule-enrichment | — | — | — | — | NEVER |
 | rule-secrets | 2026-03-13 | 259d0b8 | 7.2/10 | 0 | CURRENT |
 | rule-workflows | — | — | — | — | NEVER |
@@ -55,7 +55,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | rule-crypto | — | — | — | — | NEVER |
 | rule-creds | — | — | — | — | NEVER |
 | rule-deser | — | — | — | — | NEVER |
-| local-diff | — | — | — | — | NEVER |
+| local-diff | 2026-03-13 | b3732e4 | 8.4/10 | 0 | CURRENT |
 | graph-types | — | — | — | — | NEVER |
 
 ### Phase 2 -- Mid-Tier (4 units)
@@ -97,6 +97,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|
 | 2026-03-13 | schema, rule-secrets, retry | Claude Opus 4.6 / Nelson Spence | `pilot/PHASE-2-ADJUDICATION.md` |
 | 2026-03-13 | ignore, imports, embedder | Claude Opus 4.6 / Nelson Spence | `ignore/SCORECARD.md`, `imports/SCORECARD.md`, `embedder/SCORECARD.md` |
+| 2026-03-13 | rule-engine, local-diff | Claude Opus 4.6 / Nelson Spence | `rule-engine/SCORECARD.md`, `local-diff/SCORECARD.md` |
 
 ## Superset Analysis
 
