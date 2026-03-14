@@ -3,7 +3,7 @@
 # Audit Scorecard: graph-context
 
 **Audit date:** 2026-03-14
-**Commit:** e4d24a8
+**Commit:** 617a0f9
 **Auditor:** Claude Opus 4.6 (AI draft) / Nelson Spence (human reviewer)
 **Unit type:** infrastructure (primary)
 **Subprofile:** config (reclassified from state in v1.2 — 3/5 state items N/A)
@@ -18,7 +18,7 @@
 | IN-01 | Missing config produces clear error | N/A | No configuration. `build_context_pack()` takes a graph store instance + parameters. No env vars, no config files. |
 | IN-02 | Unit follows project conventions | PASS | SPDX header (line 1). ruff clean, mypy strict clean (Tier A: CI). Test mirror: `test_grippy_graph_context.py` (Tier A). |
 | IN-C01 | Edge case inputs handled gracefully | PASS | Empty graph returns ContextPack with all empty fields (Tier A: `test_empty_graph`). Empty touched_files returns pack with empty blast/findings (Tier A: `test_build_context_pack_no_touched_files`). Truncation at `max_chars` boundary verified (Tier A: `test_format_context_truncation_boundary`). |
-| IN-C02 | AST/parsing operations do not crash on malformed input | PARTIAL | No AST operations. Query operations against unexpected graph state: closed connection propagates `ProgrammingError` (Tier A: `test_build_context_pack_graph_exception_propagates`). Docstring claims non-fatal behavior but function lacks try/except — see F-GC-001. |
+| IN-C02 | AST/parsing operations do not crash on malformed input | PASS | No AST operations. Query operations against unexpected graph state: closed connection propagates `ProgrammingError` (Tier A: `test_build_context_pack_graph_exception_propagates`). Docstring accurately documents exception propagation (F-GC-001 resolved in 617a0f9). |
 
 ---
 
@@ -58,7 +58,7 @@
 | 5. Auditability & Traceability | 5/10 | C | No structured logging. ContextPack fields are traceable but format output is opaque text. |
 | 6. Test Quality | 7/10 | A | 15 tests across 6 classes. Covers positive, negative, sanitization, determinism. Thin but targeted. |
 | 7. Convention Adherence | 9/10 | A | ruff, mypy strict, SPDX, naming, test mirror all clean. |
-| 8. Documentation Accuracy | 6/10 | C | F-GC-001: docstring claims non-fatal but no try/except. Sanitization rationale undocumented. |
+| 8. Documentation Accuracy | 6/10 | C | F-GC-001 resolved (617a0f9). Sanitization rationale undocumented. |
 | 9. Performance | 7/10 | C | Graph queries bounded by store's walk limits. Truncation at max_chars. No unbounded operations. |
 | 10. Dead Code / Debt | 9/10 | A | All functions called. Zero TODOs. Clean imports. |
 | 11. Dependency Hygiene | 8/10 | A | Imports graph_store (Phase 2), graph_types (Phase 1), navi_sanitize. Cross-phase import justified. |
@@ -82,7 +82,7 @@
 ### F-GC-001: Docstring claims non-fatal but function propagates exceptions (LOW)
 
 **Severity:** LOW
-**Status:** OPEN
+**Status:** RESOLVED (fixed in 617a0f9 — docstring corrected)
 **Evidence tier:** A (test: `test_build_context_pack_graph_exception_propagates`)
 
 **Location:** `graph_context.py:32`
@@ -240,11 +240,11 @@ None.
 **Evidence:**
 - File-level docstring: "Pre-review context builder — queries the graph for blast radius + history" — accurate (Tier C).
 - `ContextPack` docstring: "Pre-review context extracted from the graph store" — accurate (Tier C).
-- `build_context_pack()` docstring: "Query graph for pre-review context. Non-fatal — empty on errors." — **inaccurate** (F-GC-001). The function does not catch exceptions; the caller does.
+- `build_context_pack()` docstring: "Raises on graph store errors — caller is responsible for exception handling." — **accurate** (F-GC-001 resolved in 617a0f9).
 - `format_context_for_llm()` docstring: "Format context pack as sanitized text for LLM prompt context" — accurate. Does call `navi_sanitize.clean()` on severity/title (Tier C).
 - **Missing documentation:** No docstring explains why only severity/title are sanitized (not paths or observations). No explanation of the `max_chars` default value (2000). No documentation of the `<graph-context>` wrapping that happens in the caller (review.py).
-- Not 7: F-GC-001 docstring/behavior mismatch. Missing sanitization rationale.
-- Calibration: below imports (7) and graph-store (7). The docstring mismatch is a concrete accuracy failure, not just a gap.
+- Not 7: Missing sanitization rationale. No documentation of `max_chars` default or `<graph-context>` wrapping in caller.
+- Calibration: below imports (7) and graph-store (7). Missing sanitization rationale and sparse inline docs keep this below peers.
 
 ---
 
@@ -288,8 +288,8 @@ None.
 ## Calibration Assessment
 
 graph-context scores **7.0/10** against calibration peers:
-- **imports (7.4):** graph-context is smaller, has similar indirect exposure, similar test density. Lower documentation score (docstring mismatch) and lower robustness (no internal error handling) account for the 0.4 gap. Framework discriminates.
+- **imports (7.4):** graph-context is smaller, has similar indirect exposure, similar test density. Lower documentation score (missing sanitization rationale) and lower robustness (no internal error handling) account for the 0.4 gap. Framework discriminates.
 - **graph-types (7.6):** graph-types is a data model with no runtime behavior — simpler to audit. graph-context has active sanitization logic and LLM-adjacent data flow, creating more audit surface. The 0.6 gap reflects that additional risk.
 - **graph-store (8.0):** graph-store has 81 vs 15 tests, broader API, stronger robustness. The 1.0 gap is the largest in this batch and reflects genuine quality difference.
 
-The framework is discriminating: graph-context's thinner tests, selective sanitization, and docstring mismatch produce a score noticeably lower than its infrastructure peers. This is the expected outcome from the plan's calibration checkpoint.
+The framework is discriminating: graph-context's thinner tests, selective sanitization, and sparse documentation produce a score noticeably lower than its infrastructure peers. This is the expected outcome from the plan's calibration checkpoint.

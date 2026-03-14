@@ -3,7 +3,7 @@
 # Audit Scorecard: graph-store
 
 **Audit date:** 2026-03-14
-**Commit:** e4d24a8
+**Commit:** 617a0f9
 **Auditor:** Claude Opus 4.6 (AI draft) / Nelson Spence (human reviewer)
 **Unit type:** infrastructure (primary)
 **Subprofile:** state

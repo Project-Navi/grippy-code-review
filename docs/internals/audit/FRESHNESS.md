@@ -62,8 +62,8 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| graph-store | 2026-03-14 | 685b270 | 8.0/10 | 0 | CURRENT |
-| graph-context | 2026-03-14 | 685b270 | 7.0/10 | 0 | CURRENT |
+| graph-store | 2026-03-14 | 617a0f9 | 8.0/10 | 0 | CURRENT |
+| graph-context | 2026-03-14 | 617a0f9 | 7.0/10 | 0 | CURRENT |
 | prompts | — | — | — | — | NEVER |
 | codebase | — | — | — | — | NEVER |
 
