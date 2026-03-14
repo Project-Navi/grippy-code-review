@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
 from grippy.rules.config import PROFILES
 from grippy.rules.context import RuleContext, parse_diff
-from grippy.rules.weak_crypto import WeakCryptoRule
+from grippy.rules.weak_crypto import _WEAK_PATTERNS, WeakCryptoRule
 
 
 def _make_diff(filename: str, added_lines: list[str]) -> str:
@@ -101,3 +105,97 @@ class TestWeakCryptoRule:
         rule = WeakCryptoRule()
         assert rule.id == "weak-crypto"
         assert rule.default_severity == RuleSeverity.WARN
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestCryptoReDoS:
+    def test_redos_random_pattern(self) -> None:
+        """100K-char adversarial input against the random pattern completes quickly."""
+        adversarial = "random." + "x" * 100_000
+        _, pattern = _WEAK_PATTERNS[6]
+        with _timeout(5):
+            pattern.search(adversarial)
+
+    def test_extremely_long_line(self) -> None:
+        """>1MB added line through full rule.run() produces no crash or findings."""
+        long_line = "x" * 1_100_000
+        diff = _make_diff("crypto.py", [long_line])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert results == []
+
+
+# -- SR-01: Pattern coverage tests (closes untested entries) ------------------
+
+
+class TestCryptoPatternCoverage:
+    def test_rc4_cipher(self) -> None:
+        diff = _make_diff("crypto.py", ["cipher = RC4.new(key)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+        assert "RC4" in results[0].message
+
+    def test_arc4_cipher(self) -> None:
+        diff = _make_diff("crypto.py", ["cipher = ARC4.new(key)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+        assert "RC4" in results[0].message or "ARC4" in results[0].message
+
+    def test_blowfish_cipher(self) -> None:
+        diff = _make_diff("crypto.py", ["cipher = Blowfish.new(key, Blowfish.MODE_ECB)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) >= 1
+        assert any("Blowfish" in r.message for r in results)
+
+    def test_random_random(self) -> None:
+        diff = _make_diff("token.py", ["x = random.random()"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+
+    def test_random_choice(self) -> None:
+        diff = _make_diff("token.py", ["c = random.choice(charset)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+
+    def test_random_getrandbits(self) -> None:
+        diff = _make_diff("token.py", ["bits = random.getrandbits(128)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) == 1
+
+
+# -- SR-09: Safe-negative specificity anchors ---------------------------------
+
+
+class TestCryptoSafeNegatives:
+    def test_aes_gcm_safe(self) -> None:
+        """Modern AES-GCM should NOT be flagged."""
+        diff = _make_diff("crypto.py", ["cipher = AES.new(key, AES.MODE_GCM)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert results == []
+
+    def test_secrets_token_bytes_safe(self) -> None:
+        """secrets module should NOT be flagged."""
+        diff = _make_diff("crypto.py", ["token = secrets.token_bytes(32)"])
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert results == []
