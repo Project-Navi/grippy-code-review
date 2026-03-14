@@ -3,10 +3,17 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
 from grippy.rules.config import PROFILES
 from grippy.rules.context import RuleContext, parse_diff
-from grippy.rules.insecure_deserialization import InsecureDeserializationRule
+from grippy.rules.insecure_deserialization import (
+    _DESER_PATTERNS,
+    InsecureDeserializationRule,
+)
 
 
 def _make_diff(filename: str, added_lines: list[str]) -> str:
@@ -71,3 +78,77 @@ class TestInsecureDeserializationRule:
         rule = InsecureDeserializationRule()
         assert rule.id == "insecure-deserialization"
         assert rule.default_severity == RuleSeverity.ERROR
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestDeserReDoS:
+    def test_redos_shelve_pattern(self) -> None:
+        """100K-char adversarial input against shelve pattern completes quickly."""
+        adversarial = "shelve.open(" + "x" * 100_000 + ")"
+        _, pattern = _DESER_PATTERNS[0]
+        with _timeout(5):
+            pattern.search(adversarial)
+
+    def test_extremely_long_line(self) -> None:
+        """>1MB added line through full rule.run() produces no crash or findings."""
+        long_line = "x" * 1_100_000
+        diff = _make_diff("app.py", [long_line])
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert results == []
+
+
+# -- SR-01: Pattern coverage tests (closes untested entries) ------------------
+
+
+class TestDeserPatternCoverage:
+    def test_cloudpickle_loads(self) -> None:
+        diff = _make_diff("ml.py", ["obj = cloudpickle.loads(blob)"])
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert len(results) == 1
+        assert "cloudpickle" in results[0].message
+
+    def test_dill_load_singular(self) -> None:
+        """dill.load (file-based, not just dill.loads) should be flagged."""
+        diff = _make_diff("ml.py", ["model = dill.load(f)"])
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert len(results) == 1
+        assert "dill" in results[0].message
+
+
+# -- SR-09: Safe-negative specificity anchors ---------------------------------
+
+
+class TestDeserSafeNegatives:
+    def test_json_loads_safe(self) -> None:
+        """json.loads is safe deserialization — should NOT be flagged."""
+        diff = _make_diff("api.py", ["data = json.loads(response.text)"])
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert results == []
+
+    def test_pickle_loads_not_this_rule(self) -> None:
+        """pickle.loads is owned by rule-sinks, not this rule."""
+        diff = _make_diff("app.py", ["obj = pickle.loads(blob)"])
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert results == []

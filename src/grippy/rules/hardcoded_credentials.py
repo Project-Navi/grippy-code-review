@@ -112,4 +112,10 @@ class HardcodedCredentialsRule:
     @staticmethod
     def _redact(line: str) -> str:
         """Redact credential values from evidence."""
-        return re.sub(r"""(=\s*["'])[^"']{4,}(["'])""", r"\1****\2", line)[:120]
+        line = re.sub(r"""(=\s*["'])[^"']{4,}(["'])""", r"\1****\2", line)
+        line = re.sub(
+            r"""((?:Bearer|Basic|Token)\s+)[a-zA-Z0-9_.+/=-]{8,}""",
+            r"\1****",
+            line,
+        )
+        return line[:120]
