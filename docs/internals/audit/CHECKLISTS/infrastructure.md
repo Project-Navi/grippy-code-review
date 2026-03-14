@@ -9,7 +9,7 @@
 | IN-01 | Missing configuration (API keys, endpoints) produces a clear error, not a cryptic traceback | MEDIUM | Missing-config test; verify error message quality | test |
 | IN-02 | Unit follows project conventions (SPDX, naming, typing) | LOW | ruff + mypy check | CI |
 
-## Config Subprofile (ignore, imports, embedder, graph-context, mcp-config, mcp-response)
+## Config Subprofile (ignore, imports, embedder, graph-context, prompts, mcp-config, mcp-response)
 
 | ID | Invariant | Severity | Evidence Types | Automation |
 |----|-----------|----------|---------------|------------|

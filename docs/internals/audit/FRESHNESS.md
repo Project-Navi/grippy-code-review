@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Phase 2 Batch 1 complete — 20/30 CURRENT)
+**Last updated:** 2026-03-14 (Phase 2 Batch 2 complete — 22/30 CURRENT)
 
 ## Status Legend
 
@@ -64,8 +64,8 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|---|---|
 | graph-store | 2026-03-14 | 617a0f9 | 8.0/10 | 0 | CURRENT |
 | graph-context | 2026-03-14 | 617a0f9 | 7.0/10 | 0 | CURRENT |
-| prompts | — | — | — | — | NEVER |
-| codebase | — | — | — | — | NEVER |
+| prompts | 2026-03-14 | aba44c3 | 7.8/10 (provisional) | 0 | CURRENT |
+| codebase | 2026-03-14 | aba44c3 | 7.9/10 | 0 | CURRENT |
 
 ### Phase 3 -- Orchestration (3 units)
 
@@ -91,6 +91,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|
 | 1.0 | 2026-03-13 | Initial Grippy adaptation. 30 units, 11 dimensions, v4.1 gate model. |
 | 1.2 | 2026-03-14 | Provisional suffix scoped to Dim 3/4 only. KRC-01 known pattern class. graph-context reclassified to config. |
+| 1.3 | 2026-03-14 | prompts reclassified from llm-agent to infrastructure/config (5/8 LA items N/A). Prospective only. |
 
 ## Cross-Unit Audits
 
@@ -103,6 +104,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-13 | rule-traversal, rule-sql, rule-crypto | Claude Opus 4.6 / Nelson Spence | `rule-traversal/SCORECARD.md`, `rule-sql/SCORECARD.md`, `rule-crypto/SCORECARD.md` |
 | 2026-03-14 | rule-llm-sinks, rule-ci-risk, rule-creds, rule-deser | Claude Opus 4.6 / Nelson Spence | `rule-llm-sinks/SCORECARD.md`, `rule-ci-risk/SCORECARD.md`, `rule-creds/SCORECARD.md`, `rule-deser/SCORECARD.md` |
 | 2026-03-14 | graph-store, graph-context | Claude Opus 4.6 / Nelson Spence | `graph-store/SCORECARD.md`, `graph-context/SCORECARD.md` |
+| 2026-03-14 | prompts, codebase | Claude Opus 4.6 / Nelson Spence | `prompts/SCORECARD.md`, `codebase/SCORECARD.md` |
 
 ## Superset Analysis
 
