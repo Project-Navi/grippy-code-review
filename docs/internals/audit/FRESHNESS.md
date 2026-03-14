@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Wave 2 Batch 3A complete — 19/30 CURRENT)
+**Last updated:** 2026-03-14 (Phase 2 Batch 1 complete — 20/30 CURRENT)
 
 ## Status Legend
 
@@ -62,8 +62,8 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| graph-store | — | — | — | — | NEVER |
-| graph-context | — | — | — | — | NEVER |
+| graph-store | 2026-03-14 | 685b270 | 8.0/10 | 0 | CURRENT |
+| graph-context | 2026-03-14 | 685b270 | 7.0/10 | 0 | CURRENT |
 | prompts | — | — | — | — | NEVER |
 | codebase | — | — | — | — | NEVER |
 
@@ -90,6 +90,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | Version | Date | Key Changes |
 |---|---|---|
 | 1.0 | 2026-03-13 | Initial Grippy adaptation. 30 units, 11 dimensions, v4.1 gate model. |
+| 1.2 | 2026-03-14 | Provisional suffix scoped to Dim 3/4 only. KRC-01 known pattern class. graph-context reclassified to config. |
 
 ## Cross-Unit Audits
 
@@ -101,6 +102,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-13 | graph-types, rule-workflows, rule-sinks | Claude Opus 4.6 / Nelson Spence | `graph-types/SCORECARD.md`, `rule-workflows/SCORECARD.md`, `rule-sinks/SCORECARD.md` |
 | 2026-03-13 | rule-traversal, rule-sql, rule-crypto | Claude Opus 4.6 / Nelson Spence | `rule-traversal/SCORECARD.md`, `rule-sql/SCORECARD.md`, `rule-crypto/SCORECARD.md` |
 | 2026-03-14 | rule-llm-sinks, rule-ci-risk, rule-creds, rule-deser | Claude Opus 4.6 / Nelson Spence | `rule-llm-sinks/SCORECARD.md`, `rule-ci-risk/SCORECARD.md`, `rule-creds/SCORECARD.md`, `rule-deser/SCORECARD.md` |
+| 2026-03-14 | graph-store, graph-context | Claude Opus 4.6 / Nelson Spence | `graph-store/SCORECARD.md`, `graph-context/SCORECARD.md` |
 
 ## Superset Analysis
 
