@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-13 (Wave 2 Batch 2 complete)
+**Last updated:** 2026-03-14 (Wave 2 Batch 3A complete — 19/30 CURRENT)
 
 ## Status Legend
 
@@ -49,12 +49,12 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | rule-workflows | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
 | rule-sinks | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
 | rule-traversal | 2026-03-13 | ab7cc93 | 7.4/10 | 0 | CURRENT |
-| rule-llm-sinks | — | — | — | — | NEVER |
-| rule-ci-risk | — | — | — | — | NEVER |
+| rule-llm-sinks | 2026-03-14 | 8957771 | 7.1/10 | 0 | CURRENT |
+| rule-ci-risk | 2026-03-14 | 8957771 | 7.5/10 | 0 | CURRENT |
 | rule-sql | 2026-03-13 | ab7cc93 | 7.4/10 | 0 | CURRENT |
 | rule-crypto | 2026-03-13 | ab7cc93 | 7.5/10 | 0 | CURRENT |
-| rule-creds | — | — | — | — | NEVER |
-| rule-deser | — | — | — | — | NEVER |
+| rule-creds | 2026-03-14 | 8957771 | 7.6/10 | 0 | CURRENT |
+| rule-deser | 2026-03-14 | 8957771 | 7.5/10 | 0 | CURRENT |
 | local-diff | 2026-03-13 | b3732e4 | 8.4/10 | 0 | CURRENT |
 | graph-types | 2026-03-13 | b40d4ec | 7.6/10 | 0 | CURRENT |
 
@@ -100,6 +100,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-13 | rule-engine, local-diff | Claude Opus 4.6 / Nelson Spence | `rule-engine/SCORECARD.md`, `local-diff/SCORECARD.md` |
 | 2026-03-13 | graph-types, rule-workflows, rule-sinks | Claude Opus 4.6 / Nelson Spence | `graph-types/SCORECARD.md`, `rule-workflows/SCORECARD.md`, `rule-sinks/SCORECARD.md` |
 | 2026-03-13 | rule-traversal, rule-sql, rule-crypto | Claude Opus 4.6 / Nelson Spence | `rule-traversal/SCORECARD.md`, `rule-sql/SCORECARD.md`, `rule-crypto/SCORECARD.md` |
+| 2026-03-14 | rule-llm-sinks, rule-ci-risk, rule-creds, rule-deser | Claude Opus 4.6 / Nelson Spence | `rule-llm-sinks/SCORECARD.md`, `rule-ci-risk/SCORECARD.md`, `rule-creds/SCORECARD.md`, `rule-deser/SCORECARD.md` |
 
 ## Superset Analysis
 
