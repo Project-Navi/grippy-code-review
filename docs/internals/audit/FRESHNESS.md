@@ -55,7 +55,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | rule-crypto | — | — | — | — | NEVER |
 | rule-creds | — | — | — | — | NEVER |
 | rule-deser | — | — | — | — | NEVER |
-| local-diff | 2026-03-13 | ea9be04 | 8.4/10 | 0 | CURRENT |
+| local-diff | 2026-03-13 | b3732e4 | 8.4/10 | 0 | CURRENT |
 | graph-types | — | — | — | — | NEVER |
 
 ### Phase 2 -- Mid-Tier (4 units)
