@@ -64,13 +64,13 @@
 | 11. Dependency Hygiene | 10/10 | A | `pathlib.Path` only. Zero internal grippy deps. Zero external deps. |
 | **Overall** | **7.8/10** | | **Average of 11 dimensions** |
 
-**Health status:** Adequate
+**Health status:** Adequate (provisional)
 
 **Determination:**
 1. Average-based status: 7.8/10 falls in 6.0-7.9 range = **Adequate**
 2. Override gates: None fired.
 3. Ceiling gates: **Adversarial soft floor fired** (Dim 4 = 5 < 6). Caps at Adequate. Average already Adequate, so no downgrade.
-4. Suffixes: No `(provisional)` — Dim 3 (7/10) supported by Tier C (prompt content review), but the loader code has zero attack surface. Dim 4 (5/10) supported by Tier C. Under v1.2 rules, `(provisional)` triggers when Dim 3 or Dim 4 is supported **exclusively** by Tier C. Dim 3 has no Tier A test target (there is nothing to test — the loader has no security logic). Dim 4 has no Tier A test target either. However, the low Dim 4 score (5) already reflects the evidence gap. Adding `(provisional)` to a score of 5 is redundant — the score itself signals the weakness. **Decision:** No `(provisional)` suffix. The score is the signal.
+4. Suffixes: `(provisional)` — Dim 3 (7/10) supported exclusively by Tier C (prompt content review, no Tier A/B evidence). Dim 4 (5/10) supported exclusively by Tier C (no adversarial tests exist). Per v1.2 rules, the suffix applies when either gate dimension lacks Tier A or B evidence. The suffix drops when Dim 3 or Dim 4 gains at least one Tier A or B evidence source.
 
 **Override gates fired:** None
 **Ceiling gates fired:** Adversarial soft floor (Dim 4 = 5 < 6) — caps at Adequate

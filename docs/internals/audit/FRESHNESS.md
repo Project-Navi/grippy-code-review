@@ -64,7 +64,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|---|---|
 | graph-store | 2026-03-14 | 617a0f9 | 8.0/10 | 0 | CURRENT |
 | graph-context | 2026-03-14 | 617a0f9 | 7.0/10 | 0 | CURRENT |
-| prompts | 2026-03-14 | aba44c3 | 7.8/10 | 0 | CURRENT |
+| prompts | 2026-03-14 | aba44c3 | 7.8/10 (provisional) | 0 | CURRENT |
 | codebase | 2026-03-14 | aba44c3 | 7.9/10 | 0 | CURRENT |
 
 ### Phase 3 -- Orchestration (3 units)
