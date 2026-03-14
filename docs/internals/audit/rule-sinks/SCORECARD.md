@@ -77,7 +77,7 @@
 | SR-06 | N/A | Ownership: engine-owned. Individual rule units do not own profile dispatch logic. | Per SR-06 scope note: "Mark N/A when auditing individual rule units." |
 | SR-07 | PASS | Tier C: Evidence field contains code patterns (`eval(user_input)`, `subprocess.run(cmd, shell=True)`, `pickle.loads(raw)`), not secret values. Edge case where a line contains both a sink and an inline secret is theoretical -- rule-secrets would independently flag the secret with redaction. | Hypothesis only (Tier D), not a finding. |
 | SR-08 | PASS | Tier C: All findings use standard `RuleResult` dataclass (imported from rules.base). Fields are compatible with `ResultEnrichment` post-processing. | Standard format matches enrichment contract. |
-| SR-09 | Partial | Tier A: Positive (16 tests), negative (2 yaml safe variants), adversarial (1 ReDoS + 1 long-line), edge cases (1 non-code file, 1 context line). Missing: negative tests for non-matching Python code, renamed/binary files, `.pyw`/`.cjs`/`.mjs` extensions. | See F-RS-001. Positive-heavy skew (16 pos vs 2 neg) is a genuine gap. |
+| SR-09 | Partial | Tier A: Positive (16 tests), negative (2 yaml safe variants), adversarial (1 ReDoS + 1 long-line), edge cases (1 non-code file, 1 context line). Missing: negative tests for non-matching Python code, renamed/binary files, `.pyw`/`.cjs`/`.mjs` extensions. | See F-SNK-001. Positive-heavy skew (16 pos vs 2 neg) is a genuine gap. |
 
 **N/A items:** 1/9 (SR-06 only). Well below the >50% reclassification threshold.
 
@@ -85,7 +85,7 @@
 
 ## Findings
 
-### F-RS-001: Positive-heavy fixture matrix
+### F-SNK-001: Positive-heavy fixture matrix
 
 **Severity:** LOW
 **Status:** OPEN
@@ -174,7 +174,7 @@ The 16:2 positive:negative ratio indicates the fixture matrix is optimized for d
 - **Large input tolerance (Tier A):** `test_extremely_long_line` proves >1MB lines are processed without crash.
 - Other patterns use `\b...\s*\(` structure -- word boundary anchored, no nested quantifiers, structurally safe (Tier C: regex analysis of 12 patterns).
 - Limited adversarial exposure: processes parsed diff lines. Attack surface is ReDoS and false positive/negative manipulation.
-- Not 7: Positive-heavy fixture matrix (F-RS-001). No Unicode adversarial tests. No adversarial fixtures beyond ReDoS + long-line.
+- Not 7: Positive-heavy fixture matrix (F-SNK-001). No Unicode adversarial tests. No adversarial fixtures beyond ReDoS + long-line.
 - Calibration: between rule-secrets (5) and rule-engine (7). Scored 6 -- ReDoS + long-line proven, but missing specificity testing.
 
 ---
@@ -209,7 +209,7 @@ The 16:2 positive:negative ratio indicates the fixture matrix is optimized for d
   - Adversarial: 2 tests (ReDoS subprocess, 1MB line).
   - Edge cases: 2 tests (non-code file ignored, context line not flagged).
   - Severity: 1 test (all ERROR).
-- Missing categories (F-RS-001): near-miss negatives, non-code file variety, ambiguous extensions.
+- Missing categories (F-SNK-001): near-miss negatives, non-code file variety, ambiguous extensions.
 - Calibration: rule-secrets scored 6 (14 tests, no adversarial). rule-sinks has more tests and adversarial coverage. rule-workflows scored 7 (15 tests, stronger negative coverage proportionally). rule-sinks matches at 7 due to more total tests despite positive skew.
 
 ---
@@ -275,7 +275,7 @@ The 16:2 positive:negative ratio indicates the fixture matrix is optimized for d
 - All 12 sink patterns used: `_PYTHON_SINKS` at line 67, `_JS_SINKS` at line 100, `_YAML_LOAD_RE` at line 82, `_YAML_SAFE_RE` at line 82 (Tier C).
 - `_PYTHON_EXTENSIONS` and `_JS_EXTENSIONS` both used at lines 56, 58 (Tier C).
 - ruff detects no unused imports (Tier A).
-- Not 10: F-RS-001 identifies a fixture matrix skew -- not code debt, but tracked.
+- Not 10: F-SNK-001 identifies a fixture matrix skew -- not code debt, but tracked.
 - Calibration: matches rule-secrets (9), rule-workflows (9).
 
 ---
