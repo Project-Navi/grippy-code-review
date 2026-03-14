@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
-from grippy.rules.ci_script_risk import CiScriptRiskRule
+from grippy.rules.ci_script_risk import _PIPE_EXEC_RE, CiScriptRiskRule
 from grippy.rules.config import ProfileConfig
 from grippy.rules.context import RuleContext, parse_diff
 
@@ -97,3 +101,68 @@ class TestCiScriptRisk:
         )
         results = CiScriptRiskRule().run(_ctx(diff))
         assert not any(r.severity == RuleSeverity.CRITICAL for r in results)
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestCiRiskReDoS:
+    def test_redos_pipe_exec_re(self) -> None:
+        """100K-char adversarial input against _PIPE_EXEC_RE (has .*) completes quickly.
+
+        Input has 'curl' match but no trailing '| sh', forcing .* to scan the entire
+        100K-char string before failing.
+        """
+        adversarial = "curl " + "x" * 100_000
+        with _timeout(5):
+            _PIPE_EXEC_RE.search(adversarial)
+
+    def test_extremely_long_line(self) -> None:
+        """>1MB added line through full rule.run() produces no crash or findings."""
+        long_line = "x" * 1_100_000
+        diff = _make_diff(".github/workflows/ci.yml", long_line)
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert results == []
+
+
+# -- SR-09: Specificity negatives ---------------------------------------------
+
+
+class TestCiRiskNegatives:
+    def test_curl_download_without_pipe(self) -> None:
+        """curl downloading a file (no pipe to sh) should NOT be CRITICAL."""
+        diff = _make_diff(
+            ".github/workflows/ci.yml",
+            "      run: curl -sSL https://example.com/file.tar.gz -o file.tar.gz",
+        )
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert not any(r.severity == RuleSeverity.CRITICAL for r in results)
+
+    def test_pseudo_sudo_not_flagged(self) -> None:
+        """A word containing 'sudo' as substring should not match."""
+        diff = _make_diff(
+            ".github/workflows/ci.yml",
+            "      run: echo pseudocode",
+        )
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert results == []
