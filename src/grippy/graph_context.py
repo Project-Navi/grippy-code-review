@@ -29,7 +29,11 @@ def build_context_pack(
     touched_files: list[str],
     author_login: str | None = None,
 ) -> ContextPack:
-    """Query graph for pre-review context. Non-fatal — empty on errors."""
+    """Query graph for pre-review context.
+
+    Raises on graph store errors — caller is responsible for exception
+    handling. See review.py for the non-fatal wrapper.
+    """
     blast: list[tuple[str, int]] = []
     recurring: list[dict[str, Any]] = []
     file_history: dict[str, list[str]] = {}
