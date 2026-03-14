@@ -249,7 +249,7 @@ units:
       - path: src/grippy/graph_context.py
         mode: literal
     type_primary: infrastructure
-    subprofile_primary: state
+    subprofile_primary: config  # Reclassified from state (v1.2): 3/5 state items N/A (>50% threshold)
     type_secondary: null
     subprofile_secondary: null
     phase: 2

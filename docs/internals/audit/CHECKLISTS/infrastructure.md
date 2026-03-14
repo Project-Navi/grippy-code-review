@@ -9,14 +9,14 @@
 | IN-01 | Missing configuration (API keys, endpoints) produces a clear error, not a cryptic traceback | MEDIUM | Missing-config test; verify error message quality | test |
 | IN-02 | Unit follows project conventions (SPDX, naming, typing) | LOW | ruff + mypy check | CI |
 
-## Config Subprofile (ignore, imports, embedder, mcp-config, mcp-response)
+## Config Subprofile (ignore, imports, embedder, graph-context, mcp-config, mcp-response)
 
 | ID | Invariant | Severity | Evidence Types | Automation |
 |----|-----------|----------|---------------|------------|
 | IN-C01 | Edge case inputs (empty files, malformed patterns, unicode filenames) are handled gracefully | MEDIUM | Edge case test fixtures | test |
 | IN-C02 | AST/parsing operations do not crash on malformed input | LOW | Malformed-file test; verify graceful handling | test |
 
-## State Subprofile (graph-store, graph-context)
+## State Subprofile (graph-store)
 
 | ID | Invariant | Severity | Evidence Types | Automation |
 |----|-----------|----------|---------------|------------|

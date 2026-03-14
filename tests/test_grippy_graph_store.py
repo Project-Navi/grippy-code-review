@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -853,3 +854,65 @@ class TestEdgeCases:
             with patch("grippy.graph_store._PRAGMAS", fake_pragmas):
                 SQLiteGraphStore(db_path=tmp_path / "operr.db")
         assert any("not supported" in r.message.lower() for r in caplog.records)
+
+
+# --- Concurrent access (IN-S01) ---
+
+
+class TestConcurrentAccess:
+    """Verify WAL mode enables concurrent reads during writes.
+
+    Uses separate SQLiteGraphStore instances on the same DB path — essential
+    because a shared-connection test only proves Python/SQLite thread locking,
+    not WAL behavior across independent connections.
+    """
+
+    def test_concurrent_reads_during_write(self, tmp_path: Path) -> None:
+        """Writer inserts nodes while reader queries concurrently. No OperationalError.
+
+        Store instances are created inside their respective threads because
+        SQLite connections are thread-bound by default. This tests true WAL
+        concurrency: two independent connections to the same DB file.
+        """
+        db_path = tmp_path / "concurrent.db"
+        # Pre-create the DB so both threads can open it
+        SQLiteGraphStore(db_path=db_path)
+
+        errors: list[Exception] = []
+        write_started = threading.Event()
+        node_count = 50
+
+        def writer_thread() -> None:
+            try:
+                writer = SQLiteGraphStore(db_path=db_path)
+                for i in range(node_count):
+                    writer.upsert_node(f"N:{i:06d}", "FILE", {"idx": i})
+                    if i == 5:
+                        write_started.set()
+            except Exception as e:
+                errors.append(e)
+            finally:
+                write_started.set()  # ensure reader unblocks even on error
+
+        def reader_thread() -> None:
+            write_started.wait(timeout=5)
+            try:
+                reader = SQLiteGraphStore(db_path=db_path)
+                for _ in range(20):
+                    reader.get_recent_nodes(limit=10)
+                    reader.neighbors("N:000000", direction="outgoing")
+            except Exception as e:
+                errors.append(e)
+
+        t_write = threading.Thread(target=writer_thread)
+        t_read = threading.Thread(target=reader_thread)
+        t_write.start()
+        t_read.start()
+        t_write.join(timeout=10)
+        t_read.join(timeout=10)
+
+        assert not errors, f"Concurrent access errors: {errors}"
+        # Verify all nodes were written (check from main thread)
+        checker = SQLiteGraphStore(db_path=db_path)
+        nodes = checker.get_recent_nodes(limit=node_count + 10)
+        assert len(nodes) == node_count
