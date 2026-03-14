@@ -46,7 +46,7 @@ These rules override average-based health status. See METHODOLOGY.md Section C f
 3. **Evaluate all ceiling gates.** Strictest (lowest) ceiling applies. If base status is better than ceiling, downgrade to ceiling. Ceilings never rescue -- they only restrict upward. **Tiebreak:** If an override gate has already forced the status to Critical, no ceiling gate can soften that result. Ceilings only cap upward movement from the average; they do not override a forced-downward result.
 4. **Append suffixes independently:**
    - `(accepted risk)` if any ACCEPTED_RISK at HIGH or CRITICAL
-   - `(provisional)` if any dimension supported only by tier C evidence. This is an **evidence-maturity signal**, not a health concern — it indicates the unit's score rests partly on manual traces that have not yet been promoted to machine-verifiable (Tier A) or deterministic repro (Tier B) evidence. The suffix drops when all dimensions have at least one Tier A or B evidence source. Most units will carry this suffix until test coverage is comprehensive; that is expected and does not indicate a problem with the unit itself.
+   - `(provisional)` if **Security Posture (Dim 3)** or **Adversarial Resilience (Dim 4)** is supported exclusively by Tier C evidence. This is an **evidence-maturity signal** scoped to the two gate dimensions — non-security dimensions using Tier C evidence do not trigger the suffix. The suffix drops when Dims 3 and 4 each have at least one Tier A or B evidence source. **Retroactive policy (v1.2):** This redefinition applies prospectively only. Existing CURRENT units retain their v1.1 suffixes until next scheduled re-audit (triggered by STALE or BOUNDARY_CHANGED status).
 
 ---
 

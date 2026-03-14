@@ -1,6 +1,6 @@
 # Per-Unit Audit Methodology — Grippy
 
-**Version:** 1.1
+**Version:** 1.2
 **Established:** 2026-03-13
 **Derived from:** Navi OS audit methodology v2.0 (20-module sweep, 178 findings, 11 remediation PRs)
 
@@ -237,6 +237,18 @@ This prevents serious issues from being buried into MEDIUM for paperwork reasons
 
 ---
 
+## Section E.1: Known Recurring Finding Classes
+
+Patterns identified during Phase 1 that recur predictably across units. Labelling prevents theatrical rediscovery while preserving the finding record.
+
+| ID | Class | Description | Phase 1 Frequency | Handling |
+|----|-------|-------------|-------------------|----------|
+| KRC-01 | Fixture matrix gap | Test suite missing one or more categories (adversarial, edge, negative) from the fixture matrix standard | 10/17 Phase 1 findings | Document as LOW finding. Do not treat as a fresh discovery per unit. Batch-remediate when test coverage sprints occur. |
+
+**Important:** Recurring class ≠ auto-dismissal. A KRC-01 instance must still be recorded when the gap materially affects a high-risk property (e.g., missing adversarial tests on a trust-boundary unit). The class label prevents theatrical rediscovery; it does not suppress genuine risk.
+
+---
+
 ## Section F: Compound Failure Chains
 
 ### Known Chain Registry
@@ -313,8 +325,8 @@ New chains discovered during audit are assigned the next ID and added to this re
 
 | Subprofile | Characteristic | Key Concerns | Units |
 |---|---|---|---|
-| Config | Passive utilities, parsers, factories. No external I/O. | Input validation, error clarity, edge cases | ignore, imports, embedder, mcp-config, mcp-response |
-| State | Reads/writes persistent data. | Concurrent access, corruption, migration | graph-store, graph-context |
+| Config | Passive utilities, parsers, factories. No external I/O. | Input validation, error clarity, edge cases | ignore, imports, embedder, graph-context, mcp-config, mcp-response |
+| State | Reads/writes persistent data. | Concurrent access, corruption, migration | graph-store |
 | Boundary | Interfaces with external systems. | Subprocess safety, timeouts, sanitization, error opacity | local-diff, mcp-server, cli |
 
 ---
@@ -337,3 +349,4 @@ One scorecard per unit. Always.
 |---|---|---|
 | 1.0 | 2026-03-13 | Initial Grippy adaptation from navi-os v2.0. 30 units, 11 dimensions, v4.1 gate model, trust boundary register, compound chain registry. |
 | 1.1 | 2026-03-13 | Pilot friction fixes: SR-06 scoped to rule-engine unit (Friction #1). Review-pipeline checklist gains Scope column — RP-07 to github-review, RP-08/09 to review (Friction #2). `(provisional)` suffix clarified as evidence-maturity signal (Friction #3). Severity taxonomy declared exhaustive — no INFO level (Friction #3 derivative). |
+| 1.2 | 2026-03-14 | **Provisional suffix scoped to gate dimensions:** `(provisional)` now triggers only when Dim 3 (Security Posture) or Dim 4 (Adversarial Resilience) is supported exclusively by Tier C evidence. Non-security dimensions using Tier C do not trigger the suffix. Rationale: Phase 1 retrospective showed 19/20 units carried the suffix because dims 5/8/9 are inherently Tier C — suffix became wallpaper, not signal. Applies prospectively only; existing units recomputed at next re-audit. **Known recurring finding classes (Section E.1):** KRC-01 (fixture matrix gap) documented as systemic pattern to prevent theatrical rediscovery. **graph-context reclassified** from infrastructure/state to infrastructure/config (3/5 state items N/A, exceeds 50% threshold). |
