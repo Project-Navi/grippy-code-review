@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Phase 2 Batch 2 complete — 22/30 CURRENT)
+**Last updated:** 2026-03-14 (Wave 2 Batch 3B complete — 23/30 CURRENT)
 
 ## Status Legend
 
@@ -44,7 +44,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
 | rule-engine | 2026-03-13 | aa19594 | 7.6/10 | 0 | CURRENT |
-| rule-enrichment | — | — | — | — | NEVER |
+| rule-enrichment | 2026-03-14 | 4bc0e23 | 7.4/10 | 0 | CURRENT |
 | rule-secrets | 2026-03-13 | 259d0b8 | 7.2/10 | 0 | CURRENT |
 | rule-workflows | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
 | rule-sinks | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
@@ -105,6 +105,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-14 | rule-llm-sinks, rule-ci-risk, rule-creds, rule-deser | Claude Opus 4.6 / Nelson Spence | `rule-llm-sinks/SCORECARD.md`, `rule-ci-risk/SCORECARD.md`, `rule-creds/SCORECARD.md`, `rule-deser/SCORECARD.md` |
 | 2026-03-14 | graph-store, graph-context | Claude Opus 4.6 / Nelson Spence | `graph-store/SCORECARD.md`, `graph-context/SCORECARD.md` |
 | 2026-03-14 | prompts, codebase | Claude Opus 4.6 / Nelson Spence | `prompts/SCORECARD.md`, `codebase/SCORECARD.md` |
+| 2026-03-14 | rule-enrichment | Claude Opus 4.6 / Nelson Spence | `rule-enrichment/SCORECARD.md` |
 
 ## Superset Analysis
 
