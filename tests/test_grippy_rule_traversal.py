@@ -3,10 +3,18 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
 from grippy.rules.config import ProfileConfig
 from grippy.rules.context import RuleContext, parse_diff
-from grippy.rules.path_traversal import PathTraversalRule
+from grippy.rules.path_traversal import (
+    _FILE_OPS_RE,
+    _STRING_LITERAL_ONLY_RE,
+    PathTraversalRule,
+)
 
 
 def _ctx(diff: str) -> RuleContext:
@@ -86,5 +94,49 @@ class TestPathTraversal:
 
     def test_no_taint_indicator_not_flagged(self) -> None:
         diff = _make_diff("app.py", "f = open(config_path)")
+        results = PathTraversalRule().run(_ctx(diff))
+        assert results == []
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestTraversalReDoS:
+    def test_redos_file_ops_re(self) -> None:
+        """100K-char adversarial input against _FILE_OPS_RE completes quickly."""
+        adversarial = "open(" + "x" * 100_000
+        with _timeout(5):
+            _FILE_OPS_RE.search(adversarial)
+
+    def test_redos_string_literal_only_re(self) -> None:
+        """100K-char input with no closing quote forces [^"']* to scan full input."""
+        adversarial = 'open( "' + "x" * 100_000
+        with _timeout(5):
+            _STRING_LITERAL_ONLY_RE.search(adversarial)
+
+    def test_extremely_long_line(self) -> None:
+        """>1MB added line through full rule.run() produces no crash or findings."""
+        long_line = "x" * 1_100_000
+        diff = _make_diff("app.py", long_line)
         results = PathTraversalRule().run(_ctx(diff))
         assert results == []
