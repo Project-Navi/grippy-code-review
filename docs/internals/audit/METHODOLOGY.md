@@ -315,7 +315,7 @@ New chains discovered during audit are assigned the next ID and added to this re
 | Type | Checklist | Units |
 |---|---|---|
 | Security Rule | `CHECKLISTS/security-rule.md` | rule-engine, rule-enrichment, 10x rule-* |
-| LLM Agent | `CHECKLISTS/llm-agent.md` | agent, prompts |
+| LLM Agent | `CHECKLISTS/llm-agent.md` | agent |
 | LLM-Facing Tool | `CHECKLISTS/llm-facing-tool.md` | codebase |
 | Review Pipeline | `CHECKLISTS/review-pipeline.md` | retry, github-review, review |
 | Data Model | `CHECKLISTS/data-model.md` | schema, graph-types |
@@ -325,7 +325,7 @@ New chains discovered during audit are assigned the next ID and added to this re
 
 | Subprofile | Characteristic | Key Concerns | Units |
 |---|---|---|---|
-| Config | Passive utilities, parsers, factories. No external I/O. | Input validation, error clarity, edge cases | ignore, imports, embedder, graph-context, mcp-config, mcp-response |
+| Config | Passive utilities, parsers, factories. No external I/O. | Input validation, error clarity, edge cases | ignore, imports, embedder, graph-context, prompts, mcp-config, mcp-response |
 | State | Reads/writes persistent data. | Concurrent access, corruption, migration | graph-store |
 | Boundary | Interfaces with external systems. | Subprocess safety, timeouts, sanitization, error opacity | local-diff, mcp-server, cli |
 
@@ -350,3 +350,4 @@ One scorecard per unit. Always.
 | 1.0 | 2026-03-13 | Initial Grippy adaptation from navi-os v2.0. 30 units, 11 dimensions, v4.1 gate model, trust boundary register, compound chain registry. |
 | 1.1 | 2026-03-13 | Pilot friction fixes: SR-06 scoped to rule-engine unit (Friction #1). Review-pipeline checklist gains Scope column — RP-07 to github-review, RP-08/09 to review (Friction #2). `(provisional)` suffix clarified as evidence-maturity signal (Friction #3). Severity taxonomy declared exhaustive — no INFO level (Friction #3 derivative). |
 | 1.2 | 2026-03-14 | **Provisional suffix scoped to gate dimensions:** `(provisional)` now triggers only when Dim 3 (Security Posture) or Dim 4 (Adversarial Resilience) is supported exclusively by Tier C evidence. Non-security dimensions using Tier C do not trigger the suffix. Rationale: Phase 1 retrospective showed 19/20 units carried the suffix because dims 5/8/9 are inherently Tier C — suffix became wallpaper, not signal. Applies prospectively only; existing units recomputed at next re-audit. **Known recurring finding classes (Section E.1):** KRC-01 (fixture matrix gap) documented as systemic pattern to prevent theatrical rediscovery. **graph-context reclassified** from infrastructure/state to infrastructure/config (3/5 state items N/A, exceeds 50% threshold). |
+| 1.3 | 2026-03-14 | prompts reclassified from llm-agent to infrastructure/config (5/8 LA items N/A). Prospective only. |

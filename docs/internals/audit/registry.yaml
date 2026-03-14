@@ -261,8 +261,8 @@ units:
         mode: literal
       - path: src/grippy/prompts_data/
         mode: directory
-    type_primary: llm-agent
-    subprofile_primary: null
+    type_primary: infrastructure
+    subprofile_primary: config  # Reclassified from llm-agent (v1.3): 5/8 LA items N/A (>50% threshold)
     type_secondary: null
     subprofile_secondary: null
     phase: 2

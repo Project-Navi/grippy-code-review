@@ -1,6 +1,6 @@
 # LLM Agent Checklist
 
-**Applies to:** agent, prompts
+**Applies to:** agent
 
 | ID | Invariant | Severity | Evidence Types | Automation |
 |----|-----------|----------|---------------|------------|
