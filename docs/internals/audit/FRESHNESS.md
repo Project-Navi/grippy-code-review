@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-13 (Wave 2 Batch 1 complete)
+**Last updated:** 2026-03-13 (Wave 2 Batch 2 complete)
 
 ## Status Legend
 
@@ -48,11 +48,11 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | rule-secrets | 2026-03-13 | 259d0b8 | 7.2/10 | 0 | CURRENT |
 | rule-workflows | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
 | rule-sinks | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
-| rule-traversal | — | — | — | — | NEVER |
+| rule-traversal | 2026-03-13 | ab7cc93 | 7.4/10 | 0 | CURRENT |
 | rule-llm-sinks | — | — | — | — | NEVER |
 | rule-ci-risk | — | — | — | — | NEVER |
-| rule-sql | — | — | — | — | NEVER |
-| rule-crypto | — | — | — | — | NEVER |
+| rule-sql | 2026-03-13 | ab7cc93 | 7.4/10 | 0 | CURRENT |
+| rule-crypto | 2026-03-13 | ab7cc93 | 7.5/10 | 0 | CURRENT |
 | rule-creds | — | — | — | — | NEVER |
 | rule-deser | — | — | — | — | NEVER |
 | local-diff | 2026-03-13 | b3732e4 | 8.4/10 | 0 | CURRENT |
@@ -99,6 +99,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-13 | ignore, imports, embedder | Claude Opus 4.6 / Nelson Spence | `ignore/SCORECARD.md`, `imports/SCORECARD.md`, `embedder/SCORECARD.md` |
 | 2026-03-13 | rule-engine, local-diff | Claude Opus 4.6 / Nelson Spence | `rule-engine/SCORECARD.md`, `local-diff/SCORECARD.md` |
 | 2026-03-13 | graph-types, rule-workflows, rule-sinks | Claude Opus 4.6 / Nelson Spence | `graph-types/SCORECARD.md`, `rule-workflows/SCORECARD.md`, `rule-sinks/SCORECARD.md` |
+| 2026-03-13 | rule-traversal, rule-sql, rule-crypto | Claude Opus 4.6 / Nelson Spence | `rule-traversal/SCORECARD.md`, `rule-sql/SCORECARD.md`, `rule-crypto/SCORECARD.md` |
 
 ## Superset Analysis
 
