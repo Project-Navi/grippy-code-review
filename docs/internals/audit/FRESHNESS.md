@@ -44,7 +44,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
 | rule-engine | 2026-03-13 | aa19594 | 7.6/10 | 0 | CURRENT |
-| rule-enrichment | 2026-03-14 | 4bc0e23 | 7.4/10 | 0 | CURRENT |
+| rule-enrichment | 2026-03-14 | aafc60e | 7.4/10 | 0 | CURRENT |
 | rule-secrets | 2026-03-13 | 259d0b8 | 7.2/10 | 0 | CURRENT |
 | rule-workflows | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
 | rule-sinks | 2026-03-13 | b40d4ec | 7.4/10 | 0 | CURRENT |
