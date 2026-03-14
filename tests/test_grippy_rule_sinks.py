@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
 from grippy.rules.config import ProfileConfig
 from grippy.rules.context import RuleContext, parse_diff
-from grippy.rules.dangerous_sinks import DangerousSinksRule
+from grippy.rules.dangerous_sinks import _PYTHON_SINKS, DangerousSinksRule
 
 
 def _ctx(diff: str) -> RuleContext:
@@ -131,3 +135,51 @@ class TestDangerousSinks:
         diff = _make_diff("app.py", "result = eval(x)")
         results = DangerousSinksRule().run(_ctx(diff))
         assert all(r.severity == RuleSeverity.ERROR for r in results)
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestSinksReDoS:
+    """Adversarial long-input tests for compiled regexes (SR-02)."""
+
+    def test_redos_subprocess_pattern(self) -> None:
+        r"""100K-char adversarial input against subprocess `.*` pattern.
+
+        The subprocess pattern \bsubprocess\.\w+\(.*shell\s*=\s*True has `.*`
+        in the middle which could theoretically cause backtracking on non-matching
+        long inputs. This test proves it completes quickly.
+        """
+        # Get the subprocess pattern from _PYTHON_SINKS
+        subprocess_pattern = next(p for name, p in _PYTHON_SINKS if "subprocess" in name)
+        # Adversarial: starts matching but never completes — forces backtracking attempt
+        adversarial = "subprocess.run(" + "x" * 100_000 + ")"
+        with _timeout(5):
+            subprocess_pattern.search(adversarial)
+
+    def test_extremely_long_line(self) -> None:
+        """>1MB added line doesn't crash the scanner."""
+        long_content = "x = " + "a" * 1_100_000
+        diff = _make_diff("app.py", long_content)
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []

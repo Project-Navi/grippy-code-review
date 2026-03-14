@@ -3,10 +3,19 @@
 
 from __future__ import annotations
 
+import signal
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from grippy.rules.base import RuleSeverity
 from grippy.rules.config import ProfileConfig
 from grippy.rules.context import RuleContext, parse_diff
-from grippy.rules.workflow_permissions import WorkflowPermissionsRule
+from grippy.rules.workflow_permissions import (
+    _PERMISSIONS_RE,
+    _SHA_PIN_RE,
+    _USES_RE,
+    WorkflowPermissionsRule,
+)
 
 
 def _ctx(diff: str) -> RuleContext:
@@ -178,3 +187,102 @@ class TestWorkflowPermissions:
         rule = WorkflowPermissionsRule()
         results = rule.run(_ctx(diff))
         assert results == []
+
+
+# -- Timeout helper for ReDoS tests ------------------------------------------
+
+
+@contextmanager
+def _timeout(seconds: int) -> Generator[None, None, None]:
+    """Raise TimeoutError if block takes longer than *seconds*."""
+
+    def _handler(signum: int, frame: object) -> None:
+        msg = f"ReDoS timeout: regex took >{seconds}s"
+        raise TimeoutError(msg)
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
+# -- SR-02: ReDoS safety tests -----------------------------------------------
+
+
+class TestWorkflowReDoS:
+    """Adversarial long-input tests for all compiled regexes (SR-02)."""
+
+    def test_redos_permissions_re(self) -> None:
+        """100K-char adversarial input against _PERMISSIONS_RE completes quickly."""
+        adversarial = "permissions" + " " * 100_000 + ":"
+        with _timeout(5):
+            _PERMISSIONS_RE.match(adversarial)
+
+    def test_redos_uses_re(self) -> None:
+        """100K-char adversarial input against _USES_RE completes quickly."""
+        adversarial = "  - uses: " + "a" * 100_000
+        with _timeout(5):
+            _USES_RE.match(adversarial)
+
+    def test_redos_sha_pin_re(self) -> None:
+        """100K-char non-matching input against _SHA_PIN_RE completes quickly.
+
+        _SHA_PIN_RE uses search() not match(), so exercise with a long
+        non-matching string to stress the search path.
+        """
+        adversarial = "x" * 100_000
+        with _timeout(5):
+            _SHA_PIN_RE.search(adversarial)
+
+
+# -- SR-04: Proximity window tests -------------------------------------------
+
+
+class TestProximityWindow:
+    """Prove the ±2 proximity window design for permissions/pull_request_target."""
+
+    def test_proximity_window_inside(self) -> None:
+        """Context line with 'write' permission within ±2 of an added line IS detected."""
+        diff = (
+            "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n"
+            "--- a/.github/workflows/ci.yml\n"
+            "+++ b/.github/workflows/ci.yml\n"
+            "@@ -1,5 +1,6 @@\n"
+            " name: ci\n"
+            " permissions:\n"
+            "   contents: write\n"  # context line, idx=2
+            "+  issues: read\n"  # added line, idx=3 — within ±2 of idx=2
+            " on:\n"
+            "   push:\n"
+        )
+        rule = WorkflowPermissionsRule()
+        results = rule.run(_ctx(diff))
+        assert any(
+            "write" in r.message.lower() and r.severity == RuleSeverity.ERROR for r in results
+        ), "Context 'write' permission within ±2 of added line should be detected"
+
+    def test_proximity_window_outside(self) -> None:
+        """Context line with 'write' permission >2 lines from any added line is NOT detected."""
+        diff = (
+            "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n"
+            "--- a/.github/workflows/ci.yml\n"
+            "+++ b/.github/workflows/ci.yml\n"
+            "@@ -1,8 +1,9 @@\n"
+            " name: ci\n"
+            " permissions:\n"
+            "   contents: write\n"  # context, idx=2
+            "   packages: read\n"  # context, idx=3
+            "   pages: read\n"  # context, idx=4
+            "   actions: read\n"  # context, idx=5
+            "+  id-token: read\n"  # added, idx=6 — >2 away from idx=2
+            " on:\n"
+            "   push:\n"
+        )
+        rule = WorkflowPermissionsRule()
+        results = rule.run(_ctx(diff))
+        assert not any("write" in r.message.lower() for r in results), (
+            "Context 'write' permission >2 lines from added line should NOT be detected"
+        )
