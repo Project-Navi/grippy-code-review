@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Tests for Grippy output policy — 38 tests covering all P0 invariants."""
+"""Tests for Grippy output policy — 39 tests covering all P0 invariants."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _f(**kw: object) -> Finding:
         "title": "SQL injection risk",
         "description": "User input interpolated into query.",
         "suggestion": "Use parameterized queries.",
-        "evidence": "db.execute(query)",  # nogrip
+        "evidence": "result = db.execute(query)",  # nogrip
         "grippy_note": "Fix this.",
     }
     defaults.update(kw)
@@ -184,8 +184,8 @@ class TestEvidenceGrounding:
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
         assert len(result.findings) == 0
         assert len(result.summary_only_findings) == 0
-        # Empty evidence counted in threshold_suppressed
-        assert result.meta.threshold_suppressed_count == 1
+        # Empty evidence tracked separately
+        assert result.meta.evidence_suppressed_count == 1
 
     def test_grounded_evidence_inline(self) -> None:
         """10. Grounded evidence -> inline-eligible, no penalty."""
@@ -235,7 +235,7 @@ index abc..def 100644
 class TestNoGripSuppression:
     def test_bare_nogrip_suppresses_finding(self) -> None:
         """12b. Finding on a bare # nogrip line -> suppressed."""
-        f = _f(line_start=11, line_end=11, evidence="db.execute(query) result")
+        f = _f(line_start=11, line_end=11, evidence="result = db.execute(query)")
         review = _review([f])
         result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
         assert len(result.findings) == 0
@@ -244,7 +244,7 @@ class TestNoGripSuppression:
 
     def test_nogrip_does_not_affect_other_lines(self) -> None:
         """12c. Finding on a non-nogrip line -> not suppressed."""
-        f = _f(line_start=12, line_end=13, evidence="db.execute(query) result")
+        f = _f(line_start=12, line_end=13, evidence="result = db.execute(query)")
         review = _review([f])
         result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
         assert len(result.findings) == 1
@@ -252,7 +252,7 @@ class TestNoGripSuppression:
 
     def test_nogrip_range_includes_nogrip_line(self) -> None:
         """12d. Finding spanning nogrip line (10-13 includes 11) -> suppressed."""
-        f = _f(line_start=10, line_end=13, evidence="db.execute(query) result")
+        f = _f(line_start=10, line_end=13, evidence="result = db.execute(query)")
         review = _review([f])
         result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
         assert len(result.findings) == 0
@@ -462,8 +462,8 @@ class TestTelemetry:
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
         assert result.meta.narration_suppressed_count == 2
 
-    def test_threshold_count(self) -> None:
-        """28. threshold_suppressed_count = threshold + empty-evidence count."""
+    def test_confidence_and_evidence_counts_split(self) -> None:
+        """28. confidence_suppressed_count and evidence_suppressed_count tracked separately."""
         findings = [
             _f(id="F-001", severity="LOW", confidence=50),  # below threshold
             _f(id="F-002", evidence=""),  # empty evidence
@@ -471,20 +471,26 @@ class TestTelemetry:
         ]
         review = _review(findings)
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
-        assert result.meta.threshold_suppressed_count == 2
+        assert result.meta.confidence_suppressed_count == 1
+        assert result.meta.evidence_suppressed_count == 1
 
     def test_total_suppressed_is_sum(self) -> None:
-        """29. confidence_filter_suppressed = narration + threshold (backward compat total)."""
+        """29. confidence_filter_suppressed = narration + confidence + evidence (no nogrip)."""
         findings = [
             _f(id="F-001", description="No action needed.", suggestion="Keep."),  # narration
             _f(id="F-002", severity="LOW", confidence=50),  # threshold
-            _f(id="F-003"),  # survives
+            _f(id="F-003", evidence=""),  # empty evidence
+            _f(id="F-004"),  # survives
         ]
         review = _review(findings)
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
         assert result.meta.confidence_filter_suppressed == (
-            result.meta.narration_suppressed_count + result.meta.threshold_suppressed_count
+            result.meta.narration_suppressed_count
+            + result.meta.confidence_suppressed_count
+            + result.meta.evidence_suppressed_count
         )
+        # Nogrip is NOT included in the quality-judgment total
+        assert result.meta.nogrip_suppressed_count == 0
 
     def test_display_capped_count(self) -> None:
         """30. display_capped_count = exact cap count."""
@@ -630,7 +636,45 @@ class TestEndToEnd:
 
         # Telemetry
         assert result.meta.narration_suppressed_count == 1  # F-001
-        assert result.meta.threshold_suppressed_count == 2  # F-002 (confidence) + F-003 (empty)
-        assert result.meta.confidence_filter_suppressed == 3  # total
+        assert result.meta.confidence_suppressed_count == 1  # F-002 (confidence)
+        assert result.meta.evidence_suppressed_count == 1  # F-003 (empty)
+        assert result.meta.confidence_filter_suppressed == 3  # total (narration + conf + evidence)
         assert result.meta.score_before_policy == 95
         assert result.meta.verdict_before_policy == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# Nogrip acceptance test (35) — PR #77 scenario
+# ---------------------------------------------------------------------------
+
+
+class TestNoGripAcceptance:
+    def test_nogrip_prevents_fixture_false_positive_from_blocking(self) -> None:
+        """Findings on # nogrip lines never produce merge-blocking verdicts."""
+        findings = [
+            _f(
+                id="F-001",
+                severity="HIGH",
+                confidence=95,
+                line_start=11,
+                line_end=11,
+                evidence='query = f"SELECT * FROM {user_input}"',
+            ),
+            _f(
+                id="F-002",
+                severity="HIGH",
+                confidence=95,
+                line_start=11,
+                line_end=11,
+                evidence="SELECT * FROM users",
+            ),
+        ]
+        review = _review(findings)
+        result = filter_review(review, mode="pr_review", diff=_DIFF_WITH_NOGRIP)
+        # Nothing leaked through:
+        assert len(result.findings) == 0
+        assert len(result.summary_only_findings) == 0
+        # Clean verdict:
+        assert result.verdict.status == VerdictStatus.PASS
+        assert result.verdict.merge_blocking is False
+        assert result.meta.nogrip_suppressed_count == 2

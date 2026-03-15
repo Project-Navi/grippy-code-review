@@ -7,6 +7,7 @@ post only genuinely new findings, resolve threads for absent findings.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -172,8 +173,11 @@ _SEVERITY_EMOJI = {
     "LOW": "\U0001f535",
 }
 
-# Marker format: <!-- grippy:file:category:line -->
-_GRIPPY_MARKER_RE = re.compile(r"<!-- grippy:(?P<file>[^:]+):(?P<category>[^:]+):(?P<line>\d+) -->")
+# Marker format: <!-- grippy:file:category:line:hash8 -->
+_GRIPPY_MARKER_RE = re.compile(
+    r"<!-- grippy:(?P<file>[^:]+):(?P<category>[^:]+):(?P<line>\d+)"
+    r"(?::(?P<disc>\w+))? -->"
+)
 
 
 def _sanitize_path(path: str) -> str:
@@ -182,10 +186,17 @@ def _sanitize_path(path: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_./ -]", "", path)
 
 
+def _disc_hash(finding: Finding) -> str:
+    """Build an 8-char discriminator hash from title + severity + category."""
+    key = f"{finding.title}:{finding.severity.value}:{finding.category.value}"
+    return hashlib.sha256(key.encode()).hexdigest()[:8]
+
+
 def _finding_marker(finding: Finding) -> str:
-    """Build an HTML comment marker for dedup — keyed on file, category, line."""
+    """Build an HTML comment marker for dedup — keyed on file, category, line, hash."""
     safe_file = _sanitize_path(finding.file)
-    return f"<!-- grippy:{safe_file}:{finding.category.value}:{finding.line_start} -->"
+    disc = _disc_hash(finding)
+    return f"<!-- grippy:{safe_file}:{finding.category.value}:{finding.line_start}:{disc} -->"
 
 
 def build_review_comment(finding: Finding) -> dict[str, str | int]:
@@ -232,11 +243,16 @@ def build_review_comment(finding: Finding) -> dict[str, str | int]:
 # --- GitHub comment fetching ---
 
 
-def _parse_marker(body: str) -> tuple[str, str, int] | None:
-    """Extract (file, category, line) from a grippy marker in comment body."""
+def _parse_marker(body: str) -> tuple[str, str, int, str | None] | None:
+    """Extract (file, category, line, disc) from a grippy marker in comment body."""
     match = _GRIPPY_MARKER_RE.search(body)
     if match:
-        return (match.group("file"), match.group("category"), int(match.group("line")))
+        return (
+            match.group("file"),
+            match.group("category"),
+            int(match.group("line")),
+            match.group("disc"),
+        )
     return None
 
 
@@ -244,7 +260,7 @@ def fetch_grippy_comments(
     *,
     repo: str,
     pr_number: int,
-) -> dict[tuple[str, str, int], ThreadRef]:
+) -> dict[tuple[str, str, int, str | None], ThreadRef]:
     """Fetch existing Grippy review threads from a PR via GraphQL.
 
     Queries the ``reviewThreads`` connection on the pull request, extracting
@@ -256,8 +272,8 @@ def fetch_grippy_comments(
         pr_number: Pull request number.
 
     Returns:
-        Dict mapping (file, category, line) to a ThreadRef with thread
-        node_id and first comment body.
+        Dict mapping (file, category, line, disc) to a ThreadRef with thread
+        node_id and first comment body. disc is None for old-format markers.
     """
     import json
 
@@ -273,7 +289,7 @@ def fetch_grippy_comments(
         " } } } }"
     )
 
-    result: dict[tuple[str, str, int], ThreadRef] = {}
+    result: dict[tuple[str, str, int, str | None], ThreadRef] = {}
     cursor: str | None = None
 
     for _page in range(20):  # safety limit: max 20 pages
@@ -352,19 +368,21 @@ def format_summary_comment(
     summary_only_findings: list[Finding] | None = None,
     policy_bypassed: bool = False,
     display_capped_count: int = 0,
+    summary_only_count: int = 0,
 ) -> str:
     """Format the compact summary dashboard as an issue comment.
 
     Args:
         score: Overall review score (0-100).
         verdict: PASS, FAIL, or PROVISIONAL.
-        finding_count: Total findings this round.
+        finding_count: Inline findings count.
         new_count: Genuinely new findings posted this round.
         resolved_count: Prior findings resolved this round.
         off_diff_findings: Findings outside diff hunks (shown inline here).
         head_sha: Commit SHA for this review.
         pr_number: PR number for marker scoping.
         diff_truncated: Whether the diff was truncated to fit context limits.
+        summary_only_count: Number of summary-only findings (scored but not inline).
 
     Returns:
         Formatted markdown comment body.
@@ -378,7 +396,14 @@ def format_summary_comment(
     lines: list[str] = []
     lines.append(f"## {status_emoji} Grippy Review \u2014 {verdict}")
     lines.append("")
-    lines.append(f"**Score: {score}/100** | **Findings: {finding_count}**")
+    if summary_only_count > 0:
+        total = finding_count + summary_only_count
+        lines.append(
+            f"**Score: {score}/100** | **Findings: {total} total**"
+            f" ({finding_count} inline, {summary_only_count} summary-only)"
+        )
+    else:
+        lines.append(f"**Score: {score}/100** | **Findings: {finding_count}**")
     lines.append("")
 
     if policy_bypassed:
@@ -573,17 +598,56 @@ def post_review(
     existing = fetch_grippy_comments(repo=repo, pr_number=pr_number)
 
     # 2. Classify: which current findings already have comments?
+    #    New-format markers use exact 4-field match (file, category, line, disc).
+    #    Old-format markers (disc=None) match if exactly one current finding
+    #    shares the same (file, category, line) — ambiguous old markers are
+    #    treated as new to avoid incorrect dedup.
     new_findings: list[Finding] = []
     for finding in findings:
-        key = (finding.file, finding.category.value, finding.line_start)
-        if key not in existing:
-            new_findings.append(finding)
+        fkey = (finding.file, finding.category.value, finding.line_start, _disc_hash(finding))
+        if fkey in existing:
+            continue
+        # Conservative old-marker match: disc=None at same (file, cat, line)
+        old_key = (finding.file, finding.category.value, finding.line_start, None)
+        if old_key in existing:
+            # Old marker — only match if this is the sole candidate at that position
+            candidates = [
+                f
+                for f in findings
+                if f.file == finding.file
+                and f.category.value == finding.category.value
+                and f.line_start == finding.line_start
+            ]
+            if len(candidates) == 1:
+                continue  # unambiguous match
+        new_findings.append(finding)
 
     # 3. Identify stale: a thread is stale if its marker key is no longer in
     #    the current findings (the finding was suppressed or disappeared).
     #    Resolve all absent, unresolved threads — not just GitHub-outdated ones.
-    current_keys = {(f.file, f.category.value, f.line_start) for f in findings}
-    absent_comments = [comment for key, comment in existing.items() if key not in current_keys]
+    #    Summary-only findings are still active concerns — don't resolve them.
+    all_active = list(findings)
+    if summary_only_findings:
+        all_active.extend(summary_only_findings)
+    current_keys: set[tuple[str, str, int, str | None]] = {
+        (f.file, f.category.value, f.line_start, _disc_hash(f)) for f in all_active
+    }
+    absent_comments = []
+    for key, comment in existing.items():
+        if key in current_keys:
+            continue
+        if key[3] is None:
+            # Old marker — don't auto-resolve if multiple candidates exist
+            candidates = [
+                f
+                for f in all_active
+                if f.file == key[0] and f.category.value == key[1] and f.line_start == key[2]
+            ]
+            if len(candidates) == 1:
+                continue  # matched to the sole candidate
+            if len(candidates) > 1:
+                continue  # ambiguous — leave the thread alone
+        absent_comments.append(comment)
     resolved_comments: list[Any] = []
     if absent_comments:
         thread_states = fetch_thread_states([c.node_id for c in absent_comments])
@@ -687,6 +751,7 @@ def post_review(
         summary_only_findings=summary_only_findings,
         policy_bypassed=policy_bypassed,
         display_capped_count=display_capped_count,
+        summary_only_count=len(summary_only_findings) if summary_only_findings else 0,
     )
 
     # Upsert: edit existing summary or create new
