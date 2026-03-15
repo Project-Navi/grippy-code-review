@@ -229,3 +229,45 @@ class TestContextDeterminism:
             text = format_context_for_llm(pack)
             results.add(text)
         assert len(results) == 1, f"Non-deterministic output: got {len(results)} distinct results"
+
+
+# --- Edge cases (KRC-01) ---
+
+
+class TestContextEdgeCases:
+    """Edge cases for build_context_pack not covered by existing tests."""
+
+    def test_touched_file_not_indexed(self, store: SQLiteGraphStore) -> None:
+        """Touched file with no corresponding graph node — no crash, empty context."""
+        pack = build_context_pack(store, touched_files=["src/not-indexed.py"])
+        assert pack.touched_files == ["src/not-indexed.py"]
+        assert pack.blast_radius_files == []
+        assert pack.recurring_findings == []
+        assert pack.file_history == {}
+
+    def test_author_with_no_reviews(self, store: SQLiteGraphStore) -> None:
+        """Author node exists but has no AUTHORED edges — empty risk summary."""
+        author_id = _record_id("AUTHOR", "newbie")
+        store.upsert_node(author_id, "AUTHOR", {"login": "newbie"})
+        pack = build_context_pack(store, touched_files=[], author_login="newbie")
+        assert pack.author_risk_summary == {}
+
+    def test_nonexistent_author(self, store: SQLiteGraphStore) -> None:
+        """Author login not in graph — empty risk summary, no crash."""
+        pack = build_context_pack(store, touched_files=[], author_login="ghost")
+        assert pack.author_risk_summary == {}
+
+    def test_shared_dependent_counted_once(self, store: SQLiteGraphStore) -> None:
+        """A file importing two touched files appears once in blast radius."""
+        fid_a = _record_id("FILE", "src/a.py")
+        fid_b = _record_id("FILE", "src/b.py")
+        fid_c = _record_id("FILE", "src/common.py")
+        store.upsert_node(fid_a, "FILE", {"path": "src/a.py"})
+        store.upsert_node(fid_b, "FILE", {"path": "src/b.py"})
+        store.upsert_node(fid_c, "FILE", {"path": "src/common.py"})
+        # common imports both a and b
+        store.upsert_edge(fid_c, fid_a, "IMPORTS")
+        store.upsert_edge(fid_c, fid_b, "IMPORTS")
+        pack = build_context_pack(store, touched_files=["src/a.py", "src/b.py"])
+        paths = [p for p, _ in pack.blast_radius_files]
+        assert "src/common.py" in paths
