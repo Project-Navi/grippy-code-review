@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Phase 3A agent solo — 24/30 CURRENT)
+**Last updated:** 2026-03-14 (Phase 3B review + github-review paired — 26/30 CURRENT)
 
 ## Status Legend
 
@@ -81,8 +81,8 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|---|---|
 | mcp-server | — | — | — | — | NEVER |
 | mcp-config | — | — | — | — | NEVER |
-| github-review | — | — | — | — | NEVER |
-| review | — | — | — | — | NEVER |
+| github-review | 2026-03-14 | c862022 | 8.2/10 | 0 | CURRENT |
+| review | 2026-03-14 | c862022 | 7.2/10 | 0 | CURRENT |
 | cli | — | — | — | — | NEVER |
 
 ## Methodology Version
@@ -107,6 +107,26 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-14 | prompts, codebase | Claude Opus 4.6 / Nelson Spence | `prompts/SCORECARD.md`, `codebase/SCORECARD.md` |
 | 2026-03-14 | rule-enrichment | Claude Opus 4.6 / Nelson Spence | `rule-enrichment/SCORECARD.md` |
 | 2026-03-14 | agent | Claude Opus 4.6 / Nelson Spence | `agent/SCORECARD.md` |
+| 2026-03-14 | review, github-review | Claude Opus 4.6 / Nelson Spence | `review/SCORECARD.md`, `github-review/SCORECARD.md` |
+
+## Compound Chain Traces
+
+Paired audits trace compound chains across unit boundaries. Each trace cites both scorecards.
+
+### CH-3: Output Injection -> GitHub Comment XSS/Phishing
+
+```
+run_review() [retry, TB-5] → GrippyReview (Pydantic-validated)
+  → review.py:679 post_review() call [review, relay]
+  → github_review.py:489 post_review() entry [github-review, terminus]
+    → _sanitize_comment_text() [5-stage: navi_sanitize → nh3 → image strip → link rewrite → URI scheme]
+    → build_review_comment() / format_summary_comment()
+    → pr.create_review() / pr.create_issue_comment() → GitHub API
+```
+
+**Verified in:** `review/SCORECARD.md` (CH-3 relay section), `github-review/SCORECARD.md` (CH-3 terminus section with full 5-stage pipeline detail)
+
+**Key pairing insight:** review.py performs zero output sanitization — it delegates entirely to github-review's TB-6 pipeline. The delegation is complete (no code path in review.py directly posts LLM content). github-review's 5-stage pipeline is the sole defense for CH-3.
 
 ## Superset Analysis
 
