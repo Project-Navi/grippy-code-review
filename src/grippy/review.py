@@ -626,6 +626,8 @@ def main(*, profile: str | None = None) -> None:
                 user_message,
                 expected_rule_counts=expected_rule_counts,
                 expected_rule_files=expected_rule_files,
+                mode=mode,
+                diff=diff,
             ),
             timeout_seconds=timeout_seconds,
         )
@@ -686,6 +688,9 @@ def main(*, profile: str | None = None) -> None:
             score=review.score.overall,
             verdict=review.verdict.status.value,
             diff_truncated=diff_truncated,
+            summary_only_findings=review.summary_only_findings,
+            policy_bypassed=review.meta.policy_bypassed,
+            display_capped_count=review.meta.display_capped_count,
         )
         print("  Done.")
     except Exception as exc:
