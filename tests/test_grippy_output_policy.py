@@ -45,7 +45,7 @@ def _f(**kw: object) -> Finding:
         "title": "SQL injection risk",
         "description": "User input interpolated into query.",
         "suggestion": "Use parameterized queries.",
-        "evidence": 'f"SELECT * FROM {user_input}"',
+        "evidence": 'f"SELECT * FROM {user_input}"',  # nogrip
         "grippy_note": "Fix this.",
     }
     defaults.update(kw)
@@ -108,7 +108,7 @@ index abc..def 100644
 @@ -10,3 +10,5 @@ def handle_request():
      user_input = request.args.get("q")
 -    old_code()
-+    query = f"SELECT * FROM {user_input}"
++    query = f"SELECT * FROM {user_input}"  # nogrip
 +    result = db.execute(query)
 +    return result
 """
