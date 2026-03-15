@@ -579,9 +579,9 @@ def post_review(
         if key not in existing:
             new_findings.append(finding)
 
-    # 3. Identify stale: use GitHub's isOutdated tracking instead of marker-key diff.
-    #    A thread is stale if GitHub marked it outdated (line moved/removed) AND
-    #    its marker key is no longer in the current findings.
+    # 3. Identify stale: a thread is stale if its marker key is no longer in
+    #    the current findings (the finding was suppressed or disappeared).
+    #    Resolve all absent, unresolved threads — not just GitHub-outdated ones.
     current_keys = {(f.file, f.category.value, f.line_start) for f in findings}
     absent_comments = [comment for key, comment in existing.items() if key not in current_keys]
     resolved_comments: list[Any] = []
@@ -589,7 +589,7 @@ def post_review(
         thread_states = fetch_thread_states([c.node_id for c in absent_comments])
         for comment in absent_comments:
             state = thread_states.get(comment.node_id, {})
-            if state.get("isOutdated", False) and not state.get("isResolved", False):
+            if not state.get("isResolved", False):
                 resolved_comments.append(comment)
 
     # Detect fork PR — GITHUB_TOKEN is read-only for forks

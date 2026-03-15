@@ -927,14 +927,14 @@ class TestPostReview:
     @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
     @patch("grippy.github_review.fetch_grippy_comments")
-    def test_skips_absent_but_not_outdated(
+    def test_resolves_absent_even_if_not_outdated(
         self,
         mock_fetch: MagicMock,
         mock_github_cls: MagicMock,
         mock_fetch_states: MagicMock,
         mock_resolve: MagicMock,
     ) -> None:
-        """Absent findings NOT marked outdated by GitHub are not resolved."""
+        """Absent findings are resolved even when GitHub hasn't marked them outdated."""
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
@@ -963,7 +963,7 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        mock_resolve.assert_not_called()
+        mock_resolve.assert_called_once()
 
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.fetch_thread_states")

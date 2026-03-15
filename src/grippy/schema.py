@@ -177,6 +177,7 @@ class ReviewMeta(BaseModel):
     policy_bypass_reason: str | None = None
     narration_suppressed_count: int = 0
     threshold_suppressed_count: int = 0
+    nogrip_suppressed_count: int = 0
     display_capped_count: int = 0
 
 

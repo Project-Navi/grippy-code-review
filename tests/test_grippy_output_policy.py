@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Tests for Grippy output policy — 34 tests covering all P0 invariants."""
+"""Tests for Grippy output policy — 38 tests covering all P0 invariants."""
 
 from __future__ import annotations
 
@@ -40,12 +40,12 @@ def _f(**kw: object) -> Finding:
         "confidence": 85,
         "category": "security",
         "file": "src/main.py",
-        "line_start": 10,
-        "line_end": 15,
+        "line_start": 12,
+        "line_end": 13,
         "title": "SQL injection risk",
         "description": "User input interpolated into query.",
         "suggestion": "Use parameterized queries.",
-        "evidence": 'f"SELECT * FROM {user_input}"',  # nogrip
+        "evidence": "db.execute(query)",  # nogrip
         "grippy_note": "Fix this.",
     }
     defaults.update(kw)
@@ -189,7 +189,7 @@ class TestEvidenceGrounding:
 
     def test_grounded_evidence_inline(self) -> None:
         """10. Grounded evidence -> inline-eligible, no penalty."""
-        f = _f(evidence='query = f"SELECT * FROM {user_input}"')
+        f = _f(evidence="result = db.execute(query)")
         review = _review([f])
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
         assert len(result.findings) == 1
@@ -215,6 +215,59 @@ class TestEvidenceGrounding:
 
 
 # ---------------------------------------------------------------------------
+# Nogrip suppression tests (12b-12e)
+# ---------------------------------------------------------------------------
+
+_DIFF_WITH_NOGRIP = """\
+diff --git a/src/main.py b/src/main.py
+index abc..def 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -10,3 +10,5 @@ def handle_request():
+     user_input = request.args.get("q")
+-    old_code()
++    query = f"SELECT * FROM {user_input}"  # nogrip
++    result = db.execute(query)
++    return result
+"""  # nogrip
+
+
+class TestNoGripSuppression:
+    def test_bare_nogrip_suppresses_finding(self) -> None:
+        """12b. Finding on a bare # nogrip line -> suppressed."""
+        f = _f(line_start=11, line_end=11, evidence="db.execute(query) result")
+        review = _review([f])
+        result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
+        assert len(result.findings) == 0
+        assert len(result.summary_only_findings) == 0
+        assert result.meta.nogrip_suppressed_count == 1
+
+    def test_nogrip_does_not_affect_other_lines(self) -> None:
+        """12c. Finding on a non-nogrip line -> not suppressed."""
+        f = _f(line_start=12, line_end=13, evidence="db.execute(query) result")
+        review = _review([f])
+        result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
+        assert len(result.findings) == 1
+        assert result.meta.nogrip_suppressed_count == 0
+
+    def test_nogrip_range_includes_nogrip_line(self) -> None:
+        """12d. Finding spanning nogrip line (10-13 includes 11) -> suppressed."""
+        f = _f(line_start=10, line_end=13, evidence="db.execute(query) result")
+        review = _review([f])
+        result = filter_review(review, diff=_DIFF_WITH_NOGRIP)
+        assert len(result.findings) == 0
+        assert result.meta.nogrip_suppressed_count == 1
+
+    def test_nogrip_without_diff_is_skipped(self) -> None:
+        """12e. diff=None -> nogrip check skipped (no diff to parse)."""
+        f = _f(line_start=11, line_end=11)
+        review = _review([f])
+        result = filter_review(review, diff=None)
+        assert len(result.findings) == 1
+        assert result.meta.nogrip_suppressed_count == 0
+
+
+# ---------------------------------------------------------------------------
 # Three-set invariant tests (13-14)
 # ---------------------------------------------------------------------------
 
@@ -223,7 +276,7 @@ class TestThreeSetInvariant:
     def test_display_caps_dont_inflate_score(self) -> None:
         """13. 8 LOWs -> all 8 in scoring set -> display caps to 3 -> score unchanged."""
         findings = [
-            _f(id=f"F-{i:03d}", severity="LOW", confidence=70, evidence="query user_input SELECT")
+            _f(id=f"F-{i:03d}", severity="LOW", confidence=70, evidence="db.execute(query) result")
             for i in range(8)
         ]
         review = _review(findings)
@@ -236,7 +289,7 @@ class TestThreeSetInvariant:
 
     def test_summary_only_scored_not_posted(self) -> None:
         """14. Summary-only findings contribute to score but not inline posting."""
-        grounded = _f(id="F-001", evidence='query = f"SELECT * FROM {user_input}"')
+        grounded = _f(id="F-001", evidence="result = db.execute(query)")
         ungrounded = _f(id="F-002", evidence="completely_unrelated_fabricated_token_xyz dummy_text")
         review = _review([grounded, ungrounded])
         result = filter_review(review, diff=_DIFF_WITH_MAIN)
@@ -326,7 +379,7 @@ class TestDisplayCaps:
                 id=f"F-{i:03d}",
                 severity="MEDIUM",
                 confidence=85,
-                evidence='query = f"SELECT * FROM {user_input}"',
+                evidence="result = db.execute(query)",
             )
             for i in range(6)
         ]
@@ -344,7 +397,7 @@ class TestDisplayCaps:
                 id=f"F-{i:03d}",
                 severity="LOW",
                 confidence=70,
-                evidence='query = f"SELECT * FROM {user_input}"',
+                evidence="result = db.execute(query)",
             )
             for i in range(4)
         ]
@@ -440,7 +493,7 @@ class TestTelemetry:
                 id=f"F-{i:03d}",
                 severity="LOW",
                 confidence=70,
-                evidence='query = f"SELECT * FROM {user_input}"',
+                evidence="result = db.execute(query)",
             )
             for i in range(5)
         ]
@@ -556,7 +609,7 @@ class TestEndToEnd:
                 id="F-005",
                 severity="HIGH",
                 confidence=90,
-                evidence='query = f"SELECT * FROM {user_input}"',
+                evidence="result = db.execute(query)",
             ),
         ]
         review = _review(findings)
