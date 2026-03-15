@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Wave 2 Batch 3B complete — 23/30 CURRENT)
+**Last updated:** 2026-03-14 (Phase 3A agent solo — 24/30 CURRENT)
 
 ## Status Legend
 
@@ -71,7 +71,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| agent | — | — | — | — | NEVER |
+| agent | 2026-03-14 | f8548ac | 7.8/10 | 0 | CURRENT |
 | retry | 2026-03-13 | 259d0b8 | 7.9/10 | 0 | CURRENT |
 | mcp-response | — | — | — | — | NEVER |
 
@@ -106,6 +106,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-14 | graph-store, graph-context | Claude Opus 4.6 / Nelson Spence | `graph-store/SCORECARD.md`, `graph-context/SCORECARD.md` |
 | 2026-03-14 | prompts, codebase | Claude Opus 4.6 / Nelson Spence | `prompts/SCORECARD.md`, `codebase/SCORECARD.md` |
 | 2026-03-14 | rule-enrichment | Claude Opus 4.6 / Nelson Spence | `rule-enrichment/SCORECARD.md` |
+| 2026-03-14 | agent | Claude Opus 4.6 / Nelson Spence | `agent/SCORECARD.md` |
 
 ## Superset Analysis
 
