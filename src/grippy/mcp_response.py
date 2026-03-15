@@ -89,6 +89,19 @@ def serialize_audit(
             "status": review.verdict.status.value,
             "merge_blocking": review.verdict.merge_blocking,
         },
+        "summary_only_findings": [
+            {
+                "id": f.id,
+                "file": f.file,
+                "line": f.line_start,
+                "severity": f.severity.value,
+                "category": f.category.value,
+                "title": f.title,
+                "description": f.description,
+                "confidence": f.confidence,
+            }
+            for f in review.summary_only_findings
+        ],
         "rule_findings": [_serialize_rule_finding(r) for r in (rule_findings or [])],
         "metadata": {
             "model": review.model,

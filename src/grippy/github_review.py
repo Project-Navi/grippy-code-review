@@ -201,19 +201,26 @@ def build_review_comment(finding: Finding) -> dict[str, str | int]:
     title = _sanitize_comment_text(finding.title)
     description = _sanitize_comment_text(finding.description)
     suggestion = _sanitize_comment_text(finding.suggestion)
+    evidence = _sanitize_comment_text(finding.evidence)
     grippy_note = _sanitize_comment_text(finding.grippy_note)
     body_lines = [
         f"#### {emoji} {finding.severity.value}: {title}",
         f"Confidence: {finding.confidence}%",
         "",
-        description,
-        "",
-        f"**Suggestion:** {suggestion}",
-        "",
-        f"*\u2014 {grippy_note}*",
-        "",
-        _finding_marker(finding),
     ]
+    if evidence.strip():
+        body_lines.extend([f"```\n{evidence}\n```", ""])
+    body_lines.extend(
+        [
+            description,
+            "",
+            f"**Suggestion:** {suggestion}",
+            "",
+            f"*\u2014 {grippy_note}*",
+            "",
+            _finding_marker(finding),
+        ]
+    )
     return {
         "path": _sanitize_path(finding.file),
         "body": "\n".join(body_lines),
@@ -342,6 +349,9 @@ def format_summary_comment(
     head_sha: str,
     pr_number: int,
     diff_truncated: bool = False,
+    summary_only_findings: list[Finding] | None = None,
+    policy_bypassed: bool = False,
+    display_capped_count: int = 0,
 ) -> str:
     """Format the compact summary dashboard as an issue comment.
 
@@ -371,6 +381,13 @@ def format_summary_comment(
     lines.append(f"**Score: {score}/100** | **Findings: {finding_count}**")
     lines.append("")
 
+    if policy_bypassed:
+        lines.append(
+            "> \u26a0\ufe0f **Output policy was bypassed due to an internal error."
+            " Findings are unfiltered.**"
+        )
+        lines.append("")
+
     if diff_truncated:
         lines.append(
             "> \u26a0\ufe0f **Notice:** Diff was truncated to fit context limits."
@@ -388,12 +405,39 @@ def format_summary_comment(
         lines.append(f"**Delta:** {' \u00b7 '.join(parts)}")
         lines.append("")
 
+    if display_capped_count > 0:
+        lines.append(f"> {display_capped_count} additional finding(s) omitted for brevity.")
+        lines.append("")
+
     # Off-diff findings
     if off_diff_findings:
         lines.append("<details>")
         lines.append(f"<summary>Off-diff findings ({len(off_diff_findings)})</summary>")
         lines.append("")
         for f in off_diff_findings:
+            sev_emoji = _SEVERITY_EMOJI.get(f.severity.value, "\u26aa")
+            f_title = _sanitize_comment_text(f.title)
+            f_description = _sanitize_comment_text(f.description)
+            f_suggestion = _sanitize_comment_text(f.suggestion)
+            lines.append(f"#### {sev_emoji} {f.severity.value}: {f_title}")
+            lines.append(f"\U0001f4c1 `{_sanitize_path(f.file)}:{f.line_start}`")
+            lines.append("")
+            lines.append(f_description)
+            lines.append("")
+            lines.append(f"**Suggestion:** {f_suggestion}")
+            lines.append("")
+        lines.append("</details>")
+        lines.append("")
+
+    # Summary-only findings (scored but not inline-eligible)
+    if summary_only_findings:
+        lines.append("<details>")
+        lines.append(
+            f"<summary>Summary-only findings ({len(summary_only_findings)})"
+            " \u2014 scored but not inline-eligible</summary>"
+        )
+        lines.append("")
+        for f in summary_only_findings:
             sev_emoji = _SEVERITY_EMOJI.get(f.severity.value, "\u26aa")
             f_title = _sanitize_comment_text(f.title)
             f_description = _sanitize_comment_text(f.description)
@@ -497,6 +541,9 @@ def post_review(
     score: int,
     verdict: str,
     diff_truncated: bool = False,
+    summary_only_findings: list[Finding] | None = None,
+    policy_bypassed: bool = False,
+    display_capped_count: int = 0,
 ) -> None:
     """Post Grippy review as inline comments + summary dashboard.
 
@@ -637,6 +684,9 @@ def post_review(
         head_sha=head_sha,
         pr_number=pr_number,
         diff_truncated=diff_truncated,
+        summary_only_findings=summary_only_findings,
+        policy_bypassed=policy_bypassed,
+        display_capped_count=display_capped_count,
     )
 
     # Upsert: edit existing summary or create new
