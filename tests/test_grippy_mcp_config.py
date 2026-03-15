@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from grippy.mcp_config import (
     MCPClient,
+    _load_config,
     add_to_client,
     generate_server_entry,
     get_available_clients,
@@ -16,6 +17,32 @@ from grippy.mcp_config import (
     is_configured,
     remove_from_client,
 )
+
+# ---------------------------------------------------------------------------
+# _load_config direct tests
+# ---------------------------------------------------------------------------
+
+
+class TestLoadConfig:
+    """Direct tests for _load_config edge cases."""
+
+    def test_malformed_json_returns_empty_dict(self, tmp_path: Path) -> None:
+        """Malformed JSON file returns empty dict, not exception."""
+        config_file = tmp_path / "broken.json"
+        config_file.write_text("{not valid json")
+        assert _load_config(config_file) == {}
+
+    def test_non_dict_root_returns_empty_dict(self, tmp_path: Path) -> None:
+        """JSON file with non-dict root (e.g., array) returns empty dict."""
+        config_file = tmp_path / "array.json"
+        config_file.write_text("[1, 2, 3]")
+        assert _load_config(config_file) == {}
+
+    def test_missing_file_returns_empty_dict(self, tmp_path: Path) -> None:
+        """Missing file returns empty dict, not exception."""
+        config_file = tmp_path / "nonexistent.json"
+        assert _load_config(config_file) == {}
+
 
 # ---------------------------------------------------------------------------
 # get_config_path tests
