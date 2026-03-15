@@ -324,6 +324,89 @@ class TestFormatSummary:
         assert "truncated" in result.lower()
         assert "Some files may not have been reviewed" in result
 
+    def test_policy_bypassed_warning(self) -> None:
+        """policy_bypassed=True adds a warning annotation to the summary."""
+        from grippy.github_review import format_summary_comment
+
+        result = format_summary_comment(
+            score=80,
+            verdict="PASS",
+            finding_count=0,
+            new_count=0,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=8,
+            policy_bypassed=True,
+        )
+        assert "Output policy was bypassed" in result
+        assert "unfiltered" in result.lower()
+
+    def test_display_capped_annotation(self) -> None:
+        """display_capped_count > 0 adds an omission annotation."""
+        from grippy.github_review import format_summary_comment
+
+        result = format_summary_comment(
+            score=70,
+            verdict="FAIL",
+            finding_count=5,
+            new_count=5,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=9,
+            display_capped_count=3,
+        )
+        assert "3 additional finding(s) omitted for brevity" in result
+
+    def test_summary_only_findings_section(self) -> None:
+        """summary_only_findings renders in a collapsible details section."""
+        from grippy.github_review import format_summary_comment
+
+        summary_only = [_make_finding(file="src/utils.py", title="Weak hash usage")]
+        result = format_summary_comment(
+            score=70,
+            verdict="FAIL",
+            finding_count=1,
+            new_count=1,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=10,
+            summary_only_findings=summary_only,
+        )
+        assert "Summary-only findings (1)" in result
+        assert "scored but not inline-eligible" in result
+        assert "Weak hash usage" in result
+        assert "src/utils.py" in result
+
+
+# --- build_review_comment snippet rendering ---
+
+
+class TestBuildReviewCommentEvidence:
+    """build_review_comment renders evidence as a fenced code block."""
+
+    def test_evidence_rendered_as_code_block(self) -> None:
+        from grippy.github_review import build_review_comment
+
+        finding = _make_finding(title="SQL injection")
+        comment = build_review_comment(finding)
+        body = comment["body"]
+        assert "```\nevidence here\n```" in body
+
+    def test_empty_evidence_no_code_block(self) -> None:
+        from grippy.github_review import build_review_comment
+
+        finding = _make_finding(title="Missing check")
+        # Finding with whitespace-only evidence
+        finding_dict = finding.model_dump()
+        finding_dict["evidence"] = "   "
+        finding_with_empty = Finding(**finding_dict)
+        comment = build_review_comment(finding_with_empty)
+        body = comment["body"]
+        assert "```" not in body
+
 
 # --- fetch_grippy_comments ---
 
