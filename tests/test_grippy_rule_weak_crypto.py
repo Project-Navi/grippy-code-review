@@ -199,3 +199,47 @@ class TestCryptoSafeNegatives:
         diff = _make_diff("crypto.py", ["token = secrets.token_bytes(32)"])
         results = WeakCryptoRule().run(_ctx(diff))
         assert results == []
+
+
+class TestCryptoEdgeCaseFixtures:
+    """Edge-case fixture categories for weak crypto rule."""
+
+    def test_binary_diff_no_crash(self) -> None:
+        """Binary file diffs produce no results and no crash."""
+        diff = (
+            "diff --git a/image.png b/image.png\n"
+            "new file mode 100644\n"
+            "index 0000000..abcdef1\n"
+            "Binary files /dev/null and b/image.png differ\n"
+        )
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert results == []
+
+    def test_renamed_file_still_scanned(self) -> None:
+        """Weak crypto in renamed files is still detected."""
+        diff = (
+            "diff --git a/old_hash.py b/new_hash.py\n"
+            "similarity index 90%\n"
+            "rename from old_hash.py\n"
+            "rename to new_hash.py\n"
+            "--- a/old_hash.py\n"
+            "+++ b/new_hash.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            " existing\n"
+            "+h = hashlib.md5(password.encode())\n"
+        )
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert len(results) >= 1
+
+    def test_deleted_line_not_flagged(self) -> None:
+        """Removed weak crypto lines should not trigger findings."""
+        diff = (
+            "diff --git a/app.py b/app.py\n"
+            "--- a/app.py\n"
+            "+++ b/app.py\n"
+            "@@ -1,2 +1,1 @@\n"
+            "-h = hashlib.md5(password.encode())\n"
+            " other = True\n"
+        )
+        results = WeakCryptoRule().run(_ctx(diff))
+        assert results == []
