@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Phase 3B review + github-review paired — 26/30 CURRENT)
+**Last updated:** 2026-03-14 (Phase 3C mcp-response solo — 27/30 CURRENT)
 
 ## Status Legend
 
@@ -73,7 +73,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 |---|---|---|---|---|---|
 | agent | 2026-03-14 | f8548ac | 7.8/10 | 0 | CURRENT |
 | retry | 2026-03-13 | 259d0b8 | 7.9/10 | 0 | CURRENT |
-| mcp-response | — | — | — | — | NEVER |
+| mcp-response | 2026-03-14 | c415a22 | 7.9/10 | 0 | CURRENT |
 
 ### Phase 4 -- Integration (5 units)
 
@@ -108,6 +108,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-14 | rule-enrichment | Claude Opus 4.6 / Nelson Spence | `rule-enrichment/SCORECARD.md` |
 | 2026-03-14 | agent | Claude Opus 4.6 / Nelson Spence | `agent/SCORECARD.md` |
 | 2026-03-14 | review, github-review | Claude Opus 4.6 / Nelson Spence | `review/SCORECARD.md`, `github-review/SCORECARD.md` |
+| 2026-03-14 | mcp-response | Claude Opus 4.6 / Nelson Spence | `mcp-response/SCORECARD.md` |
 
 ## Compound Chain Traces
 

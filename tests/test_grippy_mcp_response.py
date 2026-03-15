@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from grippy.mcp_response import serialize_audit, serialize_scan
-from grippy.rules.base import RuleResult, RuleSeverity
+from grippy.mcp_response import _serialize_rule_finding, serialize_audit, serialize_scan
+from grippy.rules.base import ResultEnrichment, RuleResult, RuleSeverity
 from grippy.schema import (
     AsciiArtKey,
     ComplexityTier,
@@ -273,3 +273,55 @@ class TestSerializeScan:
         stats = {"files": 5, "additions": 100, "deletions": 20}
         result = serialize_scan([], gate=False, profile="security", diff_stats=stats)
         assert result["diff_stats"] == stats
+
+
+# ---------------------------------------------------------------------------
+# _serialize_rule_finding tests
+# ---------------------------------------------------------------------------
+
+
+class TestSerializeRuleFinding:
+    """Tests for _serialize_rule_finding edge cases."""
+
+    def test_enrichment_serialized_when_present(self) -> None:
+        enrichment = ResultEnrichment(
+            blast_radius=5,
+            is_recurring=True,
+            prior_count=3,
+            suppressed=False,
+            suppression_reason="",
+            velocity="increasing",
+        )
+        result = _serialize_rule_finding(
+            RuleResult(
+                rule_id="SEC-010",
+                severity=RuleSeverity.WARN,
+                message="Test finding",
+                file="app.py",
+                line=42,
+                enrichment=enrichment,
+            ),
+        )
+        assert "enrichment" in result
+        e = result["enrichment"]
+        assert e["blast_radius"] == 5
+        assert e["is_recurring"] is True
+        assert e["prior_count"] == 3
+        assert e["suppressed"] is False
+        assert e["suppression_reason"] == ""
+        assert e["velocity"] == "increasing"
+
+    def test_personality_fields_absent_from_audit(self) -> None:
+        """Verify every Personality model field is stripped from serialized output."""
+        review = _make_review()
+        result = serialize_audit(review, profile="security", diff_stats={"files": 3})
+        flat = str(result)
+        # Every field from schema.Personality must be absent
+        for field in (
+            "tone_register",
+            "opening_catchphrase",
+            "closing_line",
+            "disguise_used",
+            "ascii_art_key",
+        ):
+            assert field not in flat, f"Personality field '{field}' leaked into serialized output"
