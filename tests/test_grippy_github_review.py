@@ -1236,7 +1236,7 @@ class TestFetchThreadStates:
 
     @patch("grippy.github_review.subprocess.run")
     def test_uses_graphql_variables(self, mock_run: MagicMock) -> None:
-        """Thread IDs are passed as GraphQL variables, not interpolated."""
+        """Thread IDs are passed as GraphQL variables via stdin, not interpolated."""
         import json
 
         from grippy.github_review import fetch_thread_states
@@ -1246,10 +1246,10 @@ class TestFetchThreadStates:
             stdout=json.dumps({"data": {"nodes": []}}),
         )
         fetch_thread_states(["PRRT_1"])
-        cmd = mock_run.call_args[0][0]
-        query_args = [a for a in cmd if a.startswith("query=")]
-        assert "$ids" in query_args[0]
-        assert "PRRT_1" not in query_args[0]
+        input_data = json.loads(mock_run.call_args[1]["input"])
+        assert "$ids" in input_data["query"]
+        assert "PRRT_1" not in input_data["query"]
+        assert input_data["variables"]["ids"] == ["PRRT_1"]
 
     @patch("grippy.github_review.subprocess.run")
     def test_exception_returns_empty(self, mock_run: MagicMock) -> None:
@@ -1990,10 +1990,12 @@ class TestPostReviewVerdictLifecycle:
 
 
 class TestFetchThreadStatesFix:
-    """fetch_thread_states must use -F (JSON) not -f (string) for the ids parameter."""
+    """fetch_thread_states must pass ids array via --input stdin (not -F which doesn't parse arrays)."""
 
     @patch("subprocess.run")
-    def test_uses_dash_cap_f_for_ids(self, mock_run) -> None:
+    def test_uses_stdin_input_for_ids(self, mock_run) -> None:
+        import json
+
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout='{"data":{"nodes":[]}}',
@@ -2001,14 +2003,12 @@ class TestFetchThreadStatesFix:
         )
         from grippy.github_review import fetch_thread_states
 
-        fetch_thread_states(["PRRT_abc123"])
+        fetch_thread_states(["PRRT_abc123", "PRRT_def456"])
         args = mock_run.call_args[0][0]
-        for i, arg in enumerate(args):
-            if arg.startswith("ids="):
-                assert args[i - 1] == "-F", f"Expected -F before ids=, got {args[i - 1]}"
-                break
-        else:
-            pytest.fail("ids= argument not found in subprocess call")
+        assert "--input" in args, "Expected --input flag for stdin JSON"
+        # Verify ids passed as JSON array in stdin
+        input_data = json.loads(mock_run.call_args[1]["input"])
+        assert input_data["variables"]["ids"] == ["PRRT_abc123", "PRRT_def456"]
 
     @patch("subprocess.run")
     def test_empty_thread_ids_skips_call(self, mock_run) -> None:

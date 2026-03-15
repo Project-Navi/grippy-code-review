@@ -791,16 +791,11 @@ def fetch_thread_states(thread_ids: list[str]) -> dict[str, dict[str, bool]]:
         "... on PullRequestReviewThread { id isOutdated isResolved } } }"
     )
     try:
+        # gh -F doesn't parse JSON arrays — use --input with stdin
+        input_payload = json.dumps({"query": _nodes_query, "variables": {"ids": thread_ids}})
         result = subprocess.run(
-            [
-                "gh",
-                "api",
-                "graphql",
-                "-f",
-                f"query={_nodes_query}",
-                "-F",
-                f"ids={json.dumps(thread_ids)}",
-            ],
+            ["gh", "api", "graphql", "--input", "-"],
+            input=input_payload,
             capture_output=True,
             text=True,
             timeout=30,
