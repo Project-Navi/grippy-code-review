@@ -346,6 +346,91 @@ class TestReadFileTool:
         assert "path traversal not allowed" in result.lower()
 
 
+class TestPathTraversalAdversarialCorpus:
+    """F-CB-002: Adversarial path corpus for read_file and list_files.
+
+    Curated traversal inputs beyond the basic ../../etc/passwd case.
+    Each test verifies the Path.is_relative_to() guard rejects the
+    input or the path resolves safely inside the repo root.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "../../etc/passwd",
+            "../../../etc/shadow",
+            "..\\..\\windows\\system32\\config\\sam",
+            "src/../../../etc/passwd",
+            "/etc/passwd",
+            "/tmp/evil.py",
+        ],
+        ids=[
+            "unix-traversal-2",
+            "unix-traversal-3",
+            "windows-backslash",
+            "mid-path-breakout",
+            "absolute-unix",
+            "absolute-tmp",
+        ],
+    )
+    def test_read_file_rejects_traversal_corpus(self, tmp_repo: Path, path: str) -> None:
+        read_fn = _make_read_file(tmp_repo)
+        result = read_fn(path)
+        assert (
+            "not allowed" in result.lower()
+            or "not found" in result.lower()
+            or "error" in result.lower()
+        )
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "../..",
+            "/etc",
+            "/tmp",
+            "src/../../..",
+        ],
+        ids=[
+            "dir-traversal",
+            "absolute-etc",
+            "absolute-tmp",
+            "mid-path-dir-breakout",
+        ],
+    )
+    def test_list_files_rejects_traversal_corpus(self, tmp_repo: Path, path: str) -> None:
+        list_fn = _make_list_files(tmp_repo)
+        result = list_fn(path)
+        assert (
+            "not allowed" in result.lower()
+            or "not found" in result.lower()
+            or "error" in result.lower()
+        )
+
+    def test_symlink_traversal_blocked(self, tmp_path: Path) -> None:
+        """Symlink pointing outside repo root is rejected."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / "safe.py").write_text("safe")
+
+        outside = tmp_path / "outside_secret.py"
+        outside.write_text("stolen data")
+
+        link = repo_root / "evil_link.py"
+        link.symlink_to(outside)
+
+        read_fn = _make_read_file(repo_root)
+        result = read_fn("evil_link.py")
+        # resolve() follows the symlink — is_relative_to() should catch it
+        assert "not allowed" in result.lower()
+
+    def test_null_byte_in_path(self, tmp_repo: Path) -> None:
+        """Path with null byte doesn't crash (handled by OS or Python)."""
+        read_fn = _make_read_file(tmp_repo)
+        result = read_fn("src/main\x00.py")
+        # Should produce an error, not succeed
+        assert "error" in result.lower() or "not found" in result.lower()
+
+
 # --- list_files tool tests ---
 
 
