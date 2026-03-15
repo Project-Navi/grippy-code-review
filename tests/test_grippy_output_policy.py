@@ -658,7 +658,7 @@ class TestNoGripAcceptance:
                 confidence=95,
                 line_start=11,
                 line_end=11,
-                evidence='query = f"SELECT * FROM {user_input}"',
+                evidence='query = f"SELECT * FROM {user_input}"',  # nogrip
             ),
             _f(
                 id="F-002",
