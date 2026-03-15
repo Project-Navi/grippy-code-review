@@ -159,7 +159,7 @@ def _evidence_is_grounded(finding: Finding, added_lines: dict[str, list[str]]) -
 
     tokens = [t for t in finding.evidence.split() if len(t) >= 3]
     if len(tokens) < 2:
-        return True  # too few meaningful tokens — benefit of doubt
+        return False  # insufficient evidence — not grounded
 
     added_text = " ".join(file_lines)
     matches = sum(1 for t in tokens if t in added_text)
@@ -368,7 +368,8 @@ def filter_review(
     # --- Phase 1: Suppression ---
     surviving: list[Finding] = []
     narration_count = 0
-    threshold_count = 0
+    confidence_count = 0
+    evidence_count = 0
     nogrip_count = 0
 
     for finding in review.findings:
@@ -379,7 +380,7 @@ def filter_review(
             narration_count += 1
             continue
         if _below_confidence_threshold(finding):
-            threshold_count += 1
+            confidence_count += 1
             continue
         surviving.append(finding)
 
@@ -392,7 +393,7 @@ def filter_review(
 
         if not evidence_text:
             # Empty evidence → suppress (no proof)
-            threshold_count += 1
+            evidence_count += 1
             continue
 
         if added_lines is not None:
@@ -425,9 +426,10 @@ def filter_review(
     review.meta.score_before_policy = score_before
     review.meta.verdict_before_policy = verdict_before
     review.meta.narration_suppressed_count = narration_count
-    review.meta.threshold_suppressed_count = threshold_count
+    review.meta.confidence_suppressed_count = confidence_count
+    review.meta.evidence_suppressed_count = evidence_count
     review.meta.nogrip_suppressed_count = nogrip_count
-    review.meta.confidence_filter_suppressed = narration_count + threshold_count + nogrip_count
+    review.meta.confidence_filter_suppressed = narration_count + confidence_count + evidence_count
     review.meta.display_capped_count = capped_count
 
     return review

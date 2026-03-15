@@ -225,7 +225,7 @@ class TestBuildReviewComment:
 
         finding = _make_finding(file="src/app.py", category="security", line_start=10)
         comment = build_review_comment(finding)
-        assert "<!-- grippy:src/app.py:security:10 -->" in comment["body"]
+        assert "<!-- grippy:src/app.py:security:10:" in comment["body"]
 
     def test_comment_side_is_right(self) -> None:
         from grippy.github_review import build_review_comment
@@ -460,9 +460,9 @@ class TestFetchGrippyComments:
         )
         result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 2
-        assert ("src/app.py", "security", 10) in result
-        assert ("lib/utils.py", "logic", 20) in result
-        ref1 = result[("src/app.py", "security", 10)]
+        assert ("src/app.py", "security", 10, None) in result
+        assert ("lib/utils.py", "logic", 20, None) in result
+        ref1 = result[("src/app.py", "security", 10, None)]
         assert isinstance(ref1, ThreadRef)
         assert ref1.node_id == "PRRT_1"
 
@@ -591,8 +591,8 @@ class TestFetchGrippyComments:
         ]
         result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 2
-        assert ("a.py", "security", 10) in result
-        assert ("b.py", "logic", 20) in result
+        assert ("a.py", "security", 10, None) in result
+        assert ("b.py", "logic", 20, None) in result
         assert mock_run.call_count == 2
         # Verify cursor from page 1 was forwarded to page 2 call
         second_call_cmd = mock_run.call_args_list[1][0][0]
@@ -845,7 +845,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("src/app.py", "security", 9): ThreadRef(
+            ("src/app.py", "security", 9, None): ThreadRef(
                 node_id="PRRT_1",
                 body="old\n<!-- grippy:src/app.py:security:9 -->",
             ),
@@ -893,7 +893,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_old",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -938,7 +938,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_still_valid",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -980,7 +980,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_done",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -1005,6 +1005,48 @@ class TestPostReview:
             verdict="PASS",
         )
 
+        mock_resolve.assert_not_called()
+
+    @patch("grippy.github_review.resolve_threads")
+    @patch("grippy.github_review.fetch_thread_states")
+    @patch("grippy.github_review.Github")
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_summary_only_findings_protect_threads(
+        self,
+        mock_fetch: MagicMock,
+        mock_github_cls: MagicMock,
+        mock_fetch_states: MagicMock,
+        mock_resolve: MagicMock,
+    ) -> None:
+        """Summary-only findings are still active — their threads are NOT resolved."""
+        from grippy.github_review import post_review
+
+        summary_finding = _make_finding(file="old.py", category="logic", line_start=5)
+        mock_fetch.return_value = {
+            ("old.py", "logic", 5, None): ThreadRef(
+                node_id="PRRT_summary",
+                body="old\n<!-- grippy:old.py:logic:5 -->",
+            ),
+        }
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.head.repo.full_name = "org/repo"
+        mock_pr.base.repo.full_name = "org/repo"
+
+        post_review(
+            token="test-token",
+            repo="org/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc",
+            diff="",
+            score=85,
+            verdict="PASS",
+            summary_only_findings=[summary_finding],
+        )
+
+        # Thread should NOT be resolved — finding is still active (summary-only)
         mock_resolve.assert_not_called()
 
 
