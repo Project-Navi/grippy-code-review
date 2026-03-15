@@ -1,6 +1,6 @@
 # Audit Unit Freshness Tracker — Grippy
 
-**Last updated:** 2026-03-14 (Phase 3C mcp-response solo — 27/30 CURRENT)
+**Last updated:** 2026-03-15 (Phase 4 final shell wave — 30/30 CURRENT)
 
 ## Status Legend
 
@@ -79,11 +79,11 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 
 | Unit ID | Last Audit | Commit | Score | Commits Since | Status |
 |---|---|---|---|---|---|
-| mcp-server | — | — | — | — | NEVER |
-| mcp-config | — | — | — | — | NEVER |
+| mcp-server | 2026-03-15 | 6a92ce7 | 7.7/10 | 0 | CURRENT |
+| mcp-config | 2026-03-15 | e7339cd | 7.8/10 | 0 | CURRENT |
 | github-review | 2026-03-14 | c862022 | 8.2/10 | 0 | CURRENT |
 | review | 2026-03-14 | c862022 | 7.2/10 | 0 | CURRENT |
-| cli | — | — | — | — | NEVER |
+| cli | 2026-03-15 | d58661b | 7.6/10 | 0 | CURRENT |
 
 ## Methodology Version
 
@@ -109,6 +109,7 @@ Changes to these anchor functions trigger BOUNDARY_CHANGED status for affected u
 | 2026-03-14 | agent | Claude Opus 4.6 / Nelson Spence | `agent/SCORECARD.md` |
 | 2026-03-14 | review, github-review | Claude Opus 4.6 / Nelson Spence | `review/SCORECARD.md`, `github-review/SCORECARD.md` |
 | 2026-03-14 | mcp-response | Claude Opus 4.6 / Nelson Spence | `mcp-response/SCORECARD.md` |
+| 2026-03-15 | mcp-config, cli, mcp-server | Claude Opus 4.6 / Nelson Spence | `mcp-config/SCORECARD.md`, `cli/SCORECARD.md`, `mcp-server/SCORECARD.md` |
 
 ## Compound Chain Traces
 
