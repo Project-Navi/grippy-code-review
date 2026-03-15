@@ -132,6 +132,6 @@ run_review() [retry, TB-5] → GrippyReview (Pydantic-validated)
 
 ## Superset Analysis
 
-| Date | Commit Range | Finding Count | Reference |
+| Date | Commit Range | Open Findings | Reference |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-03-15 | cebbcab..3cb362d | 26 | SUPERSET.md |
