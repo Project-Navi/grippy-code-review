@@ -111,14 +111,14 @@ class SQLiteGraphStore:
                 actual = str(cur.fetchone()[0])
                 log.debug("Pragma %s = %s", read_stmt, actual)
                 if expected is not None and actual != expected:
-                    log.warning(
+                    log.error(
                         "Pragma %s: expected %s, got %s",
                         read_stmt,
                         expected,
                         actual,
                     )
             except sqlite3.OperationalError:
-                log.warning("Pragma not supported: %s", set_stmt)
+                log.error("Pragma not supported: %s", set_stmt)
         cur.execute(_NODES_TABLE)
         cur.execute(_EDGES_TABLE)
         cur.execute(_OBSERVATIONS_TABLE)
