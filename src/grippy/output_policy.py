@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from grippy.ignore import parse_nogrip
 from grippy.rules.context import parse_diff
 from grippy.schema import (
     Finding,
@@ -104,24 +105,46 @@ def _below_confidence_threshold(finding: Finding) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _get_added_lines_by_file(diff: str) -> dict[str, list[str]]:
-    """Extract added lines per file from a unified diff.
+_NoGripIndex = dict[tuple[str, int], set[str] | bool]
+
+
+def _parse_diff_context(
+    diff: str,
+) -> tuple[dict[str, list[str]], _NoGripIndex]:
+    """Parse diff once, returning added lines by file and nogrip index.
 
     Delegates to ``parse_diff`` from ``rules/context.py`` to avoid duplicating
-    diff parsing logic. P1 can extend this to return line numbers for
-    line-window matching.
+    diff parsing logic. Builds the nogrip index in the same pass using
+    ``parse_nogrip`` from ``ignore.py``.
     """
     files = parse_diff(diff)
-    result: dict[str, list[str]] = {}
+    added_lines: dict[str, list[str]] = {}
+    nogrip_index: _NoGripIndex = {}
+
     for f in files:
         added: list[str] = []
         for hunk in f.hunks:
             for line in hunk.lines:
                 if line.type == "add":
                     added.append(line.content)
+                    if line.new_lineno is not None:
+                        ng = parse_nogrip(line.content)
+                        if ng is not None:
+                            nogrip_index[(f.path, line.new_lineno)] = ng
         if added:
-            result[f.path] = added
-    return result
+            added_lines[f.path] = added
+
+    return added_lines, nogrip_index
+
+
+def _get_added_lines_by_file(diff: str) -> dict[str, list[str]]:
+    """Extract added lines per file from a unified diff.
+
+    Convenience wrapper around ``_parse_diff_context`` for callers that
+    only need the added lines (e.g. tests).
+    """
+    added_lines, _ = _parse_diff_context(diff)
+    return added_lines
 
 
 def _evidence_is_grounded(finding: Finding, added_lines: dict[str, list[str]]) -> bool:
@@ -141,6 +164,26 @@ def _evidence_is_grounded(finding: Finding, added_lines: dict[str, list[str]]) -
     added_text = " ".join(file_lines)
     matches = sum(1 for t in tokens if t in added_text)
     return matches >= 2
+
+
+# ---------------------------------------------------------------------------
+# 0c-bis. Nogrip suppression
+# ---------------------------------------------------------------------------
+
+
+def _is_nogrip_suppressed(finding: Finding, nogrip_index: _NoGripIndex) -> bool:
+    """Check if any line in [line_start, line_end] has a ``# nogrip`` pragma.
+
+    Bare ``# nogrip`` suppresses all findings. Targeted ``# nogrip: SEC-001``
+    only suppresses findings whose ``rule_id`` matches.
+    """
+    for line_no in range(finding.line_start, finding.line_end + 1):
+        ng = nogrip_index.get((finding.file, line_no))
+        if ng is True:
+            return True  # bare nogrip — suppress all
+        if isinstance(ng, set) and finding.rule_id and finding.rule_id in ng:
+            return True  # targeted nogrip matching finding's rule_id
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -317,14 +360,21 @@ def filter_review(
             mode,
         )
 
-    added_lines = _get_added_lines_by_file(diff) if diff else None
+    if diff:
+        added_lines, nogrip_index = _parse_diff_context(diff)
+    else:
+        added_lines, nogrip_index = None, {}
 
     # --- Phase 1: Suppression ---
     surviving: list[Finding] = []
     narration_count = 0
     threshold_count = 0
+    nogrip_count = 0
 
     for finding in review.findings:
+        if nogrip_index and _is_nogrip_suppressed(finding, nogrip_index):
+            nogrip_count += 1
+            continue
         if _is_narration(finding):
             narration_count += 1
             continue
@@ -376,7 +426,8 @@ def filter_review(
     review.meta.verdict_before_policy = verdict_before
     review.meta.narration_suppressed_count = narration_count
     review.meta.threshold_suppressed_count = threshold_count
-    review.meta.confidence_filter_suppressed = narration_count + threshold_count
+    review.meta.nogrip_suppressed_count = nogrip_count
+    review.meta.confidence_filter_suppressed = narration_count + threshold_count + nogrip_count
     review.meta.display_capped_count = capped_count
 
     return review
