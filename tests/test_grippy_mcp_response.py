@@ -111,6 +111,7 @@ class TestSerializeAudit:
         result = serialize_audit(review, profile="security", diff_stats={"files": 3})
         assert set(result.keys()) == {
             "findings",
+            "summary_only_findings",
             "score",
             "verdict",
             "rule_findings",
