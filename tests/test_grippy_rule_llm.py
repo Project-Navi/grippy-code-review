@@ -208,3 +208,49 @@ class TestLlmSinksPatternCoverage:
         )
         results = LlmOutputSinksRule().run(_ctx(diff))
         assert any(r.rule_id == "llm-output-unsanitized" for r in results)
+
+
+class TestLlmSinksEdgeCaseFixtures:
+    """Edge-case fixture categories for LLM output sinks rule."""
+
+    def test_binary_diff_no_crash(self) -> None:
+        """Binary file diffs produce no results and no crash."""
+        diff = (
+            "diff --git a/image.png b/image.png\n"
+            "new file mode 100644\n"
+            "index 0000000..abcdef1\n"
+            "Binary files /dev/null and b/image.png differ\n"
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_renamed_file_still_scanned(self) -> None:
+        """LLM sinks in renamed files are still detected."""
+        diff = (
+            "diff --git a/old_bot.py b/new_bot.py\n"
+            "similarity index 90%\n"
+            "rename from old_bot.py\n"
+            "rename to new_bot.py\n"
+            "--- a/old_bot.py\n"
+            "+++ b/new_bot.py\n"
+            "@@ -1,1 +1,3 @@\n"
+            " existing\n"
+            "+    result = agent.run(prompt)\n"
+            "+    pr.create_issue_comment(result.content)\n"
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert any(r.rule_id == "llm-output-unsanitized" for r in results)
+
+    def test_deleted_line_not_flagged(self) -> None:
+        """Removed lines with LLM sinks should not trigger findings."""
+        diff = (
+            "diff --git a/bot.py b/bot.py\n"
+            "--- a/bot.py\n"
+            "+++ b/bot.py\n"
+            "@@ -1,3 +1,1 @@\n"
+            "-    result = agent.run(prompt)\n"
+            "-    pr.create_issue_comment(result.content)\n"
+            " other = True\n"
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert results == []
