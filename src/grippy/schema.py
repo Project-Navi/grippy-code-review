@@ -170,6 +170,14 @@ class ReviewMeta(BaseModel):
     context_files_loaded: int
     confidence_filter_suppressed: int
     duplicate_filter_suppressed: int
+    # Output policy telemetry
+    score_before_policy: int | None = None
+    verdict_before_policy: str | None = None
+    policy_bypassed: bool = False
+    policy_bypass_reason: str | None = None
+    narration_suppressed_count: int = 0
+    threshold_suppressed_count: int = 0
+    display_capped_count: int = 0
 
 
 # --- Top-level output ---
@@ -189,6 +197,7 @@ class GrippyReview(BaseModel):
     pr: PRMetadata
     scope: ReviewScope
     findings: list[Finding]
+    summary_only_findings: list[Finding] = Field(default_factory=list)
     escalations: list[Escalation]
     score: Score
     verdict: Verdict
