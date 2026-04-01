@@ -343,3 +343,11 @@ def format_pr_context(
         sections.append(f"<rule_findings>\n{_escape_xml(rule_findings)}\n</rule_findings>")
 
     return "\n\n".join(sections)
+
+
+# --- Migration note (Phase 0) ---
+# TB-1 anchor functions (escape_xml, format_pr_context, escape_rule_field) have been
+# extracted to grippy.input_fence with unified navi-sanitize pipeline.
+# The adapter pattern is in grippy.agno_adapter (AgnoAdapter, create_agno_reviewer).
+# Consumers will be switched to import from input_fence/agno_adapter in Phase 3.
+# Until then, the functions in this file remain canonical for existing code paths.

@@ -12,12 +12,15 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
 from grippy.output_policy import filter_review
 from grippy.schema import GrippyReview
+
+if TYPE_CHECKING:
+    from grippy.ports import ReviewerPort  # noqa: F401 — used in docstrings
 
 log = logging.getLogger(__name__)
 
@@ -125,9 +128,14 @@ def run_review(
 
     Args:
         agent: Agno Agent instance (or mock with .run() method).
+            Phase 0 migration note: this parameter will be typed as
+            ``ReviewerPort`` in Phase 3 when the Agno adapter implements
+            the protocol. Until then, the actual type remains ``Any``.
         message: The user message (PR context) to send.
         max_retries: Number of retries after the initial attempt. 0 = no retries.
         on_validation_error: Optional callback(attempt_number, error) on each failure.
+        expected_rule_counts: Expected finding counts per rule_id from the rule engine.
+        expected_rule_files: Expected file sets per rule_id for fabrication detection.
 
     Returns:
         Validated GrippyReview.
