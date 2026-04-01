@@ -111,8 +111,14 @@ def _install_mcp(argv: list[str]) -> None:
             print(f"  {i}) {t}")
         choice = input(f"Choice [1-{len(transports)}]: ").strip()
         try:
-            transport = transports[int(choice) - 1]
+            idx = int(choice) - 1
+            if 0 <= idx < len(transports):
+                transport = transports[idx]
+            else:
+                print("Choice out of range, defaulting to 'local' transport.")
+                transport = "local"
         except (ValueError, IndexError):
+            print("Invalid selection, defaulting to 'local' transport.")
             transport = "local"
 
     # -- Collect transport-specific config --
