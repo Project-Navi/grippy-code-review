@@ -109,7 +109,9 @@ class TestRunReviewSuccess:
         agent = _mock_agent(VALID_REVIEW_DICT)
         result = run_review(agent, "Review this PR")
         assert isinstance(result, GrippyReview)
-        assert result.score.overall == 95
+        # Score recomputed by output policy: 0 findings → 100
+        assert result.score.overall == 100
+        assert result.meta.score_before_policy == 95
 
     def test_parses_json_string_response(self) -> None:
         """Agent returning a JSON string is parsed into GrippyReview."""
@@ -135,7 +137,9 @@ class TestRunReviewSuccess:
         agent = _mock_reasoning_agent(VALID_REVIEW_JSON)
         result = run_review(agent, "Review this PR")
         assert isinstance(result, GrippyReview)
-        assert result.score.overall == 95
+        # Score recomputed by output policy: 0 findings → 100
+        assert result.score.overall == 100
+        assert result.meta.score_before_policy == 95
 
     def test_parses_reasoning_content_dict(self) -> None:
         """Reasoning content as dict is also handled."""
