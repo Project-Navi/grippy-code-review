@@ -377,3 +377,101 @@ class TestSuppressionSpecificity:
             assert results[0].enrichment is not None
             assert results[0].enrichment.suppressed is True
             assert "dynaconf" in results[0].enrichment.suppression_reason
+
+
+# -- Adversarial enrichment inputs (F-ENR-001) ---------------------------------
+
+
+class TestAdversarialEnrichmentInputs:
+    """F-ENR-001: Verify enrichment handles crafted import paths safely.
+
+    Import paths come from codebase indexing (AST parsing). These tests
+    verify that malicious or unusual import paths don't crash enrichment
+    or cause false suppression through substring collision.
+    """
+
+    def test_short_import_substring_collision(self) -> None:
+        """Import 'os' should not suppress sql-injection via substring match on file path.
+
+        The suppression check compares import names against suppression map
+        substrings (e.g., 'sqlalchemy'). An import named 'os' could
+        theoretically match substring 'os' in other strings, but since
+        the _SUPPRESSION_MAP values are specific ('sqlalchemy', 'django/db',
+        etc.), 'os' should never match them.
+        """
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "cosmos/handler.py")
+            os_id = _record_id(NodeType.FILE, "os")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "cosmos/handler.py"})
+            store.upsert_node(os_id, NodeType.FILE, {"path": "os"})
+            store.upsert_edge(app_id, os_id, EdgeType.IMPORTS)
+
+            results = enrich_results(
+                [_result(rule_id="sql-injection-risk", file="cosmos/handler.py")], store
+            )
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is False
+
+    def test_path_traversal_import_no_crash(self) -> None:
+        """Import with path traversal characters doesn't crash enrichment."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "app.py")
+            evil_id = _record_id(NodeType.FILE, "../../etc/passwd")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "app.py"})
+            store.upsert_node(evil_id, NodeType.FILE, {"path": "../../etc/passwd"})
+            store.upsert_edge(app_id, evil_id, EdgeType.IMPORTS)
+
+            results = enrich_results([_result(rule_id="sql-injection-risk", file="app.py")], store)
+            assert results[0].enrichment is not None
+            # Traversal import doesn't match any suppression substring
+            assert results[0].enrichment.suppressed is False
+
+    def test_empty_import_path_no_crash(self) -> None:
+        """Import node with empty path string doesn't crash enrichment."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "app.py")
+            empty_id = _record_id(NodeType.FILE, "")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "app.py"})
+            store.upsert_node(empty_id, NodeType.FILE, {"path": ""})
+            store.upsert_edge(app_id, empty_id, EdgeType.IMPORTS)
+
+            results = enrich_results([_result(rule_id="sql-injection-risk", file="app.py")], store)
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is False
+
+    def test_suppression_substring_in_crafted_import_name(self) -> None:
+        """Import named 'not-sqlalchemy-really' DOES trigger suppression.
+
+        This documents the substring matching behavior: any import path
+        containing a suppression keyword triggers suppression. This is
+        a known false-positive vector for crafted import names.
+        """
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "app.py")
+            crafted_id = _record_id(NodeType.FILE, "not-sqlalchemy-really")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "app.py"})
+            store.upsert_node(crafted_id, NodeType.FILE, {"path": "not-sqlalchemy-really"})
+            store.upsert_edge(app_id, crafted_id, EdgeType.IMPORTS)
+
+            results = enrich_results([_result(rule_id="sql-injection-risk", file="app.py")], store)
+            assert results[0].enrichment is not None
+            # Substring match DOES fire — documented behavior
+            assert results[0].enrichment.suppressed is True
+
+    def test_unicode_import_path_no_crash(self) -> None:
+        """Import with Unicode characters doesn't crash enrichment."""
+        with TemporaryDirectory() as tmp:
+            store = _make_graph(tmp)
+            app_id = _record_id(NodeType.FILE, "app.py")
+            uni_id = _record_id(NodeType.FILE, "src/módulo/café.py")
+            store.upsert_node(app_id, NodeType.FILE, {"path": "app.py"})
+            store.upsert_node(uni_id, NodeType.FILE, {"path": "src/módulo/café.py"})
+            store.upsert_edge(app_id, uni_id, EdgeType.IMPORTS)
+
+            results = enrich_results([_result(rule_id="sql-injection-risk", file="app.py")], store)
+            assert results[0].enrichment is not None
+            assert results[0].enrichment.suppressed is False

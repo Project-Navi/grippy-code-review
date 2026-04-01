@@ -329,3 +329,28 @@ class TestFindingFrozen:
         f = Finding(**_minimal_finding())
         with pytest.raises(ValidationError):
             f.file = "other.py"  # type: ignore[misc]
+
+
+# --- GrippyReview required field rejection (F-SCH-002) ---
+
+
+class TestGrippyReviewRequiredFields:
+    """F-SCH-002: GrippyReview rejects input with missing required fields."""
+
+    @pytest.mark.parametrize(
+        "field",
+        ["audit_type", "timestamp", "pr", "scope", "findings", "score", "verdict", "personality"],
+    )
+    def test_missing_required_field_rejected(self, field: str) -> None:
+        """Each required field must be present — omission raises ValidationError."""
+        data = _minimal_review()
+        del data[field]
+        with pytest.raises(ValidationError, match=field):
+            GrippyReview(**data)
+
+    def test_missing_nested_required_field_rejected(self) -> None:
+        """Required nested fields (e.g., pr.title) also reject on omission."""
+        data = _minimal_review()
+        del data["pr"]["title"]
+        with pytest.raises(ValidationError, match="title"):
+            GrippyReview(**data)
