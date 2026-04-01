@@ -225,7 +225,7 @@ class TestBuildReviewComment:
 
         finding = _make_finding(file="src/app.py", category="security", line_start=10)
         comment = build_review_comment(finding)
-        assert "<!-- grippy:src/app.py:security:10 -->" in comment["body"]
+        assert "<!-- grippy:src/app.py:security:10:" in comment["body"]
 
     def test_comment_side_is_right(self) -> None:
         from grippy.github_review import build_review_comment
@@ -324,6 +324,89 @@ class TestFormatSummary:
         assert "truncated" in result.lower()
         assert "Some files may not have been reviewed" in result
 
+    def test_policy_bypassed_warning(self) -> None:
+        """policy_bypassed=True adds a warning annotation to the summary."""
+        from grippy.github_review import format_summary_comment
+
+        result = format_summary_comment(
+            score=80,
+            verdict="PASS",
+            finding_count=0,
+            new_count=0,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=8,
+            policy_bypassed=True,
+        )
+        assert "Output policy was bypassed" in result
+        assert "unfiltered" in result.lower()
+
+    def test_display_capped_annotation(self) -> None:
+        """display_capped_count > 0 adds an omission annotation."""
+        from grippy.github_review import format_summary_comment
+
+        result = format_summary_comment(
+            score=70,
+            verdict="FAIL",
+            finding_count=5,
+            new_count=5,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=9,
+            display_capped_count=3,
+        )
+        assert "3 additional finding(s) omitted for brevity" in result
+
+    def test_summary_only_findings_section(self) -> None:
+        """summary_only_findings renders in a collapsible details section."""
+        from grippy.github_review import format_summary_comment
+
+        summary_only = [_make_finding(file="src/utils.py", title="Weak hash usage")]
+        result = format_summary_comment(
+            score=70,
+            verdict="FAIL",
+            finding_count=1,
+            new_count=1,
+            resolved_count=0,
+            off_diff_findings=[],
+            head_sha="abc",
+            pr_number=10,
+            summary_only_findings=summary_only,
+        )
+        assert "Summary-only findings (1)" in result
+        assert "scored but not inline-eligible" in result
+        assert "Weak hash usage" in result
+        assert "src/utils.py" in result
+
+
+# --- build_review_comment snippet rendering ---
+
+
+class TestBuildReviewCommentEvidence:
+    """build_review_comment renders evidence as a fenced code block."""
+
+    def test_evidence_rendered_as_code_block(self) -> None:
+        from grippy.github_review import build_review_comment
+
+        finding = _make_finding(title="SQL injection")
+        comment = build_review_comment(finding)
+        body = comment["body"]
+        assert "```\nevidence here\n```" in body
+
+    def test_empty_evidence_no_code_block(self) -> None:
+        from grippy.github_review import build_review_comment
+
+        finding = _make_finding(title="Missing check")
+        # Finding with whitespace-only evidence
+        finding_dict = finding.model_dump()
+        finding_dict["evidence"] = "   "
+        finding_with_empty = Finding(**finding_dict)
+        comment = build_review_comment(finding_with_empty)
+        body = comment["body"]
+        assert "```" not in body
+
 
 # --- fetch_grippy_comments ---
 
@@ -377,9 +460,9 @@ class TestFetchGrippyComments:
         )
         result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 2
-        assert ("src/app.py", "security", 10) in result
-        assert ("lib/utils.py", "logic", 20) in result
-        ref1 = result[("src/app.py", "security", 10)]
+        assert ("src/app.py", "security", 10, None) in result
+        assert ("lib/utils.py", "logic", 20, None) in result
+        ref1 = result[("src/app.py", "security", 10, None)]
         assert isinstance(ref1, ThreadRef)
         assert ref1.node_id == "PRRT_1"
 
@@ -508,8 +591,8 @@ class TestFetchGrippyComments:
         ]
         result = fetch_grippy_comments(repo="org/repo", pr_number=1)
         assert len(result) == 2
-        assert ("a.py", "security", 10) in result
-        assert ("b.py", "logic", 20) in result
+        assert ("a.py", "security", 10, None) in result
+        assert ("b.py", "logic", 20, None) in result
         assert mock_run.call_count == 2
         # Verify cursor from page 1 was forwarded to page 2 call
         second_call_cmd = mock_run.call_args_list[1][0][0]
@@ -762,7 +845,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("src/app.py", "security", 9): ThreadRef(
+            ("src/app.py", "security", 9, None): ThreadRef(
                 node_id="PRRT_1",
                 body="old\n<!-- grippy:src/app.py:security:9 -->",
             ),
@@ -810,7 +893,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_old",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -844,18 +927,18 @@ class TestPostReview:
     @patch("grippy.github_review.fetch_thread_states")
     @patch("grippy.github_review.Github")
     @patch("grippy.github_review.fetch_grippy_comments")
-    def test_skips_absent_but_not_outdated(
+    def test_resolves_absent_even_if_not_outdated(
         self,
         mock_fetch: MagicMock,
         mock_github_cls: MagicMock,
         mock_fetch_states: MagicMock,
         mock_resolve: MagicMock,
     ) -> None:
-        """Absent findings NOT marked outdated by GitHub are not resolved."""
+        """Absent findings are resolved even when GitHub hasn't marked them outdated."""
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_still_valid",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -880,7 +963,7 @@ class TestPostReview:
             verdict="PASS",
         )
 
-        mock_resolve.assert_not_called()
+        mock_resolve.assert_called_once()
 
     @patch("grippy.github_review.resolve_threads")
     @patch("grippy.github_review.fetch_thread_states")
@@ -897,7 +980,7 @@ class TestPostReview:
         from grippy.github_review import post_review
 
         mock_fetch.return_value = {
-            ("old.py", "logic", 5): ThreadRef(
+            ("old.py", "logic", 5, None): ThreadRef(
                 node_id="PRRT_done",
                 body="old\n<!-- grippy:old.py:logic:5 -->",
             ),
@@ -922,6 +1005,48 @@ class TestPostReview:
             verdict="PASS",
         )
 
+        mock_resolve.assert_not_called()
+
+    @patch("grippy.github_review.resolve_threads")
+    @patch("grippy.github_review.fetch_thread_states")
+    @patch("grippy.github_review.Github")
+    @patch("grippy.github_review.fetch_grippy_comments")
+    def test_summary_only_findings_protect_threads(
+        self,
+        mock_fetch: MagicMock,
+        mock_github_cls: MagicMock,
+        mock_fetch_states: MagicMock,
+        mock_resolve: MagicMock,
+    ) -> None:
+        """Summary-only findings are still active — their threads are NOT resolved."""
+        from grippy.github_review import post_review
+
+        summary_finding = _make_finding(file="old.py", category="logic", line_start=5)
+        mock_fetch.return_value = {
+            ("old.py", "logic", 5, None): ThreadRef(
+                node_id="PRRT_summary",
+                body="old\n<!-- grippy:old.py:logic:5 -->",
+            ),
+        }
+        mock_pr = MagicMock()
+        mock_github_cls.return_value.get_repo.return_value.get_pull.return_value = mock_pr
+        mock_pr.get_issue_comments.return_value = []
+        mock_pr.head.repo.full_name = "org/repo"
+        mock_pr.base.repo.full_name = "org/repo"
+
+        post_review(
+            token="test-token",
+            repo="org/repo",
+            pr_number=1,
+            findings=[],
+            head_sha="abc",
+            diff="",
+            score=85,
+            verdict="PASS",
+            summary_only_findings=[summary_finding],
+        )
+
+        # Thread should NOT be resolved — finding is still active (summary-only)
         mock_resolve.assert_not_called()
 
 
@@ -1111,7 +1236,7 @@ class TestFetchThreadStates:
 
     @patch("grippy.github_review.subprocess.run")
     def test_uses_graphql_variables(self, mock_run: MagicMock) -> None:
-        """Thread IDs are passed as GraphQL variables, not interpolated."""
+        """Thread IDs are passed as GraphQL variables via stdin, not interpolated."""
         import json
 
         from grippy.github_review import fetch_thread_states
@@ -1121,10 +1246,10 @@ class TestFetchThreadStates:
             stdout=json.dumps({"data": {"nodes": []}}),
         )
         fetch_thread_states(["PRRT_1"])
-        cmd = mock_run.call_args[0][0]
-        query_args = [a for a in cmd if a.startswith("query=")]
-        assert "$ids" in query_args[0]
-        assert "PRRT_1" not in query_args[0]
+        input_data = json.loads(mock_run.call_args[1]["input"])
+        assert "$ids" in input_data["query"]
+        assert "PRRT_1" not in input_data["query"]
+        assert input_data["variables"]["ids"] == ["PRRT_1"]
 
     @patch("grippy.github_review.subprocess.run")
     def test_exception_returns_empty(self, mock_run: MagicMock) -> None:
@@ -1865,10 +1990,12 @@ class TestPostReviewVerdictLifecycle:
 
 
 class TestFetchThreadStatesFix:
-    """fetch_thread_states must use -F (JSON) not -f (string) for the ids parameter."""
+    """fetch_thread_states must pass ids array via --input stdin (not -F which doesn't parse arrays)."""
 
     @patch("subprocess.run")
-    def test_uses_dash_cap_f_for_ids(self, mock_run) -> None:
+    def test_uses_stdin_input_for_ids(self, mock_run) -> None:
+        import json
+
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout='{"data":{"nodes":[]}}',
@@ -1876,14 +2003,12 @@ class TestFetchThreadStatesFix:
         )
         from grippy.github_review import fetch_thread_states
 
-        fetch_thread_states(["PRRT_abc123"])
+        fetch_thread_states(["PRRT_abc123", "PRRT_def456"])
         args = mock_run.call_args[0][0]
-        for i, arg in enumerate(args):
-            if arg.startswith("ids="):
-                assert args[i - 1] == "-F", f"Expected -F before ids=, got {args[i - 1]}"
-                break
-        else:
-            pytest.fail("ids= argument not found in subprocess call")
+        assert "--input" in args, "Expected --input flag for stdin JSON"
+        # Verify ids passed as JSON array in stdin
+        input_data = json.loads(mock_run.call_args[1]["input"])
+        assert input_data["variables"]["ids"] == ["PRRT_abc123", "PRRT_def456"]
 
     @patch("subprocess.run")
     def test_empty_thread_ids_skips_call(self, mock_run) -> None:

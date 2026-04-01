@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import threading
@@ -916,3 +917,52 @@ class TestConcurrentAccess:
         checker = SQLiteGraphStore(db_path=db_path)
         nodes = checker.get_recent_nodes(limit=node_count + 10)
         assert len(nodes) == node_count
+
+
+# --- Data encoding edge cases (KRC-01) ---
+
+
+class TestDataEncodingEdgeCases:
+    """Verify graph store handles non-ASCII and unusual data safely."""
+
+    def test_unicode_in_node_data(self, store: SQLiteGraphStore) -> None:
+        """Unicode content in node data round-trips correctly."""
+        data = {"path": "src/日本語.py", "desc": "emoji 🔒 and CJK 漢字"}
+        store.upsert_node("FILE:unicode", "FILE", data)
+        node = store.get_node("FILE:unicode")
+        assert node is not None
+        assert node.data["path"] == "src/日本語.py"
+        assert "🔒" in node.data["desc"]
+
+    def test_unicode_in_observation_content(self, store: SQLiteGraphStore) -> None:
+        """Observations with non-ASCII content stored and retrieved."""
+        store.upsert_node("FILE:obs", "FILE")
+        added = store.add_observations(
+            "FILE:obs",
+            ["PR #1: fixed ñ-handling — résumé upload"],
+            source="pipeline",
+            kind="history",
+        )
+        assert len(added) == 1
+        obs = store.get_observations("FILE:obs")
+        assert "ñ" in obs[0]
+        assert "résumé" in obs[0]
+
+    def test_special_chars_in_edge_properties(self, store: SQLiteGraphStore) -> None:
+        """Edge properties with quotes, backslashes, newlines survive JSON round-trip."""
+        store.upsert_node("A:aaa", "FILE")
+        store.upsert_node("B:bbb", "FILE")
+        props = {"note": 'path with "quotes" and \\backslash', "multi": "line\nbreak"}
+        store.upsert_edge("A:aaa", "B:bbb", "IMPORTS", properties=props)
+        cur = store._conn.cursor()
+        cur.execute("SELECT properties FROM edges")
+        raw = cur.fetchone()[0]
+        restored = json.loads(raw)
+        assert restored["note"] == props["note"]
+        assert restored["multi"] == props["multi"]
+
+    def test_empty_string_node_type(self, store: SQLiteGraphStore) -> None:
+        """Empty string node type is accepted (schema has DEFAULT 'node')."""
+        store.upsert_node("TEST:empty-type", "", {"x": 1})
+        node = store.get_node("TEST:empty-type")
+        assert node is not None

@@ -9,13 +9,17 @@ Native json_schema path first — no Instructor dependency.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
 
+from grippy.output_policy import filter_review
 from grippy.schema import GrippyReview
+
+log = logging.getLogger(__name__)
 
 
 class ReviewParseError(Exception):
@@ -114,6 +118,8 @@ def run_review(
     on_validation_error: Callable[[int, Exception], None] | None = None,
     expected_rule_counts: dict[str, int] | None = None,
     expected_rule_files: dict[str, frozenset[str]] | None = None,
+    mode: str = "pr_review",
+    diff: str | None = None,
 ) -> GrippyReview:
     """Run a review with structured output validation and retry.
 
@@ -170,6 +176,15 @@ def run_review(
             _model_id = getattr(getattr(agent, "model", None), "id", None)
             if _model_id:
                 review.model = _model_id
+
+            # Apply output policy — single fail-open owner
+            try:
+                review = filter_review(review, mode=mode, diff=diff)
+            except Exception as exc:
+                log.warning("Output policy failed — returning unfiltered review: %s", exc)
+                review.meta.policy_bypassed = True
+                review.meta.policy_bypass_reason = str(exc)
+
             return review
         except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as e:
             error_str = str(e)

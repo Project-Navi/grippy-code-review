@@ -183,3 +183,47 @@ class TestSinksReDoS:
         diff = _make_diff("app.py", long_content)
         results = DangerousSinksRule().run(_ctx(diff))
         assert results == []
+
+
+class TestSinksEdgeCaseFixtures:
+    """Edge-case fixture categories for sinks rule."""
+
+    def test_binary_diff_no_crash(self) -> None:
+        """Binary file diffs produce no results and no crash."""
+        diff = (
+            "diff --git a/image.png b/image.png\n"
+            "new file mode 100644\n"
+            "index 0000000..abcdef1\n"
+            "Binary files /dev/null and b/image.png differ\n"
+        )
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_renamed_file_still_scanned(self) -> None:
+        """Dangerous sinks in renamed files are still detected."""
+        diff = (
+            "diff --git a/old_util.py b/new_util.py\n"
+            "similarity index 90%\n"
+            "rename from old_util.py\n"
+            "rename to new_util.py\n"
+            "--- a/old_util.py\n"
+            "+++ b/new_util.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            " existing\n"
+            "+exec(code)\n"
+        )
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert len(results) >= 1
+
+    def test_deleted_line_not_flagged(self) -> None:
+        """Removed lines with dangerous sinks should not trigger findings."""
+        diff = (
+            "diff --git a/app.py b/app.py\n"
+            "--- a/app.py\n"
+            "+++ b/app.py\n"
+            "@@ -1,2 +1,1 @@\n"
+            "-exec(code)\n"
+            " other = True\n"
+        )
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []

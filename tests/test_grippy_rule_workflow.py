@@ -286,3 +286,51 @@ class TestProximityWindow:
         assert not any("write" in r.message.lower() for r in results), (
             "Context 'write' permission >2 lines from added line should NOT be detected"
         )
+
+
+class TestWorkflowEdgeCaseFixtures:
+    """Edge-case fixture categories for workflow permissions rule."""
+
+    def test_binary_diff_no_crash(self) -> None:
+        """Binary file diffs produce no results and no crash."""
+        diff = (
+            "diff --git a/image.png b/image.png\n"
+            "new file mode 100644\n"
+            "index 0000000..abcdef1\n"
+            "Binary files /dev/null and b/image.png differ\n"
+        )
+        results = WorkflowPermissionsRule().run(_ctx(diff))
+        assert results == []
+
+    def test_renamed_workflow_still_scanned(self) -> None:
+        """Permissions in renamed workflow files are still detected."""
+        diff = (
+            "diff --git a/.github/workflows/old.yml b/.github/workflows/new.yml\n"
+            "similarity index 90%\n"
+            "rename from .github/workflows/old.yml\n"
+            "rename to .github/workflows/new.yml\n"
+            "--- a/.github/workflows/old.yml\n"
+            "+++ b/.github/workflows/new.yml\n"
+            "@@ -1,2 +1,4 @@\n"
+            " name: deploy\n"
+            "+permissions:\n"
+            "+  contents: write\n"
+            " on:\n"
+        )
+        results = WorkflowPermissionsRule().run(_ctx(diff))
+        assert any("write" in r.message.lower() for r in results)
+
+    def test_deleted_permission_not_flagged(self) -> None:
+        """Removed permission lines should not trigger findings."""
+        diff = (
+            "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n"
+            "--- a/.github/workflows/ci.yml\n"
+            "+++ b/.github/workflows/ci.yml\n"
+            "@@ -1,4 +1,2 @@\n"
+            " name: ci\n"
+            "-permissions:\n"
+            "-  contents: write\n"
+            " on:\n"
+        )
+        results = WorkflowPermissionsRule().run(_ctx(diff))
+        assert not any("write" in r.message.lower() for r in results)
