@@ -714,7 +714,15 @@ def _make_grep_code(repo_root: Path) -> Any:
                 return "No matches found."
             if result.returncode != 0:
                 return f"Search failed: {result.stderr.strip()}"
-            return result.stdout
+            # Strip absolute repo root prefix from leading path segments only.
+            # Each grep output line starts with "path:lineno:content" — only
+            # the path portion should be relativized; matched content is preserved.
+            repo_prefix = str(repo_root) + "/"
+            lines = result.stdout.splitlines(keepends=True)
+            output = "".join(
+                line[len(repo_prefix) :] if line.startswith(repo_prefix) else line for line in lines
+            )
+            return output
         except subprocess.TimeoutExpired:
             return "Search timed out — try a more specific pattern."
         except FileNotFoundError:
