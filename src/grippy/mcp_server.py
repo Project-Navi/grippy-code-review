@@ -155,7 +155,7 @@ def _run_audit(scope: str = "staged", profile: str = "security") -> str:
     )
 
     try:
-        review = run_review(agent, user_message)
+        review = run_review(agent, user_message, mode=mode, diff=diff)
     except ReviewParseError as exc:
         return _json_error(f"Review failed after {exc.attempts} attempts")
     except Exception as exc:
