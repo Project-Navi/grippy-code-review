@@ -602,3 +602,123 @@ class TestRuleCoverageRetryLoop:
         )
         assert isinstance(result, GrippyReview)
         assert agent.run.call_count == 2
+
+
+# --- File-set validation retry integration (F-RY-001) ---
+
+
+class TestFileSetValidationRetryLoop:
+    """Integration: run_review retries when findings reference fabricated files.
+
+    Exercises the expected_rule_files parameter through the full retry loop,
+    proving that file-set validation (retry.py:102-105) triggers retries
+    and correction prompts when the LLM fabricates file references.
+    """
+
+    @staticmethod
+    def _review_dict_with_file_findings(
+        rule_files: list[tuple[str, str]],
+    ) -> dict:
+        """Build a valid review dict with findings having (rule_id, file) pairs."""
+        import copy
+
+        data = copy.deepcopy(VALID_REVIEW_DICT)
+        data["findings"] = [
+            {
+                "id": f"F-{i:03d}",
+                "severity": "HIGH",
+                "confidence": 90,
+                "category": "security",
+                "file": file,
+                "line_start": 10 + i,
+                "line_end": 15 + i,
+                "title": f"Finding {i}",
+                "description": f"Description {i}",
+                "suggestion": f"Fix {i}",
+                "evidence": "...",
+                "grippy_note": "Grippy says.",
+                "rule_id": rule_id,
+            }
+            for i, (rule_id, file) in enumerate(rule_files)
+        ]
+        return data
+
+    def test_retry_on_fabricated_files(self) -> None:
+        """Agent retries when findings reference wrong files (anti-hallucination)."""
+        # First response: correct rule_id and count, but fabricated file
+        fabricated = self._review_dict_with_file_findings([("secrets-in-diff", "hallucinated.py")])
+        # Second response: correct file
+        corrected = self._review_dict_with_file_findings([("secrets-in-diff", "config.py")])
+        agent = _mock_agent(fabricated, corrected)
+
+        result = run_review(
+            agent,
+            "Review this PR",
+            max_retries=3,
+            expected_rule_counts={"secrets-in-diff": 1},
+            expected_rule_files={"secrets-in-diff": frozenset({"config.py"})},
+        )
+        assert isinstance(result, GrippyReview)
+        assert agent.run.call_count == 2
+
+        # Retry message references the failing rule
+        retry_msg = agent.run.call_args_list[1][0][0]
+        assert "secrets-in-diff" in retry_msg
+
+    def test_no_retry_when_files_match(self) -> None:
+        """Single call when findings reference expected files."""
+        correct = self._review_dict_with_file_findings([("secrets-in-diff", "config.py")])
+        agent = _mock_agent(correct)
+
+        result = run_review(
+            agent,
+            "Review this PR",
+            max_retries=3,
+            expected_rule_counts={"secrets-in-diff": 1},
+            expected_rule_files={"secrets-in-diff": frozenset({"config.py"})},
+        )
+        assert isinstance(result, GrippyReview)
+        assert agent.run.call_count == 1
+
+    def test_any_file_overlap_sufficient(self) -> None:
+        """Findings covering one of multiple expected files is enough (set intersection).
+
+        The code uses `finding_files & expected_rule_files[rule_id]` — any overlap
+        between finding files and expected files passes. This is the boundary:
+        zero overlap fails, any overlap passes.
+        """
+        # Finding references only "config.py", expected set has both "config.py" and "auth.py"
+        partial_overlap = self._review_dict_with_file_findings([("secrets-in-diff", "config.py")])
+        agent = _mock_agent(partial_overlap)
+
+        result = run_review(
+            agent,
+            "Review this PR",
+            max_retries=3,
+            expected_rule_counts={"secrets-in-diff": 1},
+            expected_rule_files={"secrets-in-diff": frozenset({"config.py", "auth.py"})},
+        )
+        assert isinstance(result, GrippyReview)
+        assert agent.run.call_count == 1  # No retry — overlap exists
+
+    def test_warns_on_exhausted_retries_with_fabricated_files(self) -> None:
+        """Returns review with warning when file-set validation never passes."""
+        import warnings
+
+        # All responses reference wrong files
+        wrong_file = self._review_dict_with_file_findings([("secrets-in-diff", "wrong.py")])
+        agent = _mock_agent(wrong_file, wrong_file, wrong_file, wrong_file)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = run_review(
+                agent,
+                "Review this PR",
+                max_retries=3,
+                expected_rule_counts={"secrets-in-diff": 1},
+                expected_rule_files={"secrets-in-diff": frozenset({"config.py"})},
+            )
+            assert isinstance(result, GrippyReview)
+            rule_warnings = [x for x in w if "Rule coverage incomplete" in str(x.message)]
+            assert len(rule_warnings) == 1
+            assert "flagged files" in str(rule_warnings[0].message)
