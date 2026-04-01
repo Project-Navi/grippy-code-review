@@ -32,21 +32,43 @@ def xml_escaper(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+# Injection patterns — must match input_fence._INJECTION_PATTERNS exactly.
+# Duplicated here to avoid circular import (ports cannot import input_fence).
+# The guard checks that these patterns are ABSENT (i.e., already neutralized).
+_INJECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"(?i)ignore\s+(?:all\s+)?previous\s+instructions?"),
+    re.compile(r"(?i)score\s+this\s+(?:PR|review|code)\s+\d+"),
+    re.compile(r"(?i)(?:confidence|severity)\s+(?:below|under|above|less\s+than)\s+\d+"),
+    re.compile(r"(?i)IMPORTANT\s+SYSTEM\s+UPDATE"),
+    re.compile(r"(?i)you\s+are\s+now\s+"),
+    re.compile(r"(?i)skip\s+(?:security\s+)?analysis"),
+    re.compile(r"(?i)no\s+findings?\s+needed"),
+]
+
+
 def _assert_already_sanitized(text: str) -> str:
     """Reject if not already sanitized. Does NOT sanitize — that's input_fence's job.
 
-    Two-phase idempotency check matching the production _escape_xml pipeline:
+    Three-phase check matching the full production escape_xml() pipeline:
     1. navi-sanitize (invisible chars, bidi, homoglyphs) must be a no-op
     2. No raw XML delimiters remain (< > or unescaped &)
+    3. No un-neutralized injection patterns remain
 
-    Raises ValueError if either check fails — no silent double-escaping.
+    Raises ValueError if any check fails — no silent double-escaping.
+    (Grumpy R5 FINDING-01: original guard only checked phases 1-2, not 3.)
     """
     msg = "Content must be pre-sanitized via format_pr_context()"
+    # Phase 1: navi-sanitize stability
     cleaned = navi_sanitize.clean(text)
     if text != cleaned:
         raise ValueError(msg)
+    # Phase 2: no raw XML delimiters
     if "<" in text or ">" in text or _RAW_AMPERSAND.search(text):
         raise ValueError(msg)
+    # Phase 3: injection patterns must already be neutralized
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            raise ValueError(msg)
     return text
 
 
