@@ -152,3 +152,47 @@ class TestDeserSafeNegatives:
         diff = _make_diff("app.py", ["obj = pickle.loads(blob)"])
         results = InsecureDeserializationRule().run(_ctx(diff))
         assert results == []
+
+
+class TestDeserEdgeCaseFixtures:
+    """Edge-case fixture categories for insecure deserialization rule."""
+
+    def test_binary_diff_no_crash(self) -> None:
+        """Binary file diffs produce no results and no crash."""
+        diff = (
+            "diff --git a/image.png b/image.png\n"
+            "new file mode 100644\n"
+            "index 0000000..abcdef1\n"
+            "Binary files /dev/null and b/image.png differ\n"
+        )
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert results == []
+
+    def test_renamed_file_still_scanned(self) -> None:
+        """Insecure deserialization in renamed files is still detected."""
+        diff = (
+            "diff --git a/old_store.py b/new_store.py\n"
+            "similarity index 90%\n"
+            "rename from old_store.py\n"
+            "rename to new_store.py\n"
+            "--- a/old_store.py\n"
+            "+++ b/new_store.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            " existing\n"
+            "+db = shelve.open('data')\n"
+        )
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert len(results) >= 1
+
+    def test_deleted_line_not_flagged(self) -> None:
+        """Removed deserialization lines should not trigger findings."""
+        diff = (
+            "diff --git a/app.py b/app.py\n"
+            "--- a/app.py\n"
+            "+++ b/app.py\n"
+            "@@ -1,2 +1,1 @@\n"
+            "-db = shelve.open('data')\n"
+            " other = True\n"
+        )
+        results = InsecureDeserializationRule().run(_ctx(diff))
+        assert results == []
