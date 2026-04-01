@@ -24,11 +24,11 @@ class _AgnoResponse:
 
     @property
     def content(self) -> str | dict[str, Any] | BaseModel | None:
-        return self._raw.content  # type: ignore[no-any-return]
+        return self._raw.content
 
     @property
     def reasoning_content(self) -> str | None:
-        return getattr(self._raw, "reasoning_content", None)  # type: ignore[no-any-return]
+        return getattr(self._raw, "reasoning_content", None)
 
 
 class AgnoAdapter:
@@ -49,7 +49,7 @@ class AgnoAdapter:
 
     @property
     def model_id(self) -> str | None:
-        return getattr(getattr(self._agent, "model", None), "id", None)  # type: ignore[no-any-return]
+        return getattr(getattr(self._agent, "model", None), "id", None)
 
 
 def create_agno_reviewer(**kwargs: Any) -> AgnoAdapter:

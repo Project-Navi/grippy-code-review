@@ -19,7 +19,16 @@ _RAW_AMPERSAND = re.compile(r"&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+)
 
 
 def xml_escaper(text: str) -> str:
-    """XML-escape after navi-sanitize pipeline. Single definition, used everywhere."""
+    """XML entity escaper for use as navi_sanitize.clean(text, escaper=xml_escaper).
+
+    NOT idempotent — applying twice double-escapes &amp; to &amp;amp;.
+    For idempotent escaping, use input_fence.escape_xml() which uses
+    _RAW_AMPERSAND regex to skip already-escaped entities.
+
+    This function is the navi-sanitize escaper callback. It operates on
+    fresh text that clean() has already processed, so idempotency is not
+    needed in that context.
+    """
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
