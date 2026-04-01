@@ -30,6 +30,12 @@ from grippy.graph_types import (
     TraversalReceipt,
     TraversalResult,
 )
+from grippy.ports import (
+    ReviewerPort,
+    ReviewToolBudgetError,
+    ReviewTransportError,
+    SanitizedPRContext,
+)
 from grippy.retry import ReviewParseError, run_review
 from grippy.review import (
     load_pr_event,
@@ -47,7 +53,11 @@ __all__ = [
     "MissingNodeError",
     "NodeType",
     "ReviewParseError",
+    "ReviewToolBudgetError",
+    "ReviewTransportError",
+    "ReviewerPort",
     "SQLiteGraphStore",
+    "SanitizedPRContext",
     "TraversalReceipt",
     "TraversalResult",
     "__version__",
