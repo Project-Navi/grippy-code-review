@@ -23,6 +23,7 @@ from grippy.codebase import (
     _make_list_files,
     _make_read_file,
     _make_search_code,
+    _reject_symlinks,
     _write_manifest,
     chunk_file,
     sanitize_tool_hook,
@@ -1480,3 +1481,136 @@ class TestParseResultsEdgeCases:
         row = {"payload": json.dumps([1, 2, 3])}  # list, not dict
         results = CodebaseIndex._parse_results_static([row])
         assert results == []
+
+
+# --- Symlink rejection tests ---
+
+
+class TestRejectSymlinks:
+    """_reject_symlinks prevents symlink-based path traversal before resolve()."""
+
+    def test_rejects_symlink_file_to_outside(self, tmp_path: Path) -> None:
+        """Symlink file pointing outside repo root is rejected."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        outside = tmp_path / "secret.txt"
+        outside.write_text("stolen")
+        link = repo / "evil.txt"
+        link.symlink_to(outside)
+
+        result = _reject_symlinks(repo / "evil.txt", repo)
+        assert result is not None
+        assert "symlink" in result.lower()
+
+    def test_rejects_symlink_directory_to_outside(self, tmp_path: Path) -> None:
+        """Symlink directory pointing outside repo root is rejected."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        outside_dir = tmp_path / "outside_dir"
+        outside_dir.mkdir()
+        (outside_dir / "secret.py").write_text("stolen")
+        link = repo / "evil_dir"
+        link.symlink_to(outside_dir)
+
+        result = _reject_symlinks(repo / "evil_dir", repo)
+        assert result is not None
+        assert "symlink" in result.lower()
+
+    def test_allows_regular_file(self, tmp_path: Path) -> None:
+        """Regular file inside repo returns None (no error)."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "safe.py").write_text("safe")
+
+        result = _reject_symlinks(repo / "safe.py", repo)
+        assert result is None
+
+    def test_allows_nested_path_without_symlinks(self, tmp_path: Path) -> None:
+        """Nested path with no symlinks in any component returns None."""
+        repo = tmp_path / "repo"
+        (repo / "src" / "pkg").mkdir(parents=True)
+        (repo / "src" / "pkg" / "mod.py").write_text("code")
+
+        result = _reject_symlinks(repo / "src" / "pkg" / "mod.py", repo)
+        assert result is None
+
+    def test_rejects_symlink_in_intermediate_component(self, tmp_path: Path) -> None:
+        """Symlink in a middle path component is detected."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        (outside_dir / "secret.py").write_text("stolen")
+        link = repo / "linked_dir"
+        link.symlink_to(outside_dir)
+
+        result = _reject_symlinks(repo / "linked_dir" / "secret.py", repo)
+        assert result is not None
+        assert "symlink" in result.lower()
+
+    def test_rejects_path_outside_repo_root(self, tmp_path: Path) -> None:
+        """Path that is not relative to repo root is rejected."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        outside = tmp_path / "other" / "file.py"
+
+        result = _reject_symlinks(outside, repo)
+        assert result is not None
+        assert "outside" in result.lower()
+
+
+class TestSymlinkDefenseInReadFile:
+    """read_file rejects symlinks via _reject_symlinks before resolve()."""
+
+    def test_read_file_rejects_symlink_to_outside(self, tmp_path: Path) -> None:
+        """read_file returns error for symlink pointing outside repo."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "safe.py").write_text("safe")
+        outside = tmp_path / "secret.py"
+        outside.write_text("stolen data")
+        link = repo / "evil_link.py"
+        link.symlink_to(outside)
+
+        read_fn = _make_read_file(repo)
+        result = read_fn("evil_link.py")
+        assert "symlink" in result.lower() or "not allowed" in result.lower()
+
+    def test_read_file_allows_regular_file(self, tmp_path: Path) -> None:
+        """read_file works for normal files after symlink check."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "safe.py").write_text("safe content here")
+
+        read_fn = _make_read_file(repo)
+        result = read_fn("safe.py")
+        assert "safe content here" in result
+
+
+class TestSymlinkDefenseInListFiles:
+    """list_files rejects symlinks via _reject_symlinks before resolve()."""
+
+    def test_list_files_rejects_symlink_directory(self, tmp_path: Path) -> None:
+        """list_files returns error for symlinked directory pointing outside."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "safe.py").write_text("safe")
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        (outside_dir / "secret.py").write_text("stolen")
+        link = repo / "evil_dir"
+        link.symlink_to(outside_dir)
+
+        list_fn = _make_list_files(repo)
+        result = list_fn("evil_dir")
+        assert "symlink" in result.lower() or "not allowed" in result.lower()
+
+    def test_list_files_allows_regular_directory(self, tmp_path: Path) -> None:
+        """list_files works for normal directories after symlink check."""
+        repo = tmp_path / "repo"
+        (repo / "src").mkdir(parents=True)
+        (repo / "src" / "main.py").write_text("code")
+
+        list_fn = _make_list_files(repo)
+        result = list_fn("src")
+        assert "main.py" in result
