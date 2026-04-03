@@ -164,8 +164,12 @@ def _sanitize_comment_text(text: str) -> str:
     text = re.sub(r"^\s{0,3}\[[^\]]+\]:\s+\S[^\n]*$", "", text, flags=re.MULTILINE)
     # Strip reference-style link references: [text][id] and collapsed [text][]
     text = re.sub(r"\[([^\]]*)\]\[[^\]]*\]", r"\1", text)
-    # Strip bare URL autolinks: <https://...> and <http://...>
-    text = re.sub(r"<(https?://[^>]+)>", r"\1", text)
+    # Defang bare URL autolinks: <https://...> → hxxps://... (not clickable on GitHub)
+    text = re.sub(
+        r"<https?://[^>]+>",
+        lambda m: m.group(0)[1:-1].replace("https://", "hxxps://").replace("http://", "hxxp://"),
+        text,
+    )
     # Loop unquote until stable — prevents multi-layer URL encoding bypass
     # (e.g., %2561 -> %61 -> a) that could smuggle dangerous schemes past
     # the regex check.
@@ -182,8 +186,16 @@ def _sanitize_comment_text(text: str) -> str:
     text = re.sub(r"\[([^\]]*)\]\(https?://[^)]+\)", r"\1", text)
     text = re.sub(r"^\s{0,3}\[[^\]]+\]:\s+\S[^\n]*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"\[([^\]]*)\]\[[^\]]*\]", r"\1", text)
-    text = re.sub(r"<(https?://[^>]+)>", r"\1", text)
+    # Defang autolinks after decode too
+    text = re.sub(
+        r"<https?://[^>]+>",
+        lambda m: m.group(0)[1:-1].replace("https://", "hxxps://").replace("http://", "hxxp://"),
+        text,
+    )
     text = _DANGEROUS_SCHEME_RE.sub("", text)
+    # Defang bare URLs that survived all prior stripping — GitHub auto-linkifies these
+    text = re.sub(r"https://", "hxxps://", text)
+    text = re.sub(r"http://", "hxxp://", text)
     return text
 
 

@@ -59,11 +59,14 @@ def _is_git_tracked(path: str) -> bool:
     by a separate check before this function is called.
     """
     try:
+        file_path = Path(path)
+        repo_dir = file_path.parent
+        # Use relative path — git ls-files expects paths relative to cwd/repo root
         result = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", path],
+            ["git", "ls-files", "--error-unmatch", file_path.name],
             capture_output=True,
             timeout=5,
-            cwd=Path(path).parent,  # ensure git operates in the file's repo
+            cwd=str(repo_dir),
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):

@@ -2112,8 +2112,8 @@ class TestReferenceStyleLinkStripping:
         text = "Visit <https://evil.com> for details"
         result = _sanitize_comment_text(text)
         assert "<https://" not in result
-        # The URL text itself may remain (safe — not a clickable link)
-        assert ">" not in result or "evil.com>" not in result
+        # nh3 strips the autolink entirely; any surviving bare URLs are defanged
+        assert "https://evil.com" not in result
 
     def test_inline_links_still_stripped(self) -> None:
         """Regression: existing inline link stripping still works."""

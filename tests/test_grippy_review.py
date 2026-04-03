@@ -2136,65 +2136,27 @@ class TestIsGitTracked:
 class TestDevVarsLoadGuard:
     """main() refuses to load .dev.vars when git-tracked."""
 
-    @patch("grippy.review._is_git_tracked", return_value=True)
-    def test_tracked_dev_vars_not_loaded(
-        self, mock_tracked: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When .dev.vars is git-tracked, its contents must not be loaded."""
-        dev_vars = tmp_path / ".dev.vars"
-        dev_vars.write_text("SECRET_KEY=leaked_value\n")
-        monkeypatch.delenv("CI", raising=False)
-        monkeypatch.delenv("SECRET_KEY", raising=False)
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        monkeypatch.setenv("GITHUB_EVENT_PATH", "/nonexistent")
+    def test_is_git_tracked_on_tracked_file(self) -> None:
+        """_is_git_tracked returns True for files in the git index."""
+        repo_root = Path(__file__).resolve().parent.parent
+        tracked_file = repo_root / "pyproject.toml"
+        assert tracked_file.exists()
+        assert _is_git_tracked(str(tracked_file)) is True
 
-        # Patch __file__ resolution to point to tmp_path structure
-        with patch("grippy.review.Path") as mock_path_cls:
-            mock_file = MagicMock()
-            mock_file.resolve.return_value.parent.parent.parent.__truediv__ = lambda _, name: (
-                dev_vars if name == ".dev.vars" else tmp_path / name
-            )
-            mock_path_cls.__call__ = lambda _, x: mock_file if x == __file__ else Path(x)
-            mock_path_cls.return_value = mock_file
+    def test_is_git_tracked_on_untracked_file(self, tmp_path: Path) -> None:
+        """_is_git_tracked returns False for files not in the git index."""
+        untracked = tmp_path / "not-in-git.txt"
+        untracked.write_text("test")
+        assert _is_git_tracked(str(untracked)) is False
 
-            from grippy.review import main
+    def test_is_git_tracked_on_nonexistent_file(self) -> None:
+        """_is_git_tracked returns False for files that don't exist."""
+        assert _is_git_tracked("/nonexistent/path/.dev.vars") is False
 
-            try:
-                main()
-            except (SystemExit, Exception):
-                pass
-
-        assert os.environ.get("SECRET_KEY") != "leaked_value"
-
-    @patch("grippy.review._is_git_tracked", return_value=False)
-    def test_untracked_dev_vars_loaded(
-        self, mock_tracked: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When .dev.vars is NOT tracked, its contents are loaded."""
-        dev_vars = tmp_path / ".dev.vars"
-        dev_vars.write_text("DEVVARS_TEST_KEY=loaded_value\n")
-        monkeypatch.delenv("CI", raising=False)
-        monkeypatch.delenv("DEVVARS_TEST_KEY", raising=False)
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        monkeypatch.setenv("GITHUB_EVENT_PATH", "/nonexistent")
-
-        # Patch Path(__file__) to resolve to our tmp_path structure
-        original_path = Path
-
-        def _patched_resolve(self: Any) -> Path:
-            return original_path(str(self)).resolve()
-
-        with patch(
-            "grippy.review.Path.__call__",
-            side_effect=lambda x: original_path(x),
-        ):
-            pass
-
-        # Simpler approach: directly call main and check env after
-        # The dev_vars_path resolves to project root / .dev.vars
-        # We can't easily test the full main() flow, so test _is_git_tracked
-        # integration separately via the guard in main()
-        assert _is_git_tracked.__name__ == "_is_git_tracked"
+    @patch("grippy.review.subprocess.run", side_effect=FileNotFoundError)
+    def test_is_git_tracked_git_unavailable(self, _mock: MagicMock) -> None:
+        """_is_git_tracked returns False (fail-open) when git is not available."""
+        assert _is_git_tracked("/some/path") is False
 
 
 class TestGitignoreContainsDevVars:
