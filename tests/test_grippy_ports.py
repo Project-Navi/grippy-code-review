@@ -109,35 +109,6 @@ class TestSanitizedPRContext:
         assert "[BLOCKED]" in ctx.content
 
 
-class TestInjectionPatternParity:
-    """Enforce that ports._INJECTION_PATTERNS matches input_fence._INJECTION_PATTERNS.
-
-    These are duplicated to avoid circular imports. This test ensures they
-    don't drift. (Grumpy R6 FINDING-03: duplicated regex with no parity enforcement.)
-    """
-
-    def test_pattern_count_matches(self) -> None:
-        from grippy.input_fence import _INJECTION_PATTERNS as _FENCE_PATTERNS
-        from grippy.ports import _INJECTION_PATTERNS as _GUARD_PATTERNS
-
-        assert len(_GUARD_PATTERNS) == len(_FENCE_PATTERNS), (
-            f"Guard has {len(_GUARD_PATTERNS)} patterns, fence has {len(_FENCE_PATTERNS)}. "
-            f"These must stay in sync."
-        )
-
-    def test_pattern_strings_match(self) -> None:
-        """Each guard pattern must match the same regex as the fence pattern."""
-        from grippy.input_fence import _INJECTION_PATTERNS as _FENCE_PATTERNS
-        from grippy.ports import _INJECTION_PATTERNS as _GUARD_PATTERNS
-
-        for i, (guard_pat, (fence_pat, _replacement)) in enumerate(
-            zip(_GUARD_PATTERNS, _FENCE_PATTERNS, strict=True)
-        ):
-            assert guard_pat.pattern == fence_pat.pattern, (
-                f"Pattern {i} diverged: guard={guard_pat.pattern!r}, fence={fence_pat.pattern!r}"
-            )
-
-
 class TestExceptionTypes:
     """Transport and tool budget exceptions are importable and correct."""
 

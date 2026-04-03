@@ -12,31 +12,13 @@ with a shared navi-sanitize pipeline:
 from __future__ import annotations
 
 import logging
-import re
 
 import navi_sanitize
 
+from grippy.injection_patterns import INJECTION_PATTERNS as _INJECTION_PATTERNS
 from grippy.ports import _RAW_AMPERSAND, SanitizedPRContext
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Injection patterns — adapted from navi-os's sanitize_for_llm() pattern.
-# Matched text is replaced with [BLOCKED] so attacker-controlled PR content
-# cannot manipulate review scoring, confidence calibration, or analysis.
-# ---------------------------------------------------------------------------
-_INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"(?i)ignore\s+(?:all\s+)?previous\s+instructions?"), "[BLOCKED]"),
-    (re.compile(r"(?i)score\s+this\s+(?:PR|review|code)\s+\d+"), "[BLOCKED]"),
-    (
-        re.compile(r"(?i)(?:confidence|severity)\s+(?:below|under|above|less\s+than)\s+\d+"),
-        "[BLOCKED]",
-    ),
-    (re.compile(r"(?i)IMPORTANT\s+SYSTEM\s+UPDATE"), "[BLOCKED]"),
-    (re.compile(r"(?i)you\s+are\s+now\s+"), "[BLOCKED] "),
-    (re.compile(r"(?i)skip\s+(?:security\s+)?analysis"), "[BLOCKED]"),
-    (re.compile(r"(?i)no\s+findings?\s+needed"), "[BLOCKED]"),
-]
 
 # ---------------------------------------------------------------------------
 # Data fence — the structural boundary that precedes all user-provided data.

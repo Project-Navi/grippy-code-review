@@ -157,6 +157,59 @@ class TestSqlReDoS:
         assert results == []
 
 
+class TestSqlReDoSStrict:
+    """Strict sub-100ms timing tests for bounded SQL regex patterns.
+
+    These verify that replacing .* with [^'\"\\n]* eliminates quadratic
+    backtracking on 50K-char adversarial lines.
+    """
+
+    def test_fstring_sql_50k_under_100ms(self) -> None:
+        """_FSTRING_SQL with .format( prefix and 50K chars must complete in <100ms."""
+        import time
+
+        adversarial = ".format(" + "x" * 50_000
+        start = time.monotonic()
+        _FSTRING_SQL.search(adversarial)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        assert elapsed_ms < 100, f"_FSTRING_SQL took {elapsed_ms:.1f}ms on 50K adversarial input"
+
+    def test_percent_sql_50k_under_100ms(self) -> None:
+        """_PERCENT_SQL with SQL keyword + 50K padding must complete in <100ms."""
+        import time
+
+        adversarial = '"SELECT ' + "x" * 50_000 + '"'
+        start = time.monotonic()
+        _PERCENT_SQL.search(adversarial)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        assert elapsed_ms < 100, f"_PERCENT_SQL took {elapsed_ms:.1f}ms on 50K adversarial input"
+
+    def test_concat_sql_50k_under_100ms(self) -> None:
+        """_CONCAT_SQL with SQL keyword + 50K padding must complete in <100ms."""
+        import time
+
+        adversarial = '"SELECT ' + "x" * 50_000 + '" +'
+        start = time.monotonic()
+        _CONCAT_SQL.search(adversarial)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        assert elapsed_ms < 100, f"_CONCAT_SQL took {elapsed_ms:.1f}ms on 50K adversarial input"
+
+    def test_positive_fstring_still_matches(self) -> None:
+        """Bounded patterns still detect f-string SQL injection."""
+        assert _FSTRING_SQL.search('query = f"SELECT * FROM users WHERE id = {uid}"')
+        assert _FSTRING_SQL.search("q = f'INSERT INTO t VALUES ({v})'")
+        assert _FSTRING_SQL.search('.format( "SELECT * FROM t" )')
+
+    def test_positive_percent_still_matches(self) -> None:
+        """Bounded patterns still detect %-format SQL injection."""
+        assert _PERCENT_SQL.search('"SELECT * FROM users WHERE id = %s" % uid')
+
+    def test_positive_concat_still_matches(self) -> None:
+        """Bounded patterns still detect concatenation SQL injection."""
+        assert _CONCAT_SQL.search('"SELECT * FROM t WHERE name = " + name')
+        assert _CONCAT_SQL.search('+ "SELECT * FROM t"')
+
+
 class TestSqlEdgeCaseFixtures:
     """Edge-case fixture categories for SQL injection rule."""
 

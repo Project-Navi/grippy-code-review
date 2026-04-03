@@ -36,6 +36,17 @@ _SINK_RE = re.compile(
 _SANITIZER_RE = re.compile("|".join(re.escape(s) for s in SANITIZERS))
 
 
+def _is_comment_line(content: str) -> bool:
+    """Check if a line is a comment."""
+    stripped = content.strip()
+    if stripped.startswith("#") or stripped.startswith("//"):
+        return True
+    # Multi-line comment body: * followed by non-alnum (not generator syntax)
+    if stripped.startswith("*") and (len(stripped) == 1 or not stripped[1].isalnum()):
+        return True
+    return False
+
+
 class LlmOutputSinksRule:
     """Detect LLM output piped directly to sinks without sanitization."""
 
@@ -64,12 +75,16 @@ class LlmOutputSinksRule:
 
         # Look for model output tokens, then scan forward for sinks
         for i, (_lineno, content) in enumerate(added_lines):
+            if _is_comment_line(content):
+                continue
             if not _MODEL_OUTPUT_RE.search(content):
                 continue
 
             # Scan forward in same hunk for sinks
             for j in range(i, len(added_lines)):
                 sink_lineno, sink_content = added_lines[j]
+                if _is_comment_line(sink_content):
+                    continue
                 if _SINK_RE.search(sink_content):
                     # Check if any sanitizer appears between model output and sink
                     between = " ".join(c for _, c in added_lines[i : j + 1])

@@ -23,5 +23,8 @@ nboot-spec.json
 benchmarks/output/
 !benchmarks/output/.gitkeep
 
+# Security-sensitive internal docs
+DEBT-internal.md
+
 # Zensical build output
 site/
