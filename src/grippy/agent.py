@@ -6,7 +6,6 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +13,7 @@ import navi_sanitize
 from agno.agent import Agent
 from agno.models.openai.like import OpenAILike
 
+from grippy.injection_patterns import INJECTION_PATTERNS as _INJECTION_PATTERNS
 from grippy.prompts import load_identity, load_instructions
 from grippy.schema import GrippyReview
 
@@ -70,24 +70,6 @@ _PROVIDERS: dict[str, tuple[str, str, bool]] = {
     "groq": ("agno.models.groq", "Groq", False),
     "mistral": ("agno.models.mistral", "MistralChat", False),
 }
-
-
-# Natural-language prompt injection patterns — adapted from navi-os's
-# sanitize_for_llm() pattern.  Matched text is replaced with [BLOCKED]
-# so attacker-controlled PR content cannot manipulate review scoring,
-# confidence calibration, or analysis behavior.
-_INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"(?i)ignore\s+(?:all\s+)?previous\s+instructions?"), "[BLOCKED]"),
-    (re.compile(r"(?i)score\s+this\s+(?:PR|review|code)\s+\d+"), "[BLOCKED]"),
-    (
-        re.compile(r"(?i)(?:confidence|severity)\s+(?:below|under|above|less\s+than)\s+\d+"),
-        "[BLOCKED]",
-    ),
-    (re.compile(r"(?i)IMPORTANT\s+SYSTEM\s+UPDATE"), "[BLOCKED]"),
-    (re.compile(r"(?i)you\s+are\s+now\s+"), "[BLOCKED] "),
-    (re.compile(r"(?i)skip\s+(?:security\s+)?analysis"), "[BLOCKED]"),
-    (re.compile(r"(?i)no\s+findings?\s+needed"), "[BLOCKED]"),
-]
 
 
 def _escape_xml(text: str) -> str:

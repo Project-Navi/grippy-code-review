@@ -13,6 +13,8 @@ from typing import Annotated, Any, Protocol
 import navi_sanitize
 from pydantic import AfterValidator, BaseModel, ConfigDict
 
+from grippy.injection_patterns import INJECTION_GUARD_PATTERNS as _INJECTION_PATTERNS
+
 # Matches & that is NOT part of a valid XML/HTML entity reference.
 # Valid entity refs: &amp; &lt; &gt; &quot; &apos; or numeric &#123; &#x1F;
 _RAW_AMPERSAND = re.compile(r"&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")
@@ -30,20 +32,6 @@ def xml_escaper(text: str) -> str:
     needed in that context.
     """
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-# Injection patterns — must match input_fence._INJECTION_PATTERNS exactly.
-# Duplicated here to avoid circular import (ports cannot import input_fence).
-# The guard checks that these patterns are ABSENT (i.e., already neutralized).
-_INJECTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(?i)ignore\s+(?:all\s+)?previous\s+instructions?"),
-    re.compile(r"(?i)score\s+this\s+(?:PR|review|code)\s+\d+"),
-    re.compile(r"(?i)(?:confidence|severity)\s+(?:below|under|above|less\s+than)\s+\d+"),
-    re.compile(r"(?i)IMPORTANT\s+SYSTEM\s+UPDATE"),
-    re.compile(r"(?i)you\s+are\s+now\s+"),
-    re.compile(r"(?i)skip\s+(?:security\s+)?analysis"),
-    re.compile(r"(?i)no\s+findings?\s+needed"),
-]
 
 
 def _assert_already_sanitized(text: str) -> str:
