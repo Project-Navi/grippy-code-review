@@ -43,6 +43,12 @@ def _is_ci_file(path: str) -> bool:
     return False
 
 
+def _is_comment_line(content: str) -> bool:
+    """Check if a line is a comment in CI-relevant languages (YAML, shell, Docker)."""
+    stripped = content.strip()
+    return stripped.startswith("#") or stripped.startswith("//")
+
+
 class CiScriptRiskRule:
     """Detect risky script execution patterns in CI/infrastructure files."""
 
@@ -60,6 +66,9 @@ class CiScriptRiskRule:
                     if line.type != "add" or line.new_lineno is None:
                         continue
                     content = line.content
+
+                    if _is_comment_line(content):
+                        continue
 
                     # curl|bash — CRITICAL
                     if _PIPE_EXEC_RE.search(content):

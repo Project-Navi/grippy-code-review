@@ -11,20 +11,26 @@ from grippy.rules.context import RuleContext
 _SQL_KEYWORDS = r"(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|MERGE)"
 
 # f-string or .format() with SQL keyword
+# Uses [^\n]*? (lazy, newline-bounded) instead of .* to prevent cross-line
+# backtracking while still matching quotes within the line.
 _FSTRING_SQL = re.compile(
-    rf"""(?:f['"]|\.format\s*\().*\b{_SQL_KEYWORDS}\b""",
+    rf"""(?:f['"]|\.format\s*\()[^\n]*?\b{_SQL_KEYWORDS}\b""",
     re.IGNORECASE,
 )
 
 # %-formatting with SQL keyword: % operator must follow a closing quote
+# Uses [^\n]*? (lazy, newline-bounded) instead of .* to prevent cross-line
+# backtracking while still matching mixed quote characters.
 _PERCENT_SQL = re.compile(
-    rf"""['"].*\b{_SQL_KEYWORDS}\b.*['"]\s*%\s*(?:\(|[a-zA-Z_])""",
+    rf"""['"][^\n]*?\b{_SQL_KEYWORDS}\b[^\n]*?['"]\s*%\s*(?:\(|[a-zA-Z_])""",
     re.IGNORECASE,
 )
 
 # String concatenation with SQL keyword (both directions)
+# Uses [^\n]*? (lazy, newline-bounded) instead of .* to prevent cross-line
+# backtracking while still matching mixed quote characters.
 _CONCAT_SQL = re.compile(
-    rf"""(?:['"].*\b{_SQL_KEYWORDS}\b.*['"]\s*\+|\+\s*['"].*\b{_SQL_KEYWORDS}\b)""",
+    rf"""(?:['"][^\n]*?\b{_SQL_KEYWORDS}\b[^\n]*?['"]\s*\+|\+\s*['"][^\n]*?\b{_SQL_KEYWORDS}\b)""",
     re.IGNORECASE,
 )
 

@@ -14,7 +14,7 @@ _PYTHON_SINKS: list[tuple[str, re.Pattern[str]]] = [
     ("exec()", re.compile(r"\bexec\s*\(")),
     ("os.system()", re.compile(r"\bos\.system\s*\(")),
     ("os.popen()", re.compile(r"\bos\.popen\s*\(")),
-    ("subprocess with shell=True", re.compile(r"\bsubprocess\.\w+\(.*shell\s*=\s*True")),
+    ("subprocess with shell=True", re.compile(r"\bsubprocess\.\w+\([^\n]*?shell\s*=\s*True")),
     ("pickle.loads()", re.compile(r"\bpickle\.loads?\s*\(")),
     ("marshal.loads()", re.compile(r"\bmarshal\.loads?\s*\(")),
 ]
@@ -42,6 +42,23 @@ def _file_ext(path: str) -> str:
     return path[dot:] if dot >= 0 else ""
 
 
+def _is_comment_line(content: str) -> bool:
+    """Check if a line is a comment in common languages.
+
+    Handles: # (Python/shell/YAML), // (JS/TS/C), and multi-line comment
+    body lines that start with whitespace + * (JS/C block comments).
+    Does NOT match bare * at line start — that's valid JS generator syntax.
+    """
+    stripped = content.strip()
+    if stripped.startswith("#") or stripped.startswith("//"):
+        return True
+    # Multi-line comment body: leading whitespace then * (but not *identifier)
+    # Matches: "  * some comment", " * @param", but not "*run()" or "*foo"
+    if stripped.startswith("*") and (len(stripped) == 1 or not stripped[1].isalnum()):
+        return True
+    return False
+
+
 class DangerousSinksRule:
     """Detect dangerous execution sinks in Python and JavaScript/TypeScript."""
 
@@ -63,6 +80,8 @@ class DangerousSinksRule:
         results: list[RuleResult] = []
         added = [(ln, content) for _, ln, content in ctx.added_lines_for(path)]
         for lineno, content in added:
+            if _is_comment_line(content):
+                continue
             # Standard sinks
             for name, pattern in _PYTHON_SINKS:
                 if pattern.search(content):
@@ -97,6 +116,8 @@ class DangerousSinksRule:
         results: list[RuleResult] = []
         added = [(ln, content) for _, ln, content in ctx.added_lines_for(path)]
         for lineno, content in added:
+            if _is_comment_line(content):
+                continue
             for name, pattern in _JS_SINKS:
                 if pattern.search(content):
                     results.append(

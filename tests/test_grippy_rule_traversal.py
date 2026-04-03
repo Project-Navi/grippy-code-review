@@ -98,6 +98,34 @@ class TestPathTraversal:
         assert results == []
 
 
+class TestTraversalCommentFiltering:
+    """Commented-out code should not trigger findings (SR-03)."""
+
+    def test_python_comment_not_flagged(self) -> None:
+        """Python # comment with open(user_path) should not be flagged."""
+        diff = _make_diff("app.py", "# f = open(user_path)")
+        results = PathTraversalRule().run(_ctx(diff))
+        assert results == []
+
+    def test_js_comment_not_flagged(self) -> None:
+        """JS // comment with path.join should not be flagged."""
+        diff = _make_diff("app.js", "// const f = path.join(base, user_input)")
+        results = PathTraversalRule().run(_ctx(diff))
+        assert results == []
+
+    def test_js_block_comment_not_flagged(self) -> None:
+        """JS * block comment with open should not be flagged."""
+        diff = _make_diff("app.ts", " * open(request.file)")
+        results = PathTraversalRule().run(_ctx(diff))
+        assert results == []
+
+    def test_uncommented_still_flagged(self) -> None:
+        """Non-comment lines must still be flagged."""
+        diff = _make_diff("app.py", "f = open(user_path)")
+        results = PathTraversalRule().run(_ctx(diff))
+        assert any("user-controlled" in r.message for r in results)
+
+
 # -- Timeout helper for ReDoS tests ------------------------------------------
 
 

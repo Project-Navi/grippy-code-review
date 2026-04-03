@@ -103,6 +103,40 @@ class TestCiScriptRisk:
         assert not any(r.severity == RuleSeverity.CRITICAL for r in results)
 
 
+class TestCiCommentFiltering:
+    """Commented-out code should not trigger findings (SR-03)."""
+
+    def test_yaml_comment_curl_pipe_not_flagged(self) -> None:
+        """YAML # comment with curl|bash should not be flagged."""
+        diff = _make_diff(
+            ".github/workflows/ci.yml",
+            "# run: curl -sSL https://example.com/install.sh | bash",
+        )
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert results == []
+
+    def test_shell_comment_sudo_not_flagged(self) -> None:
+        """Shell # comment with sudo should not be flagged."""
+        diff = _make_diff("scripts/deploy.sh", "# sudo apt-get install -y package")
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert results == []
+
+    def test_shell_comment_chmod_not_flagged(self) -> None:
+        """Shell # comment with chmod +x should not be flagged."""
+        diff = _make_diff("scripts/deploy.sh", "# chmod +x deploy.sh")
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert results == []
+
+    def test_uncommented_still_flagged(self) -> None:
+        """Non-comment lines must still be flagged."""
+        diff = _make_diff(
+            ".github/workflows/ci.yml",
+            "      run: curl -sSL https://example.com/install.sh | bash",
+        )
+        results = CiScriptRiskRule().run(_ctx(diff))
+        assert any(r.severity == RuleSeverity.CRITICAL for r in results)
+
+
 # -- Timeout helper for ReDoS tests ------------------------------------------
 
 

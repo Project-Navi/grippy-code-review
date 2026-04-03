@@ -60,6 +60,17 @@ def _has_traversal_pattern(content: str) -> bool:
     return bool(_TRAVERSAL_RE.search(content))
 
 
+def _is_comment_line(content: str) -> bool:
+    """Check if a line is a comment in common languages."""
+    stripped = content.strip()
+    if stripped.startswith("#") or stripped.startswith("//"):
+        return True
+    # Multi-line comment body: * followed by non-alnum (not generator syntax)
+    if stripped.startswith("*") and (len(stripped) == 1 or not stripped[1].isalnum()):
+        return True
+    return False
+
+
 class PathTraversalRule:
     """Flag file operations with tainted variable names or traversal patterns."""
 
@@ -78,6 +89,9 @@ class PathTraversalRule:
                     if line.type != "add" or line.new_lineno is None:
                         continue
                     content = line.content
+
+                    if _is_comment_line(content):
+                        continue
 
                     # Skip pure string literal arguments
                     if _STRING_LITERAL_ONLY_RE.search(content):

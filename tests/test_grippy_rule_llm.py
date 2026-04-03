@@ -121,6 +121,40 @@ class TestLlmOutputSinks:
         assert "_sanitize_comment_text" in SANITIZERS
 
 
+class TestLlmCommentFiltering:
+    """Commented-out code should not trigger findings (SR-03)."""
+
+    def test_python_comment_model_output_not_flagged(self) -> None:
+        """Commented model output + uncommented sink should not match."""
+        diff = _make_diff(
+            "bot.py",
+            "    # result = agent.run(prompt)",
+            "    pr.create_issue_comment(safe_text)",
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_python_comment_sink_not_flagged(self) -> None:
+        """Uncommented model output + commented sink should not match."""
+        diff = _make_diff(
+            "bot.py",
+            "    result = agent.run(prompt)",
+            "    # pr.create_issue_comment(result.content)",
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_both_uncommented_still_flagged(self) -> None:
+        """Both lines uncommented should still be flagged."""
+        diff = _make_diff(
+            "bot.py",
+            "    result = agent.run(prompt)",
+            "    pr.create_issue_comment(result.content)",
+        )
+        results = LlmOutputSinksRule().run(_ctx(diff))
+        assert any(r.rule_id == "llm-output-unsanitized" for r in results)
+
+
 # -- Timeout helper for ReDoS tests ------------------------------------------
 
 
