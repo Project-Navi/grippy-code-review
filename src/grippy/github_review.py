@@ -160,7 +160,16 @@ def _sanitize_comment_text(text: str) -> str:
     # Strip markdown images (tracking pixels) and external links (phishing)
     text = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", text)
     text = re.sub(r"\[([^\]]*)\]\(https?://[^)]+\)", r"\1", text)
-    text = _DANGEROUS_SCHEME_RE.sub("", unquote(text))
+    # Loop unquote until stable — prevents multi-layer URL encoding bypass
+    # (e.g., %2561 -> %61 -> a) that could smuggle dangerous schemes past
+    # the regex check.
+    prev = text
+    while True:
+        text = unquote(text)
+        if text == prev:
+            break
+        prev = text
+    text = _DANGEROUS_SCHEME_RE.sub("", text)
     return text
 
 

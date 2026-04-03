@@ -1697,6 +1697,67 @@ class TestCommentSanitization:
         assert "<SCRIPT>" not in result
         assert "<script>" not in result.lower()
 
+    def test_unquote_loop_decodes_fully(self) -> None:
+        """Verify that _sanitize_comment_text fully decodes URL-encoded content.
+
+        The dangerous scheme regex must run against fully decoded text.
+        The unquote() call must loop until stable to prevent multi-layer
+        encoding bypass (e.g., %2561 -> %61 -> a).
+        """
+        from urllib.parse import unquote
+
+        from grippy.github_review import _sanitize_comment_text
+
+        # Prove the vulnerability: single unquote leaves %61 intact
+        assert unquote("jav%2561script:") == "jav%61script:"
+        # Double unquote resolves to the dangerous scheme
+        assert unquote(unquote("jav%2561script:")) == "javascript:"
+
+        # The sanitizer must block this regardless
+        text = "jav%2561script:alert(1)"
+        result = _sanitize_comment_text(text)
+        assert "javascript:" not in result.lower()
+
+    def test_single_url_encoding_blocked(self) -> None:
+        """Single-encoded javascript: scheme (jav%61script:) must be blocked."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "jav%61script:alert(1)"
+        result = _sanitize_comment_text(text)
+        assert "javascript:" not in result.lower()
+
+    def test_triple_url_encoding_blocked(self) -> None:
+        """Triple-encoded javascript: scheme must also be blocked."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "jav%25252561script:alert(1)"
+        result = _sanitize_comment_text(text)
+        assert "javascript:" not in result.lower()
+
+    def test_plain_javascript_still_blocked(self) -> None:
+        """Unencoded javascript: scheme must still be blocked."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "javascript:alert(1)"
+        result = _sanitize_comment_text(text)
+        assert "javascript:" not in result.lower()
+
+    def test_double_encoded_data_scheme_blocked(self) -> None:
+        """Double-encoded data: scheme must be blocked."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "d%2561ta:text/html,pwned"
+        result = _sanitize_comment_text(text)
+        assert "data:" not in result.lower()
+
+    def test_vbscript_double_encoded_blocked(self) -> None:
+        """Double-encoded vbscript: scheme must be blocked."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "vb%2573cript:msgbox"
+        result = _sanitize_comment_text(text)
+        assert "vbscript:" not in result.lower()
+
 
 # --- Verdict markers ---
 
