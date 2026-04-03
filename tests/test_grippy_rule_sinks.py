@@ -185,6 +185,40 @@ class TestSinksReDoS:
         assert results == []
 
 
+class TestSinksReDoSStrict:
+    """Strict sub-100ms timing tests for bounded subprocess shell pattern.
+
+    Verifies that replacing .* with [^\\n]*? in the subprocess pattern
+    eliminates quadratic backtracking on 50K-char adversarial lines.
+    """
+
+    def test_subprocess_pattern_50k_under_100ms(self) -> None:
+        """subprocess pattern with 50K chars between ( and ) must complete in <100ms."""
+        import time
+
+        subprocess_pattern = next(p for name, p in _PYTHON_SINKS if "subprocess" in name)
+        adversarial = "subprocess.run(" + "x" * 50_000 + ")"
+        start = time.monotonic()
+        subprocess_pattern.search(adversarial)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        assert elapsed_ms < 100, (
+            f"subprocess pattern took {elapsed_ms:.1f}ms on 50K adversarial input"
+        )
+
+    def test_subprocess_positive_still_matches(self) -> None:
+        """Bounded pattern still detects subprocess with shell=True."""
+        subprocess_pattern = next(p for name, p in _PYTHON_SINKS if "subprocess" in name)
+        assert subprocess_pattern.search("subprocess.run(cmd, shell=True)")
+        assert subprocess_pattern.search("subprocess.call(cmd, shell = True)")
+        assert subprocess_pattern.search("subprocess.Popen(cmd, shell=True)")
+
+    def test_subprocess_negative_no_shell(self) -> None:
+        """subprocess without shell=True should not match."""
+        subprocess_pattern = next(p for name, p in _PYTHON_SINKS if "subprocess" in name)
+        assert not subprocess_pattern.search("subprocess.run(cmd)")
+        assert not subprocess_pattern.search("subprocess.call(cmd, check=True)")
+
+
 class TestSinksEdgeCaseFixtures:
     """Edge-case fixture categories for sinks rule."""
 

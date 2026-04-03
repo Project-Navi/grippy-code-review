@@ -14,7 +14,7 @@ _PYTHON_SINKS: list[tuple[str, re.Pattern[str]]] = [
     ("exec()", re.compile(r"\bexec\s*\(")),
     ("os.system()", re.compile(r"\bos\.system\s*\(")),
     ("os.popen()", re.compile(r"\bos\.popen\s*\(")),
-    ("subprocess with shell=True", re.compile(r"\bsubprocess\.\w+\(.*shell\s*=\s*True")),
+    ("subprocess with shell=True", re.compile(r"\bsubprocess\.\w+\([^\n]*?shell\s*=\s*True")),
     ("pickle.loads()", re.compile(r"\bpickle\.loads?\s*\(")),
     ("marshal.loads()", re.compile(r"\bmarshal\.loads?\s*\(")),
 ]
