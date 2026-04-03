@@ -51,12 +51,19 @@ MAX_DIFF_CHARS = int(os.environ.get("GRIPPY_MAX_DIFF_CHARS", "500000"))
 
 
 def _is_git_tracked(path: str) -> bool:
-    """Check if a file is tracked by git. Returns True if tracked."""
+    """Check if a file is tracked by git. Returns True if tracked.
+
+    Fail-open: returns False if git is unavailable or times out.
+    This means a tracked .dev.vars loads in that case — acceptable
+    trade-off for local dev usability. CI environments are excluded
+    by a separate check before this function is called.
+    """
     try:
         result = subprocess.run(
             ["git", "ls-files", "--error-unmatch", path],
             capture_output=True,
             timeout=5,
+            cwd=Path(path).parent,  # ensure git operates in the file's repo
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
