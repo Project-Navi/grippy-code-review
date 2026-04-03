@@ -169,6 +169,11 @@ def _sanitize_comment_text(text: str) -> str:
         if text == prev:
             break
         prev = text
+    # Re-run markdown stripping + scheme check after decode loop.
+    # Decoded content may reintroduce markdown links/images that were
+    # URL-encoded to bypass the earlier stripping pass.
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", text)
+    text = re.sub(r"\[([^\]]*)\]\(https?://[^)]+\)", r"\1", text)
     text = _DANGEROUS_SCHEME_RE.sub("", text)
     return text
 

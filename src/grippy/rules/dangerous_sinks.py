@@ -43,9 +43,20 @@ def _file_ext(path: str) -> str:
 
 
 def _is_comment_line(content: str) -> bool:
-    """Check if a line is a comment in common languages."""
+    """Check if a line is a comment in common languages.
+
+    Handles: # (Python/shell/YAML), // (JS/TS/C), and multi-line comment
+    body lines that start with whitespace + * (JS/C block comments).
+    Does NOT match bare * at line start — that's valid JS generator syntax.
+    """
     stripped = content.strip()
-    return stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*")
+    if stripped.startswith("#") or stripped.startswith("//"):
+        return True
+    # Multi-line comment body: leading whitespace then * (but not *identifier)
+    # Matches: "  * some comment", " * @param", but not "*run()" or "*foo"
+    if stripped.startswith("*") and (len(stripped) == 1 or not stripped[1].isalnum()):
+        return True
+    return False
 
 
 class DangerousSinksRule:

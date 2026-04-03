@@ -63,7 +63,12 @@ def _has_traversal_pattern(content: str) -> bool:
 def _is_comment_line(content: str) -> bool:
     """Check if a line is a comment in common languages."""
     stripped = content.strip()
-    return stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*")
+    if stripped.startswith("#") or stripped.startswith("//"):
+        return True
+    # Multi-line comment body: * followed by non-alnum (not generator syntax)
+    if stripped.startswith("*") and (len(stripped) == 1 or not stripped[1].isalnum()):
+        return True
+    return False
 
 
 class PathTraversalRule:
