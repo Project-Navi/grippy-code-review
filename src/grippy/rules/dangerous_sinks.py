@@ -42,6 +42,12 @@ def _file_ext(path: str) -> str:
     return path[dot:] if dot >= 0 else ""
 
 
+def _is_comment_line(content: str) -> bool:
+    """Check if a line is a comment in common languages."""
+    stripped = content.strip()
+    return stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*")
+
+
 class DangerousSinksRule:
     """Detect dangerous execution sinks in Python and JavaScript/TypeScript."""
 
@@ -63,6 +69,8 @@ class DangerousSinksRule:
         results: list[RuleResult] = []
         added = [(ln, content) for _, ln, content in ctx.added_lines_for(path)]
         for lineno, content in added:
+            if _is_comment_line(content):
+                continue
             # Standard sinks
             for name, pattern in _PYTHON_SINKS:
                 if pattern.search(content):
@@ -97,6 +105,8 @@ class DangerousSinksRule:
         results: list[RuleResult] = []
         added = [(ln, content) for _, ln, content in ctx.added_lines_for(path)]
         for lineno, content in added:
+            if _is_comment_line(content):
+                continue
             for name, pattern in _JS_SINKS:
                 if pattern.search(content):
                     results.append(

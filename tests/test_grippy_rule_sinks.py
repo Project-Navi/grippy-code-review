@@ -160,6 +160,52 @@ def _timeout(seconds: int) -> Generator[None, None, None]:
 # -- SR-02: ReDoS safety tests -----------------------------------------------
 
 
+class TestSinksCommentFiltering:
+    """Commented-out code should not trigger findings (SR-03)."""
+
+    def test_python_comment_hash_not_flagged(self) -> None:
+        """Python # comment with eval() should not be flagged."""
+        diff = _make_diff("app.py", "# eval(user_input)")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_python_comment_indented_hash_not_flagged(self) -> None:
+        """Indented Python # comment should not be flagged."""
+        diff = _make_diff("app.py", "    # result = exec(code)")  # nogrip
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_js_comment_slash_not_flagged(self) -> None:
+        """JS // comment with eval() should not be flagged."""
+        diff = _make_diff("app.js", "// eval(userInput);")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_js_comment_star_not_flagged(self) -> None:
+        """JS * comment (inside block comment) should not be flagged."""
+        diff = _make_diff("app.ts", " * eval(data)")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_uncommented_still_flagged(self) -> None:
+        """Non-comment lines must still be flagged."""
+        diff = _make_diff("app.py", "eval(user_input)")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert any("eval()" in r.message for r in results)
+
+    def test_subprocess_comment_not_flagged(self) -> None:
+        """Commented subprocess.run with shell=True should not be flagged."""
+        diff = _make_diff("app.py", "# subprocess.run(cmd, shell=True)")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+    def test_yaml_load_comment_not_flagged(self) -> None:
+        """Commented yaml.load should not be flagged."""
+        diff = _make_diff("app.py", "# data = yaml.load(content)")
+        results = DangerousSinksRule().run(_ctx(diff))
+        assert results == []
+
+
 class TestSinksReDoS:
     """Adversarial long-input tests for compiled regexes (SR-02)."""
 
