@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import itertools
 import json
+import logging
 import os
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -42,8 +44,23 @@ from grippy.retry import ReviewParseError, run_review
 from grippy.rules import RuleResult, RuleSeverity, check_gate, load_profile, run_rules
 from grippy.rules.enrichment import enrich_results, persist_rule_findings
 
+log = logging.getLogger(__name__)
+
 # Max diff size sent to the LLM — configurable for local models with smaller context
 MAX_DIFF_CHARS = int(os.environ.get("GRIPPY_MAX_DIFF_CHARS", "500000"))
+
+
+def _is_git_tracked(path: str) -> bool:
+    """Check if a file is tracked by git. Returns True if tracked."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", path],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
 
 
 _ERROR_HINTS: dict[str, str] = {
@@ -286,11 +303,17 @@ def main(*, profile: str | None = None) -> None:
     if not os.environ.get("CI"):
         dev_vars_path = Path(__file__).resolve().parent.parent.parent / ".dev.vars"
         if dev_vars_path.is_file():
-            for line in dev_vars_path.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, value = line.partition("=")
-                    os.environ.setdefault(key.strip(), value.strip())
+            if _is_git_tracked(str(dev_vars_path)):
+                log.warning(
+                    ".dev.vars is tracked by git — refusing to load. "
+                    "Remove it from tracking: git rm --cached .dev.vars"
+                )
+            else:
+                for line in dev_vars_path.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, value = line.partition("=")
+                        os.environ.setdefault(key.strip(), value.strip())
 
     # Required env
     token = os.environ.get("GITHUB_TOKEN", "")
