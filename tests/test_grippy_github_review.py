@@ -2078,3 +2078,84 @@ class TestFetchThreadStatesFix:
         result = fetch_thread_states([])
         assert result == {}
         mock_run.assert_not_called()
+
+
+# --- Reference-style markdown link stripping ---
+
+
+class TestReferenceStyleLinkStripping:
+    """_sanitize_comment_text strips reference-style links, collapsed refs, and autolinks."""
+
+    def test_reference_link_with_definition_stripped(self) -> None:
+        """[text][id] + definition line -> plain text only."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[click here][1]\n\n[1]: https://evil.com"
+        result = _sanitize_comment_text(text)
+        assert "click here" in result
+        assert "https://evil.com" not in result
+        assert "[1]" not in result
+
+    def test_collapsed_reference_stripped(self) -> None:
+        """[text][] + definition -> plain text only."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[click here][]\n\n[click here]: https://evil.com"
+        result = _sanitize_comment_text(text)
+        assert "click here" in result
+        assert "https://evil.com" not in result
+
+    def test_bare_autolink_stripped(self) -> None:
+        """<https://evil.com> -> plain URL text without angle brackets."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "Visit <https://evil.com> for details"
+        result = _sanitize_comment_text(text)
+        assert "<https://" not in result
+        # The URL text itself may remain (safe — not a clickable link)
+        assert ">" not in result or "evil.com>" not in result
+
+    def test_inline_links_still_stripped(self) -> None:
+        """Regression: existing inline link stripping still works."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[click](https://evil.com)"
+        result = _sanitize_comment_text(text)
+        assert "https://evil.com" not in result
+        assert "click" in result
+
+    def test_reference_without_definition_inert(self) -> None:
+        """[text][id] without a definition is harmless (renders as literal text)."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[text][undefined-id]"
+        result = _sanitize_comment_text(text)
+        # Should be stripped to plain text (defense-in-depth)
+        assert "text" in result
+
+    def test_multiple_reference_definitions_stripped(self) -> None:
+        """Multiple definitions are all removed."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[a][1] and [b][2]\n\n[1]: https://evil1.com\n[2]: https://evil2.com 'title'"
+        result = _sanitize_comment_text(text)
+        assert "https://evil1.com" not in result
+        assert "https://evil2.com" not in result
+        assert "a" in result
+        assert "b" in result
+
+    def test_indented_definition_stripped(self) -> None:
+        """Definitions with up to 3 spaces of indentation are stripped."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "[ref][1]\n   [1]: https://evil.com"
+        result = _sanitize_comment_text(text)
+        assert "https://evil.com" not in result
+
+    def test_http_autolink_stripped(self) -> None:
+        """<http://...> autolinks are stripped too."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "See <http://evil.com/path>"
+        result = _sanitize_comment_text(text)
+        assert "<http://" not in result
