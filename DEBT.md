@@ -41,3 +41,19 @@ Older orchestrators or LLM agents running on cached prompts without the `finding
 **Impact:** Low — grippy CI always runs from the current commit's prompts. Only affects external consumers using stale schema docs.
 
 **Fix:** No action needed unless grippy is deployed as a service with cached prompt versions.
+
+### DEBT-004: Formalize appreciative inquiry in review output
+
+**Filed:** 2026-04-04
+**Module:** `prompts_data/system-core.md`, `prompts_data/scoring-rubric.md`, `schema.py`
+**Severity:** Enhancement
+
+Grippy naturally produces positive observations about good code alongside problems — the `finding_type: "note"` field now supports this structurally. Formalizing this as appreciative inquiry (deliberately surfacing what's working well, not just what's broken) would improve the review experience for humans. Research shows balanced feedback increases engagement with review findings and reduces defensive responses to criticism.
+
+**Shape:**
+- Prompt guidance: instruct grippy to include 1-2 notes per review highlighting strong patterns, good test coverage, or security improvements — not just problems
+- Scoring rubric: notes don't deduct (already implemented) but could contribute to a "strengths" section in the summary
+- Summary format: pair findings with acknowledged strengths ("3 issues found, 2 strong patterns noted")
+- Personality: grippy's grudging-respect tone is a natural fit for appreciative inquiry — "I hate to admit it, but this auth flow is actually solid"
+
+**Why:** Code review tools that only report problems train humans to dread their output. Balanced feedback produces better outcomes than pure criticism.
