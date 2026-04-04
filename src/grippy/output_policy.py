@@ -218,7 +218,7 @@ def _recompute_score(findings: list[Finding]) -> Score:
     severity_counts = dict.fromkeys(Severity, 0)
 
     for f in findings:
-        if f.finding_type == FindingType.NOTE:
+        if f.finding_type == FindingType.NOTE and not f.rule_id:
             continue
         category_deductions[f.category] = category_deductions.get(f.category, 0) + _DEDUCTION.get(
             f.severity, 0
@@ -269,10 +269,12 @@ def _derive_verdict(score: int, findings: list[Finding], mode: str) -> Verdict:
 
     Only ``issue`` findings contribute to severity gates. ``note`` findings
     (positive observations) do not trigger FAIL regardless of their severity label.
+    Rule-backed findings (``rule_id`` set) are always treated as issues even if
+    the LLM labels them as notes — deterministic rules cannot be downgraded.
     """
     threshold = _THRESHOLD.get(mode, 70)
 
-    issues = [f for f in findings if f.finding_type != FindingType.NOTE]
+    issues = [f for f in findings if f.finding_type != FindingType.NOTE or f.rule_id]
     has_critical = any(f.severity == Severity.CRITICAL for f in issues)
     high_count = sum(1 for f in issues if f.severity == Severity.HIGH)
 

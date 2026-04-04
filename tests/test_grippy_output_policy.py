@@ -744,3 +744,22 @@ class TestFindingTypeNote:
         assert result.score.overall == 100
         assert result.verdict.status == VerdictStatus.PASS
         assert result.verdict.merge_blocking is False
+
+    def test_rule_backed_note_still_deducts(self) -> None:
+        """A note with rule_id is coerced to issue — rules can't be downgraded."""
+        findings = [
+            _f(id="F-001", finding_type="note", rule_id="secrets-in-diff"),
+            _f(id="F-002", finding_type="note", rule_id="eval-exec"),
+        ]
+        score = _recompute_score(findings)
+        assert score.overall == 70  # 100 - 2*15 (two HIGH issues)
+        assert score.deductions.high_count == 2
+
+    def test_rule_backed_note_triggers_verdict_gate(self) -> None:
+        """2+ HIGH rule-backed notes still trigger auto-FAIL."""
+        findings = [
+            _f(id="F-001", finding_type="note", rule_id="secrets-in-diff"),
+            _f(id="F-002", finding_type="note", rule_id="eval-exec"),
+        ]
+        verdict = _derive_verdict(70, findings, "pr_review")
+        assert verdict.status == VerdictStatus.FAIL
