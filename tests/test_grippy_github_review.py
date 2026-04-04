@@ -23,6 +23,7 @@ def _make_finding(
 ) -> Finding:
     return Finding(
         id="F-001",
+        finding_type="issue",
         severity=severity,
         confidence=90,
         category=category,
@@ -1562,6 +1563,7 @@ class TestCommentSanitization:
         # Rebuild with malicious description — Finding is frozen, so create fresh
         finding = Finding(
             id="F-001",
+            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1587,6 +1589,7 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
+            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1607,6 +1610,7 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
+            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1627,6 +1631,7 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
+            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1648,6 +1653,7 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
+            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",

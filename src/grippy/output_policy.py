@@ -22,6 +22,7 @@ from grippy.rules.context import parse_diff
 from grippy.schema import (
     Finding,
     FindingCategory,
+    FindingType,
     GrippyReview,
     Score,
     ScoreBreakdown,
@@ -207,11 +208,18 @@ _CATEGORY_CAP: dict[FindingCategory, int] = {
 
 
 def _recompute_score(findings: list[Finding]) -> Score:
-    """Recompute score from the scoring set using the deduction rubric."""
+    """Recompute score from the scoring set using the deduction rubric.
+
+    Only ``issue`` findings deduct points. ``note`` findings (positive
+    observations) are included in the scoring set for display but do
+    not affect the score or severity counts.
+    """
     category_deductions: dict[FindingCategory, int] = {}
     severity_counts = dict.fromkeys(Severity, 0)
 
     for f in findings:
+        if f.finding_type == FindingType.NOTE and not f.rule_id:
+            continue
         category_deductions[f.category] = category_deductions.get(f.category, 0) + _DEDUCTION.get(
             f.severity, 0
         )
@@ -257,11 +265,18 @@ _THRESHOLD: dict[str, int] = {
 
 
 def _derive_verdict(score: int, findings: list[Finding], mode: str) -> Verdict:
-    """Derive verdict from recomputed score and mode (call-site authority)."""
+    """Derive verdict from recomputed score and mode (call-site authority).
+
+    Only ``issue`` findings contribute to severity gates. ``note`` findings
+    (positive observations) do not trigger FAIL regardless of their severity label.
+    Rule-backed findings (``rule_id`` set) are always treated as issues even if
+    the LLM labels them as notes — deterministic rules cannot be downgraded.
+    """
     threshold = _THRESHOLD.get(mode, 70)
 
-    has_critical = any(f.severity == Severity.CRITICAL for f in findings)
-    high_count = sum(1 for f in findings if f.severity == Severity.HIGH)
+    issues = [f for f in findings if f.finding_type != FindingType.NOTE or f.rule_id]
+    has_critical = any(f.severity == Severity.CRITICAL for f in issues)
+    high_count = sum(1 for f in issues if f.severity == Severity.HIGH)
 
     if has_critical:
         status, blocking = VerdictStatus.FAIL, True

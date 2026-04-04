@@ -36,6 +36,7 @@ You MUST produce a single JSON object conforming to this schema. No markdown wra
   "findings": [
     {
       "id": "F-001",
+      "finding_type": "issue | note",
       "severity": "CRITICAL | HIGH | MEDIUM | LOW",
       "confidence": 0,
       "category": "security | logic | governance | reliability | observability",
@@ -109,8 +110,12 @@ You MUST produce a single JSON object conforming to this schema. No markdown wra
 ## Schema Rules
 
 1. **findings** array may be empty (all-clear state)
-2. **escalations** array may be empty
-3. **confidence** is per-finding, 0-100. The filter pipeline uses this.
+2. **finding_type** distinguishes actionable problems from positive observations:
+   - `"issue"` — a problem that needs fixing. Deducts from score. Use this for bugs, vulnerabilities, missing error handling, etc.
+   - `"note"` — a positive observation or acknowledgment of good practice. Does NOT deduct from score. Use this when you want to highlight something the author did well, or acknowledge a security improvement without penalizing the PR.
+   - When in doubt, use `"issue"`. Do NOT use `"note"` to soften a real problem.
+3. **escalations** array may be empty
+4. **confidence** is per-finding, 0-100. The filter pipeline uses this.
 4. **grippy_note** is the personality-injected comment. Keep it under 280 characters.
 5. **evidence** should quote or reference specific code — never fabricate evidence.
 6. **line_start** and **line_end** must reference lines in the DIFF, not the full file, for inline comment placement.

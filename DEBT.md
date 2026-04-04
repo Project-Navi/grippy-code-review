@@ -17,3 +17,43 @@ GitHub's REST API returns `406 Not Acceptable` when a PR diff exceeds their size
 **Fix:** Handle 406 in `fetch_pr_diff()` by falling back to per-file diffs via `GET /repos/{owner}/{repo}/pulls/{pr}/files` and fetching individual file patches, or truncating gracefully with a warning.
 
 **Workaround:** Split large fixture additions into separate PRs.
+
+### DEBT-002: No migration path for serialized Finding objects missing `finding_type`
+
+**Filed:** 2026-04-04
+**Module:** `schema.py` — `Finding`, `FindingType`
+**Severity:** Low
+
+The `finding_type` field was added to `Finding` as required (no default) to avoid OpenAI structured output `$ref` + `default` keyword conflicts. Historical serialized `Finding` records (if any exist in databases or artifacts) will fail Pydantic validation on deserialization because they lack this field.
+
+**Impact:** Low — no known production consumers persist `Finding` objects long-term. CI reviews are ephemeral.
+
+**Fix:** If persistent Finding storage is added, include a migration to inject `finding_type: "issue"` into legacy records.
+
+### DEBT-003: Cached LLM agents may not emit `finding_type` field
+
+**Filed:** 2026-04-04
+**Module:** `prompts_data/output-schema.md` — `finding_type` field
+**Severity:** Low
+
+Older orchestrators or LLM agents running on cached prompts without the `finding_type` field will produce `Finding` objects that fail Pydantic validation. The field is required, so missing it causes a parse error.
+
+**Impact:** Low — grippy CI always runs from the current commit's prompts. Only affects external consumers using stale schema docs.
+
+**Fix:** No action needed unless grippy is deployed as a service with cached prompt versions.
+
+### DEBT-004: Formalize appreciative inquiry in review output
+
+**Filed:** 2026-04-04
+**Module:** `prompts_data/system-core.md`, `prompts_data/scoring-rubric.md`, `schema.py`
+**Severity:** Enhancement
+
+Grippy naturally produces positive observations about good code alongside problems — the `finding_type: "note"` field now supports this structurally. Formalizing this as appreciative inquiry (deliberately surfacing what's working well, not just what's broken) would improve the review experience for humans. Research shows balanced feedback increases engagement with review findings and reduces defensive responses to criticism.
+
+**Shape:**
+- Prompt guidance: instruct grippy to include 1-2 notes per review highlighting strong patterns, good test coverage, or security improvements — not just problems
+- Scoring rubric: notes don't deduct (already implemented) but could contribute to a "strengths" section in the summary
+- Summary format: pair findings with acknowledged strengths ("3 issues found, 2 strong patterns noted")
+- Personality: grippy's grudging-respect tone is a natural fit for appreciative inquiry — "I hate to admit it, but this auth flow is actually solid"
+
+**Why:** Code review tools that only report problems train humans to dread their output. Balanced feedback produces better outcomes than pure criticism.

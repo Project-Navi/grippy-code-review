@@ -36,6 +36,7 @@ def _f(**kw: object) -> Finding:
     """Build a Finding with sensible defaults, overridable by keyword."""
     defaults: dict = {
         "id": "F-001",
+        "finding_type": "issue",
         "severity": "HIGH",
         "confidence": 85,
         "category": "security",
@@ -678,3 +679,87 @@ class TestNoGripAcceptance:
         assert result.verdict.status == VerdictStatus.PASS
         assert result.verdict.merge_blocking is False
         assert result.meta.nogrip_suppressed_count == 2
+
+
+# ---------------------------------------------------------------------------
+# finding_type: note vs issue
+# ---------------------------------------------------------------------------
+
+
+class TestFindingTypeNote:
+    """Notes (positive observations) must not deduct from score or trigger FAIL."""
+
+    def test_note_findings_do_not_deduct_from_score(self) -> None:
+        """4 HIGH notes → score stays 100, not 100 - 4*15 = 40."""
+        findings = [_f(id=f"F-{i:03d}", finding_type="note") for i in range(1, 5)]
+        score = _recompute_score(findings)
+        assert score.overall == 100
+        assert score.deductions.high_count == 0
+        assert score.deductions.total_deduction == 0
+
+    def test_note_findings_do_not_trigger_high_count_fail(self) -> None:
+        """2+ HIGH notes should not auto-FAIL the verdict."""
+        findings = [
+            _f(id="F-001", finding_type="note"),
+            _f(id="F-002", finding_type="note"),
+            _f(id="F-003", finding_type="note"),
+        ]
+        verdict = _derive_verdict(100, findings, "pr_review")
+        assert verdict.status == VerdictStatus.PASS
+        assert verdict.merge_blocking is False
+
+    def test_mixed_issues_and_notes_only_issues_deduct(self) -> None:
+        """1 HIGH issue + 3 HIGH notes → score = 85 (only 1 deduction)."""
+        findings = [
+            _f(id="F-001", finding_type="issue"),
+            _f(id="F-002", finding_type="note"),
+            _f(id="F-003", finding_type="note"),
+            _f(id="F-004", finding_type="note"),
+        ]
+        score = _recompute_score(findings)
+        assert score.overall == 85  # 100 - 15 (one HIGH issue)
+        assert score.deductions.high_count == 1
+
+    def test_mixed_verdict_only_counts_issues(self) -> None:
+        """1 HIGH issue + 3 HIGH notes → PROVISIONAL (1 HIGH), not FAIL (4 HIGH)."""
+        findings = [
+            _f(id="F-001", finding_type="issue"),
+            _f(id="F-002", finding_type="note"),
+            _f(id="F-003", finding_type="note"),
+            _f(id="F-004", finding_type="note"),
+        ]
+        verdict = _derive_verdict(85, findings, "pr_review")
+        assert verdict.status == VerdictStatus.PROVISIONAL
+
+    def test_finding_type_defaults_to_issue(self) -> None:
+        """Omitting finding_type defaults to issue (backward compatible)."""
+        finding = _f()
+        assert finding.finding_type == "issue"
+
+    def test_note_in_filter_review_does_not_block(self) -> None:
+        """Full pipeline: 4 HIGH notes → PASS, not FAIL."""
+        findings = [_f(id=f"F-{i:03d}", finding_type="note") for i in range(1, 5)]
+        review = _review(findings)
+        result = filter_review(review, mode="pr_review")
+        assert result.score.overall == 100
+        assert result.verdict.status == VerdictStatus.PASS
+        assert result.verdict.merge_blocking is False
+
+    def test_rule_backed_note_still_deducts(self) -> None:
+        """A note with rule_id is coerced to issue — rules can't be downgraded."""
+        findings = [
+            _f(id="F-001", finding_type="note", rule_id="secrets-in-diff"),
+            _f(id="F-002", finding_type="note", rule_id="eval-exec"),
+        ]
+        score = _recompute_score(findings)
+        assert score.overall == 70  # 100 - 2*15 (two HIGH issues)
+        assert score.deductions.high_count == 2
+
+    def test_rule_backed_note_triggers_verdict_gate(self) -> None:
+        """2+ HIGH rule-backed notes still trigger auto-FAIL."""
+        findings = [
+            _f(id="F-001", finding_type="note", rule_id="secrets-in-diff"),
+            _f(id="F-002", finding_type="note", rule_id="eval-exec"),
+        ]
+        verdict = _derive_verdict(70, findings, "pr_review")
+        assert verdict.status == VerdictStatus.FAIL

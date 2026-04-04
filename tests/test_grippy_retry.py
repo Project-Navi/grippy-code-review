@@ -381,6 +381,7 @@ class TestRuleCoverageCounts:
         data["findings"] = [
             {
                 "id": f"F-{i:03d}",
+                "finding_type": "issue",
                 "severity": "HIGH",
                 "confidence": 90,
                 "category": "security",
@@ -437,6 +438,7 @@ class TestRuleCoverageFiles:
         data["findings"] = [
             {
                 "id": f"F-{i:03d}",
+                "finding_type": "issue",
                 "severity": "HIGH",
                 "confidence": 90,
                 "category": "security",
@@ -515,6 +517,7 @@ class TestRuleCoverageRetryLoop:
         data["findings"] = [
             {
                 "id": f"F-{i:03d}",
+                "finding_type": "issue",
                 "severity": "HIGH",
                 "confidence": 90,
                 "category": "security",
@@ -630,6 +633,7 @@ class TestFileSetValidationRetryLoop:
         data["findings"] = [
             {
                 "id": f"F-{i:03d}",
+                "finding_type": "issue",
                 "severity": "HIGH",
                 "confidence": 90,
                 "category": "security",
