@@ -636,18 +636,15 @@ def main(*, profile: str | None = None) -> None:
             print(f"  Re-review: {len(changed_files)} files changed since {before_sha[:7]}")
 
     # 4. Format context
-    description = pr_event["description"]
-    if graph_context_text:
-        description = f"{description}\n\n<graph-context>\n{graph_context_text}\n</graph-context>"
-
     user_message = format_pr_context(
         title=pr_event["title"],
         author=pr_event["author"],
         branch=f"{pr_event['head_ref']} → {pr_event['base_ref']}",
-        description=description,
+        description=pr_event["description"],
         diff=diff,
         rule_findings=rule_findings_text,
         changed_since_last_review=changed_since_text,
+        graph_context=graph_context_text,
     )
 
     # 5. Run review with retry + validation (replaces agent.run + parse_review_response)
