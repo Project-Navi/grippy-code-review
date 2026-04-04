@@ -158,7 +158,7 @@ Graph enrichment: `enrich_results()` (rules/enrichment.py) post-processes findin
 ### Codebase Tools (`codebase.py`) — LLM-facing, security-critical
 
 - Path traversal: `Path.is_relative_to()` (not `startswith`)
-- Symlink: `grep_code` uses `-S` flag (no follow)
+- Symlink: `grep_code` uses `-r` (not `-R`), which does not follow symlinks on GNU grep. BSD grep `-r` does follow symlinks; `-S` is BSD-only and not used. See DEBT-INT-009.
 - Glob timeout: 5-second `time.monotonic()` deadline
 - Result caps: 5,000 files indexed, 500 glob results, 12,000 chars per tool response
 - Sanitization: `tool_hooks` middleware applies `navi_sanitize.clean()` + XML-escape + 12K truncation to all tool outputs before LLM sees them
