@@ -2159,3 +2159,49 @@ class TestReferenceStyleLinkStripping:
         text = "See <http://evil.com/path>"
         result = _sanitize_comment_text(text)
         assert "<http://" not in result
+
+    def test_shortcut_reference_neutralized_by_definition_stripping(self) -> None:
+        """Shortcut reference [text] is neutralized when its definition is stripped.
+
+        Shortcut references have no direct defense — they rely on definition
+        stripping. This test proves the definition is stripped, leaving [text]
+        as inert literal text. (Audit finding: defense-in-depth gap.)
+        """
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "Click [evil] for details.\n\n[evil]: https://evil.com"
+        result = _sanitize_comment_text(text)
+        # Definition must be stripped — URL must not survive
+        assert "evil.com" not in result or "hxxps" in result
+        # The [evil] text itself is fine — it's inert without a definition
+        assert "evil" in result
+
+    def test_url_encoded_definition_caught_by_post_unquote_pass(self) -> None:
+        """URL-encoded definition survives pre-unquote pass but is caught after decode.
+
+        Attack: %5B1%5D%3A%20https%3A%2F%2Fevil.com decodes to [1]: https://evil.com
+        The post-unquote definition stripping pass must catch this.
+        """
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "See [info][1]\n\n%5B1%5D%3A%20https%3A%2F%2Fevil.com"
+        result = _sanitize_comment_text(text)
+        assert "evil.com" not in result or "hxxps" in result
+
+    def test_bare_url_defanged(self) -> None:
+        """Bare https:// URLs (no markdown syntax) are defanged to hxxps://."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "Visit https://evil.com/phishing for details"
+        result = _sanitize_comment_text(text)
+        assert "https://evil.com" not in result
+        assert "hxxps://evil.com" in result
+
+    def test_defang_idempotent(self) -> None:
+        """Already-defanged hxxps:// is not double-mangled."""
+        from grippy.github_review import _sanitize_comment_text
+
+        text = "See hxxps://example.com for reference"
+        result = _sanitize_comment_text(text)
+        assert "hxxps://example.com" in result
+        assert "hxxhxxps" not in result
