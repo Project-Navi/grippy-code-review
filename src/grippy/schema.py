@@ -25,6 +25,13 @@ class ComplexityTier(StrEnum):
     CRITICAL = "CRITICAL"
 
 
+class FindingType(StrEnum):
+    """Whether a finding reports a problem or a positive observation."""
+
+    ISSUE = "issue"  # actionable problem — deducts from score
+    NOTE = "note"  # positive observation / praise — does NOT deduct
+
+
 class FindingCategory(StrEnum):
     SECURITY = "security"
     LOGIC = "logic"
@@ -95,6 +102,11 @@ class Finding(BaseModel):
     model_config = {"frozen": True}
 
     id: str = Field(description="F-001 through F-999")
+    finding_type: FindingType = Field(
+        default=FindingType.ISSUE,
+        description="'issue' for actionable problems (deducts score), "
+        "'note' for positive observations (does not deduct)",
+    )
     severity: Severity
     confidence: int = Field(ge=0, le=100)
     category: FindingCategory
