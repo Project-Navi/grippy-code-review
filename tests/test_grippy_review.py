@@ -49,6 +49,7 @@ from grippy.schema import (
 def _make_finding(**overrides: Any) -> Finding:
     defaults: dict[str, Any] = {
         "id": "F-001",
+        "finding_type": "issue",
         "severity": Severity.HIGH,
         "confidence": 85,
         "category": FindingCategory.SECURITY,

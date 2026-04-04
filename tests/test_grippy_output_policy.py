@@ -36,6 +36,7 @@ def _f(**kw: object) -> Finding:
     """Build a Finding with sensible defaults, overridable by keyword."""
     defaults: dict = {
         "id": "F-001",
+        "finding_type": "issue",
         "severity": "HIGH",
         "confidence": 85,
         "category": "security",

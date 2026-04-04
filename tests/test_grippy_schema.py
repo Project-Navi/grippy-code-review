@@ -27,6 +27,7 @@ def _minimal_finding(**overrides: object) -> dict:
     """Return a minimal valid Finding dict, with overrides applied."""
     base: dict = {
         "id": "F-001",
+        "finding_type": "issue",
         "severity": "CRITICAL",
         "confidence": 85,
         "category": "security",

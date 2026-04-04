@@ -102,11 +102,7 @@ class Finding(BaseModel):
     model_config = {"frozen": True}
 
     id: str = Field(description="F-001 through F-999")
-    finding_type: FindingType = Field(
-        default=FindingType.ISSUE,
-        description="'issue' for actionable problems (deducts score), "
-        "'note' for positive observations (does not deduct)",
-    )
+    finding_type: FindingType
     severity: Severity
     confidence: int = Field(ge=0, le=100)
     category: FindingCategory
