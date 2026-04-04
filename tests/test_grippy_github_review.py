@@ -2194,8 +2194,7 @@ class TestReferenceStyleLinkStripping:
 
         text = "Visit https://evil.com/phishing for details"
         result = _sanitize_comment_text(text)
-        assert "https://evil.com" not in result
-        assert "hxxps://evil.com" in result
+        assert result == "Visit hxxps://evil.com/phishing for details"
 
     def test_defang_idempotent(self) -> None:
         """Already-defanged hxxps:// is not double-mangled."""
@@ -2203,5 +2202,4 @@ class TestReferenceStyleLinkStripping:
 
         text = "See hxxps://example.com for reference"
         result = _sanitize_comment_text(text)
-        assert "hxxps://example.com" in result
-        assert "hxxhxxps" not in result
+        assert result == "See hxxps://example.com for reference"
