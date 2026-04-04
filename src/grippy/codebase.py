@@ -731,6 +731,27 @@ def _make_grep_code(repo_root: Path) -> Any:
     return grep_code
 
 
+def _reject_symlinks(path: Path, repo_root: Path) -> str | None:
+    """Check if any component of *path* is a symlink.
+
+    Defense-in-depth: rejects symlinks *before* resolve() so a symlink
+    inside the repo that resolves to an external target cannot bypass the
+    is_relative_to() guard.
+
+    Returns an error message string if a symlink is found, or None if safe.
+    """
+    try:
+        relative = path.relative_to(repo_root)
+    except ValueError:
+        return "Error: path outside repo root."
+    current = repo_root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return "Error: symlinks not allowed."
+    return None
+
+
 def _make_read_file(repo_root: Path) -> Any:
     """Create a read_file tool function bound to a repo root."""
 
@@ -742,7 +763,11 @@ def _make_read_file(repo_root: Path) -> Any:
         :param end_line: last line to read (1-based, 0 = to end)
         """
         target = repo_root / path
-        # Prevent path traversal
+        # Layer 1: reject symlinks before resolve()
+        symlink_err = _reject_symlinks(target, repo_root)
+        if symlink_err is not None:
+            return symlink_err
+        # Layer 2: resolve + is_relative_to (catches traversal via ..)
         try:
             target = target.resolve()
             if not target.is_relative_to(repo_root.resolve()):
@@ -795,7 +820,11 @@ def _make_list_files(repo_root: Path) -> Any:
         :param glob_pattern: glob pattern to filter files (default "*")
         """
         target = repo_root / path
-        # Prevent path traversal
+        # Layer 1: reject symlinks before resolve()
+        symlink_err = _reject_symlinks(target, repo_root)
+        if symlink_err is not None:
+            return symlink_err
+        # Layer 2: resolve + is_relative_to (catches traversal via ..)
         try:
             target = target.resolve()
             if not target.is_relative_to(repo_root.resolve()):

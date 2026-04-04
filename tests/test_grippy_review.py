@@ -16,6 +16,7 @@ from grippy.review import (
     _escape_rule_field,
     _failure_comment,
     _format_rule_findings,
+    _is_git_tracked,
     _with_timeout,
     fetch_pr_diff,
     load_pr_event,
@@ -2101,3 +2102,72 @@ class TestMainSameCommitGuard:
         except (SystemExit, Exception):
             pass
         mock_check.assert_not_called()
+
+
+# --- .dev.vars git-tracked guard ---
+
+
+class TestIsGitTracked:
+    """_is_git_tracked checks git ls-files for tracked status."""
+
+    @patch("subprocess.run")
+    def test_tracked_file_returns_true(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0)
+        assert _is_git_tracked(".dev.vars") is True
+
+    @patch("subprocess.run")
+    def test_untracked_file_returns_false(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=1)
+        assert _is_git_tracked(".dev.vars") is False
+
+    @patch("subprocess.run")
+    def test_timeout_returns_false(self, mock_run: MagicMock) -> None:
+        import subprocess as sp
+
+        mock_run.side_effect = sp.TimeoutExpired(cmd="git", timeout=5)
+        assert _is_git_tracked(".dev.vars") is False
+
+    @patch("subprocess.run")
+    def test_git_not_found_returns_false(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = FileNotFoundError()
+        assert _is_git_tracked(".dev.vars") is False
+
+
+class TestDevVarsLoadGuard:
+    """main() refuses to load .dev.vars when git-tracked."""
+
+    def test_is_git_tracked_on_tracked_file(self) -> None:
+        """_is_git_tracked returns True for files in the git index."""
+        repo_root = Path(__file__).resolve().parent.parent
+        tracked_file = repo_root / "pyproject.toml"
+        assert tracked_file.exists()
+        assert _is_git_tracked(str(tracked_file)) is True
+
+    def test_is_git_tracked_on_untracked_file(self, tmp_path: Path) -> None:
+        """_is_git_tracked returns False for files not in the git index."""
+        untracked = tmp_path / "not-in-git.txt"
+        untracked.write_text("test")
+        assert _is_git_tracked(str(untracked)) is False
+
+    def test_is_git_tracked_on_nonexistent_file(self) -> None:
+        """_is_git_tracked returns False for files that don't exist."""
+        assert _is_git_tracked("/nonexistent/path/.dev.vars") is False
+
+    @patch("grippy.review.subprocess.run", side_effect=FileNotFoundError)
+    def test_is_git_tracked_git_unavailable(self, _mock: MagicMock) -> None:
+        """_is_git_tracked returns False (fail-open) when git is not available."""
+        assert _is_git_tracked("/some/path") is False
+
+
+class TestGitignoreContainsDevVars:
+    """Verify .gitignore contains security-sensitive patterns."""
+
+    def test_gitignore_has_dev_vars(self) -> None:
+        gitignore = Path(__file__).resolve().parent.parent / ".gitignore"
+        content = gitignore.read_text()
+        assert ".dev.vars" in content
+
+    def test_gitignore_has_env_patterns(self) -> None:
+        gitignore = Path(__file__).resolve().parent.parent / ".gitignore"
+        content = gitignore.read_text()
+        assert ".env" in content

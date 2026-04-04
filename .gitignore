@@ -11,6 +11,8 @@ build/
 coverage.xml
 test-results.xml
 .dev.vars
+.env
+.env.*
 .claude/
 .claude-flow/
 .serena/
