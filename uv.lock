@@ -1059,7 +1059,7 @@ requires-dist = [
     { name = "coir-eval", marker = "extra == 'benchmarks'", specifier = ">=0.1.0" },
     { name = "lancedb", specifier = ">=0.20.0" },
     { name = "mcp", specifier = ">=1.0.0" },
-    { name = "navi-sanitize", specifier = ">=0.1.0" },
+    { name = "navi-sanitize", specifier = ">=0.2.1" },
     { name = "nh3", specifier = ">=0.2.0" },
     { name = "pathspec", specifier = ">=0.12" },
     { name = "pydantic", specifier = ">=2.0.0" },
@@ -1957,11 +1957,11 @@ wheels = [
 
 [[package]]
 name = "navi-sanitize"
-version = "0.1.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8b/1a/39992bde198be4ec2f2978ea0cd6519ed77b6d0973f30fc76abe2826082f/navi_sanitize-0.1.0.tar.gz", hash = "sha256:0f20aa257963a371dc2d2475060d97f9f5bc317713597d7be8cc38c77d4ac9ee", size = 49661, upload-time = "2026-03-01T19:06:44.663Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/48/68760569ea1e9a5dcbf0a0ce4437b31e81056a001f369a55acfb53371376/navi_sanitize-0.2.1.tar.gz", hash = "sha256:6d18801dcc8af74bb27c6cad88d19b7f8c87dc757dea0c7306852b37cda49c1c", size = 207622, upload-time = "2026-04-05T04:40:57.037Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/4c/d6db86dc84308c564c5624834114085182daf6f665ecf9b5f25f7a52e334/navi_sanitize-0.1.0-py3-none-any.whl", hash = "sha256:58c9230227de26ab90702a35cf2133b626064d90739da2f7882c2d875f096c0f", size = 15017, upload-time = "2026-03-01T19:06:43.542Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/13/5e1b36e3b61a1553ca978b48ea62a5251463bd4d6f6331acab20b0bfbc93/navi_sanitize-0.2.1-py3-none-any.whl", hash = "sha256:64214b060d6d1a4ebd32916c627fbac73733aef2255138f274c0a943eb25ac73", size = 17863, upload-time = "2026-04-05T04:40:55.753Z" },
 ]
 
 [[package]]
