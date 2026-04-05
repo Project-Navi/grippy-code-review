@@ -23,7 +23,6 @@ def _make_finding(
 ) -> Finding:
     return Finding(
         id="F-001",
-        finding_type="issue",
         severity=severity,
         confidence=90,
         category=category,
@@ -1563,7 +1562,6 @@ class TestCommentSanitization:
         # Rebuild with malicious description — Finding is frozen, so create fresh
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1589,7 +1587,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1610,7 +1607,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1631,7 +1627,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1653,7 +1648,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1783,7 +1777,7 @@ class TestVerdictMarkers:
         assert "<!-- grippy-verdict abc1234def5678 -->" in body
 
     def test_build_verdict_body_contains_meta(self) -> None:
-        from grippy.github_review import build_verdict_body
+        from grippy.github_review import build_verdict_body, parse_grippy_meta
 
         body = build_verdict_body(
             score=42,
@@ -1791,7 +1785,12 @@ class TestVerdictMarkers:
             head_sha="deadbeef12345678",  # pragma: allowlist secret
             base_text="Grippy rejects",
         )
-        assert '<!-- grippy-meta {"score": 42, "verdict": "FAIL"} -->' in body
+        meta = parse_grippy_meta(body)
+        assert meta is not None
+        assert meta["score"] == 42
+        assert meta["verdict"] == "FAIL"
+        assert meta["merge_blocking"] is False
+        assert meta["findings_count"] == 0
 
     def test_build_verdict_body_preserves_base_text(self) -> None:
         from grippy.github_review import build_verdict_body
@@ -1821,6 +1820,72 @@ class TestVerdictMarkers:
 
         body = "<!-- grippy-meta {bad json} -->"
         assert parse_grippy_meta(body) is None
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            '<!-- grippy-meta {"score": "not-a-number", "verdict": "PASS"} -->',
+            '<!-- grippy-meta {"score": -1, "verdict": "PASS"} -->',
+            '<!-- grippy-meta {"score": 101, "verdict": "PASS"} -->',
+            '<!-- grippy-meta {"score": true, "verdict": "PASS"} -->',
+            '<!-- grippy-meta {"score": "85\\nmalicious=true", "verdict": "PASS"} -->',
+            '<!-- grippy-meta {"score": 85, "verdict": "HACKED"} -->',
+            '<!-- grippy-meta {"score": 85, "verdict": "PASS", "merge_blocking": "yes"} -->',
+            '<!-- grippy-meta {"score": 85, "verdict": "PASS", "findings_count": -1} -->',
+            '<!-- grippy-meta {"score": 85, "verdict": "PASS", "findings_count": true} -->',
+            '<!-- grippy-meta {"score": 85, "verdict": "PASS", "rule_gate_failed": 1} -->',
+        ],
+        ids=[
+            "str-score",
+            "negative-score",
+            "over-100",
+            "bool-score",
+            "newline-injection",
+            "bad-verdict",
+            "non-bool-merge",
+            "negative-findings",
+            "bool-findings",
+            "non-bool-gate",
+        ],
+    )
+    def test_invalid_meta_rejected(self, body: str) -> None:
+        from grippy.github_review import parse_grippy_meta
+
+        assert parse_grippy_meta(body) is None
+
+    def test_new_format_with_all_fields(self) -> None:
+        """New format with merge_blocking, findings_count, rule_gate_failed."""
+        from grippy.github_review import parse_grippy_meta
+
+        body = (
+            '<!-- grippy-meta {"score": 60, "verdict": "FAIL", '
+            '"merge_blocking": true, "findings_count": 3, "rule_gate_failed": true} -->'
+        )
+        result = parse_grippy_meta(body)
+        assert result is not None
+        assert result["merge_blocking"] is True
+        assert result["findings_count"] == 3
+        assert result["rule_gate_failed"] is True
+
+    def test_non_dict_json_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """isinstance(data, dict) guard rejects non-object JSON payloads."""
+        from grippy import github_review
+        from grippy.github_review import parse_grippy_meta
+
+        # The regex constrains input to {...} so json.loads normally returns
+        # a dict.  Patch json.loads to return a list to exercise the guard.
+        monkeypatch.setattr(github_review.json, "loads", lambda _s: [1, 2, 3])
+        body = '<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->'
+        assert parse_grippy_meta(body) is None
+
+    def test_unknown_fields_stripped(self) -> None:
+        """Extra fields in meta are stripped by allowlist."""
+        from grippy.github_review import parse_grippy_meta
+
+        body = '<!-- grippy-meta {"score": 85, "verdict": "PASS", "evil": "payload"} -->'
+        result = parse_grippy_meta(body)
+        assert result is not None
+        assert "evil" not in result
 
 
 # --- _dismiss_prior_verdicts ---

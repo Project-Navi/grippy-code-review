@@ -36,8 +36,7 @@ You MUST produce a single JSON object conforming to this schema. No markdown wra
   "findings": [
     {
       "id": "F-001",
-      "finding_type": "issue | note",
-      "severity": "CRITICAL | HIGH | MEDIUM | LOW",
+      "severity": "CRITICAL | HIGH | MEDIUM | LOW | PROPS",
       "confidence": 0,
       "category": "security | logic | governance | reliability | observability",
       "file": "path/to/file.ts",
@@ -78,6 +77,7 @@ You MUST produce a single JSON object conforming to this schema. No markdown wra
       "high_count": 0,
       "medium_count": 0,
       "low_count": 0,
+      "props_count": 0,
       "total_deduction": 0
     }
   },
@@ -110,10 +110,7 @@ You MUST produce a single JSON object conforming to this schema. No markdown wra
 ## Schema Rules
 
 1. **findings** array may be empty (all-clear state)
-2. **finding_type** distinguishes actionable problems from positive observations:
-   - `"issue"` — a problem that needs fixing. Deducts from score. Use this for bugs, vulnerabilities, missing error handling, etc.
-   - `"note"` — a positive observation or acknowledgment of good practice. Does NOT deduct from score. Use this when you want to highlight something the author did well, or acknowledge a security improvement without penalizing the PR.
-   - When in doubt, use `"issue"`. Do NOT use `"note"` to soften a real problem.
+2. **severity** encodes both problem impact and positive observations. CRITICAL through LOW are problems ranked by impact. PROPS is for positive observations — see `system-core.md` Step 4 and `scoring-rubric.md` for guidance.
 3. **escalations** array may be empty
 4. **confidence** is per-finding, 0-100. The filter pipeline uses this.
 4. **grippy_note** is the personality-injected comment. Keep it under 280 characters.

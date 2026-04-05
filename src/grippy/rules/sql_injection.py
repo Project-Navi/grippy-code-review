@@ -8,7 +8,7 @@ import re
 from grippy.rules.base import RuleResult, RuleSeverity
 from grippy.rules.context import RuleContext
 
-_SQL_KEYWORDS = r"(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|MERGE)"
+_SQL_KEYWORDS = r"(?<!-)(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|MERGE)(?!-)"
 
 # f-string or .format() with SQL keyword
 # Uses [^\n]*? (lazy, newline-bounded) instead of .* to prevent cross-line

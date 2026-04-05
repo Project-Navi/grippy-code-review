@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
@@ -16,6 +17,29 @@ class Severity(StrEnum):
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"
+    PROPS = "PROPS"
+
+
+@dataclass(frozen=True)
+class SeveritySpec:
+    """Canonical properties for each severity level.
+
+    Single source of truth — output_policy, scoring, and verdict logic
+    all derive behavior from this mapping instead of hardcoding values.
+    """
+
+    deduction: int
+    merge_blocking: bool
+    confidence_minimum: int
+
+
+SEVERITY: dict[Severity, SeveritySpec] = {
+    Severity.CRITICAL: SeveritySpec(deduction=25, merge_blocking=True, confidence_minimum=80),
+    Severity.HIGH: SeveritySpec(deduction=15, merge_blocking=True, confidence_minimum=75),
+    Severity.MEDIUM: SeveritySpec(deduction=5, merge_blocking=False, confidence_minimum=75),
+    Severity.LOW: SeveritySpec(deduction=2, merge_blocking=False, confidence_minimum=65),
+    Severity.PROPS: SeveritySpec(deduction=0, merge_blocking=False, confidence_minimum=75),
+}
 
 
 class ComplexityTier(StrEnum):
@@ -23,13 +47,6 @@ class ComplexityTier(StrEnum):
     STANDARD = "STANDARD"
     COMPLEX = "COMPLEX"
     CRITICAL = "CRITICAL"
-
-
-class FindingType(StrEnum):
-    """Whether a finding reports a problem or a positive observation."""
-
-    ISSUE = "issue"  # actionable problem — deducts from score
-    NOTE = "note"  # positive observation / praise — does NOT deduct
 
 
 class FindingCategory(StrEnum):
@@ -102,7 +119,6 @@ class Finding(BaseModel):
     model_config = {"frozen": True}
 
     id: str = Field(description="F-001 through F-999")
-    finding_type: FindingType
     severity: Severity
     confidence: int = Field(ge=0, le=100)
     category: FindingCategory
@@ -148,6 +164,7 @@ class ScoreDeductions(BaseModel):
     high_count: int
     medium_count: int
     low_count: int
+    props_count: int = 0
     total_deduction: int
 
 

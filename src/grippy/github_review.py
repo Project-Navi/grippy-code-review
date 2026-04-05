@@ -529,32 +529,90 @@ GRIPPY_VERDICT_MARKER = "<!-- grippy-verdict"
 _GRIPPY_META_RE = re.compile(r"<!-- grippy-meta ({.*?}) -->")
 
 
-def build_verdict_body(*, score: int, verdict: str, head_sha: str, base_text: str) -> str:
+def build_verdict_body(
+    *,
+    score: int,
+    verdict: str,
+    head_sha: str,
+    base_text: str,
+    merge_blocking: bool = False,
+    findings_count: int = 0,
+    rule_gate_failed: bool = False,
+) -> str:
     """Build verdict review body with machine-readable markers.
 
     Appends ``<!-- grippy-verdict {sha} -->`` for identity and
-    ``<!-- grippy-meta {...} -->`` for structured score/verdict extraction.
+    ``<!-- grippy-meta {...} -->`` for structured metadata extraction.
     """
+    meta = {
+        "score": score,
+        "verdict": verdict,
+        "merge_blocking": merge_blocking,
+        "findings_count": findings_count,
+        "rule_gate_failed": rule_gate_failed,
+    }
     return (
         f"{base_text}\n\n"
         f"<!-- grippy-verdict {head_sha} -->\n"
-        f"<!-- grippy-meta {json.dumps({'score': score, 'verdict': verdict})} -->"
+        f"<!-- grippy-meta {json.dumps(meta)} -->"
     )
 
 
-def parse_grippy_meta(body: str) -> dict[str, Any] | None:
-    """Extract structured metadata from a grippy verdict body.
+_VALID_VERDICTS = frozenset({"PASS", "FAIL", "PROVISIONAL"})
 
-    Returns:
-        Dict with "score" and "verdict" keys, or None if not found/malformed.
+
+def parse_grippy_meta(body: str) -> dict[str, Any] | None:
+    """Extract and validate structured metadata from a grippy verdict body.
+
+    Validates:
+    - score: int in 0-100 (rejects bool)
+    - verdict: str in {"PASS", "FAIL", "PROVISIONAL"}
+    - merge_blocking: bool (optional, absent in old reviews)
+    - findings_count: int >= 0 (optional, rejects bool)
+    - rule_gate_failed: bool (optional)
+
+    Returns allowlisted dict of validated fields, or None if invalid.
     """
     match = _GRIPPY_META_RE.search(body)
     if not match:
         return None
     try:
-        return json.loads(match.group(1))
+        data = json.loads(match.group(1))
     except (json.JSONDecodeError, ValueError):
         return None
+    if not isinstance(data, dict):
+        return None
+
+    # Required: score (int, not bool, 0-100)
+    score = data.get("score")
+    if isinstance(score, bool) or not isinstance(score, int) or score < 0 or score > 100:
+        return None
+
+    # Required: verdict (str, closed set)
+    verdict = data.get("verdict")
+    if not isinstance(verdict, str) or verdict not in _VALID_VERDICTS:
+        return None
+
+    # Optional: merge_blocking (bool)
+    if "merge_blocking" in data and not isinstance(data["merge_blocking"], bool):
+        return None
+
+    # Optional: findings_count (int, not bool, >= 0)
+    if "findings_count" in data:
+        fc = data["findings_count"]
+        if isinstance(fc, bool) or not isinstance(fc, int) or fc < 0:
+            return None
+
+    # Optional: rule_gate_failed (bool)
+    if "rule_gate_failed" in data and not isinstance(data["rule_gate_failed"], bool):
+        return None
+
+    # Allowlist: return only known fields
+    validated: dict[str, Any] = {"score": score, "verdict": verdict}
+    for key in ("merge_blocking", "findings_count", "rule_gate_failed"):
+        if key in data:
+            validated[key] = data[key]
+    return validated
 
 
 def _dismiss_prior_verdicts(
@@ -604,6 +662,9 @@ def post_review(
     summary_only_findings: list[Finding] | None = None,
     policy_bypassed: bool = False,
     display_capped_count: int = 0,
+    merge_blocking: bool = False,
+    findings_count: int = 0,
+    rule_gate_failed: bool = False,
 ) -> None:
     """Post Grippy review as inline comments + summary dashboard.
 
@@ -747,6 +808,9 @@ def post_review(
                 verdict=verdict,
                 head_sha=head_sha,
                 base_text=f"Grippy approves \u2014 **PASS** ({score}/100)",
+                merge_blocking=merge_blocking,
+                findings_count=findings_count,
+                rule_gate_failed=rule_gate_failed,
             )
             new_review = pr.create_review(event="APPROVE", body=body)
         elif verdict == "FAIL":
@@ -755,6 +819,9 @@ def post_review(
                 verdict=verdict,
                 head_sha=head_sha,
                 base_text=f"Grippy requests changes \u2014 **FAIL** ({score}/100)",
+                merge_blocking=merge_blocking,
+                findings_count=findings_count,
+                rule_gate_failed=rule_gate_failed,
             )
             new_review = pr.create_review(event="REQUEST_CHANGES", body=body)
     except GithubException as exc:

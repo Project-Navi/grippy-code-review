@@ -88,6 +88,25 @@ class TestSqlInjectionRule:
         results = SqlInjectionRule().run(_ctx(diff))
         assert len(results) == 2
 
+    def test_hyphenated_keyword_not_sql(self) -> None:
+        """Hyphenated compound words containing SQL keywords are not SQL."""
+        diff = _make_diff(
+            "review.py",
+            [
+                'f.write(f"merge-blocking={str(val).lower()}\\n")',
+                'f.write(f"create-date={date}\\n")',
+                'f.write(f"drop-down-menu={menu}\\n")',
+            ],
+        )
+        results = SqlInjectionRule().run(_ctx(diff))
+        assert len(results) == 0
+
+    def test_real_merge_still_detected(self) -> None:
+        """Actual SQL MERGE statement is still flagged."""
+        diff = _make_diff("app.py", ['q = f"MERGE INTO target USING source ON {cond}"'])
+        results = SqlInjectionRule().run(_ctx(diff))
+        assert len(results) == 1
+
     def test_rule_metadata(self) -> None:
         rule = SqlInjectionRule()
         assert rule.id == "sql-injection-risk"

@@ -49,7 +49,6 @@ from grippy.schema import (
 def _make_finding(**overrides: Any) -> Finding:
     defaults: dict[str, Any] = {
         "id": "F-001",
-        "finding_type": "issue",
         "severity": Severity.HIGH,
         "confidence": 85,
         "category": FindingCategory.SECURITY,
@@ -2172,3 +2171,130 @@ class TestGitignoreContainsDevVars:
         gitignore = Path(__file__).resolve().parent.parent / ".gitignore"
         content = gitignore.read_text()
         assert ".env" in content
+
+
+# --- Early-exit semantic correctness (CIPHER-003 + Grumpy FINDING-02) ---
+
+
+class TestEarlyExitSemantics:
+    """Early-exit path must faithfully replay prior review metadata."""
+
+    def test_fail_verdict_returns_nonzero(self) -> None:
+        """Prior FAIL → exit code 1."""
+        from grippy.review import _early_exit_code
+
+        meta = {
+            "score": 40,
+            "verdict": "FAIL",
+            "merge_blocking": True,
+            "findings_count": 3,
+            "rule_gate_failed": False,
+        }
+        assert _early_exit_code(meta, "") == 1
+
+    def test_pass_verdict_returns_zero(self) -> None:
+        """Prior PASS → exit code 0."""
+        from grippy.review import _early_exit_code
+
+        assert _early_exit_code({"score": 85, "verdict": "PASS"}, "") == 0
+
+    def test_fail_writes_merge_blocking_true(self, tmp_path: Path) -> None:
+        """Prior FAIL → merge-blocking=true in output."""
+        from grippy.review import _early_exit_code
+
+        output_file = tmp_path / "github_output"
+        output_file.touch()
+        meta = {
+            "score": 40,
+            "verdict": "FAIL",
+            "merge_blocking": True,
+            "findings_count": 3,
+            "rule_gate_failed": False,
+        }
+        _early_exit_code(meta, str(output_file))
+        content = output_file.read_text()
+        assert "merge-blocking=true" in content
+        assert "findings-count=3" in content
+
+    def test_pass_writes_merge_blocking_false(self, tmp_path: Path) -> None:
+        """Prior PASS → merge-blocking=false in output."""
+        from grippy.review import _early_exit_code
+
+        output_file = tmp_path / "github_output"
+        output_file.touch()
+        meta = {"score": 85, "verdict": "PASS", "merge_blocking": False, "findings_count": 0}
+        _early_exit_code(meta, str(output_file))
+        content = output_file.read_text()
+        assert "merge-blocking=false" in content
+        assert "findings-count=0" in content
+
+    def test_old_format_fail_derives_merge_blocking(self) -> None:
+        """Old meta without merge_blocking: FAIL → derive exit code 1."""
+        from grippy.review import _early_exit_code
+
+        meta = {"score": 40, "verdict": "FAIL"}
+        assert _early_exit_code(meta, "") == 1
+
+    def test_old_format_pass_derives_zero(self) -> None:
+        """Old meta without merge_blocking: PASS → derive exit code 0."""
+        from grippy.review import _early_exit_code
+
+        assert _early_exit_code({"score": 85, "verdict": "PASS"}, "") == 0
+
+    def test_rule_gate_failed_returns_nonzero(self) -> None:
+        """rule_gate_failed=True → exit code 1 even if verdict is PASS."""
+        from grippy.review import _early_exit_code
+
+        meta = {
+            "score": 85,
+            "verdict": "PASS",
+            "merge_blocking": False,
+            "rule_gate_failed": True,
+        }
+        assert _early_exit_code(meta, "") == 1
+
+    def test_rule_gate_failed_written_to_output(self, tmp_path: Path) -> None:
+        """rule-gate-failed from meta is written, not hardcoded false."""
+        from grippy.review import _early_exit_code
+
+        output_file = tmp_path / "github_output"
+        output_file.touch()
+        meta = {
+            "score": 40,
+            "verdict": "FAIL",
+            "merge_blocking": True,
+            "findings_count": 0,
+            "rule_gate_failed": True,
+        }
+        _early_exit_code(meta, str(output_file))
+        content = output_file.read_text()
+        assert "rule-gate-failed=true" in content
+
+    def test_round_trip_fidelity(self, tmp_path: Path) -> None:
+        """Normal path → build_verdict_body → parse → early_exit matches normal output."""
+        from grippy.github_review import build_verdict_body, parse_grippy_meta
+        from grippy.review import _early_exit_code
+
+        body = build_verdict_body(
+            score=72,
+            verdict="FAIL",
+            head_sha="abc123",
+            base_text="Grippy requests changes",
+            merge_blocking=True,
+            findings_count=4,
+            rule_gate_failed=True,
+        )
+        meta = parse_grippy_meta(body)
+        assert meta is not None
+
+        output_file = tmp_path / "github_output"
+        output_file.touch()
+        exit_code = _early_exit_code(meta, str(output_file))
+        content = output_file.read_text()
+
+        assert exit_code == 1
+        assert "score=72" in content
+        assert "verdict=FAIL" in content
+        assert "merge-blocking=true" in content
+        assert "findings-count=4" in content
+        assert "rule-gate-failed=true" in content
