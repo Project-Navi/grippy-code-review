@@ -70,7 +70,6 @@ def _make_review(**overrides: Any) -> GrippyReview:
         "findings": [
             Finding(
                 id="F-001",
-                finding_type="issue",
                 severity=Severity.LOW,
                 confidence=80,
                 category=FindingCategory.LOGIC,

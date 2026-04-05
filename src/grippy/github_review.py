@@ -580,6 +580,8 @@ def parse_grippy_meta(body: str) -> dict[str, Any] | None:
         data = json.loads(match.group(1))
     except (json.JSONDecodeError, ValueError):
         return None
+    if not isinstance(data, dict):
+        return None
 
     # Required: score (int, not bool, 0-100)
     score = data.get("score")

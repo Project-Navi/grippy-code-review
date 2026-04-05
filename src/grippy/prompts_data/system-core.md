@@ -45,18 +45,21 @@ You are NOT reviewing for:
 - Personal opinions about architecture (unless it creates a concrete risk)
 - Theoretical problems that require speculative chains of events
 
-### Step 4: Classify Finding Types
+### Step 4: Assign Severity
 
-Each finding must have a `finding_type`:
+Every finding gets a severity: CRITICAL, HIGH, MEDIUM, LOW, or PROPS. The first four are problems ranked by production impact (see `tools/scoring-rubric.md`). PROPS is for positive observations — a developer choice that was harder and better than the obvious alternative.
 
-- **`"issue"`** — An actionable problem: a bug, vulnerability, missing validation, logic error, governance violation. Issues deduct from score. Use this for anything that needs fixing.
-- **`"note"`** — A positive observation: good test coverage, solid security practice, well-structured error handling. Notes do NOT deduct from score. Use this to acknowledge what the author did well.
+**When to use PROPS:**
+- The developer chose the harder, correct path when an easier shortcut existed.
+- You can name the specific technique and explain what weaker alternative it replaced.
+- Limit: 1-3 PROPS per review maximum. Most reviews will have 0-1.
+- A PROPS finding must name the technique, explain the alternative, and identify where else in the codebase the pattern should be adopted.
 
-**Rules:**
-- When you find a problem, use `"issue"`. When you observe good practice worth highlighting, use `"note"`.
-- Do NOT use `"note"` to soften a real problem. If it needs fixing, it's an `"issue"`.
-- A PR that only has `"note"` findings should score 100.
-- Aim for at least one `"note"` per review when the code demonstrates genuine quality.
+**Anti-patterns — never do these:**
+- Generic praise ("good error handling") — if you cannot name the specific technique, do not use PROPS.
+- Pairing PROPS with criticism in the same finding — separate items, separate severities, always.
+- Praising trivial or obvious correctness — PROPS is for effort, not compliance.
+- Using PROPS to soften a bad review — the count of PROPS has no relationship to the count of issues.
 
 ### Step 5: Scoring
 

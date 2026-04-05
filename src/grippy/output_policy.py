@@ -20,9 +20,9 @@ import logging
 from grippy.ignore import parse_nogrip
 from grippy.rules.context import parse_diff
 from grippy.schema import (
+    SEVERITY,
     Finding,
     FindingCategory,
-    FindingType,
     GrippyReview,
     Score,
     ScoreBreakdown,
@@ -81,10 +81,7 @@ def _is_narration(finding: Finding) -> bool:
 # ---------------------------------------------------------------------------
 
 _CONFIDENCE_THRESHOLD: dict[Severity, int] = {
-    Severity.CRITICAL: 80,
-    Severity.HIGH: 75,
-    Severity.MEDIUM: 75,
-    Severity.LOW: 65,
+    sev: spec.confidence_minimum for sev, spec in SEVERITY.items()
 }
 
 _CATEGORY_PENALTY: dict[FindingCategory, int] = {
@@ -191,12 +188,7 @@ def _is_nogrip_suppressed(finding: Finding, nogrip_index: _NoGripIndex) -> bool:
 # 0d. Score recomputation
 # ---------------------------------------------------------------------------
 
-_DEDUCTION: dict[Severity, int] = {
-    Severity.CRITICAL: 25,
-    Severity.HIGH: 15,
-    Severity.MEDIUM: 5,
-    Severity.LOW: 2,
-}
+_DEDUCTION: dict[Severity, int] = {sev: spec.deduction for sev, spec in SEVERITY.items()}
 
 _CATEGORY_CAP: dict[FindingCategory, int] = {
     FindingCategory.SECURITY: 50,
@@ -210,16 +202,14 @@ _CATEGORY_CAP: dict[FindingCategory, int] = {
 def _recompute_score(findings: list[Finding]) -> Score:
     """Recompute score from the scoring set using the deduction rubric.
 
-    Only ``issue`` findings deduct points. ``note`` findings (positive
-    observations) are included in the scoring set for display but do
-    not affect the score or severity counts.
+    Deductions are derived from ``SEVERITY`` spec — PROPS has deduction 0,
+    so positive observations are included in the scoring set for display
+    but do not affect the score.
     """
     category_deductions: dict[FindingCategory, int] = {}
     severity_counts = dict.fromkeys(Severity, 0)
 
     for f in findings:
-        if f.finding_type == FindingType.NOTE and not f.rule_id:
-            continue
         category_deductions[f.category] = category_deductions.get(f.category, 0) + _DEDUCTION.get(
             f.severity, 0
         )
@@ -247,6 +237,7 @@ def _recompute_score(findings: list[Finding]) -> Score:
             high_count=severity_counts[Severity.HIGH],
             medium_count=severity_counts[Severity.MEDIUM],
             low_count=severity_counts[Severity.LOW],
+            props_count=severity_counts[Severity.PROPS],
             total_deduction=total,
         ),
     )
@@ -267,16 +258,14 @@ _THRESHOLD: dict[str, int] = {
 def _derive_verdict(score: int, findings: list[Finding], mode: str) -> Verdict:
     """Derive verdict from recomputed score and mode (call-site authority).
 
-    Only ``issue`` findings contribute to severity gates. ``note`` findings
-    (positive observations) do not trigger FAIL regardless of their severity label.
-    Rule-backed findings (``rule_id`` set) are always treated as issues even if
-    the LLM labels them as notes — deterministic rules cannot be downgraded.
+    Severity gates use ``SEVERITY[sev].merge_blocking`` to decide which
+    levels participate in FAIL/PROVISIONAL decisions.  PROPS has
+    ``merge_blocking=False`` so positive observations never trigger gates.
     """
     threshold = _THRESHOLD.get(mode, 70)
 
-    issues = [f for f in findings if f.finding_type != FindingType.NOTE or f.rule_id]
-    has_critical = any(f.severity == Severity.CRITICAL for f in issues)
-    high_count = sum(1 for f in issues if f.severity == Severity.HIGH)
+    has_critical = any(f.severity == Severity.CRITICAL for f in findings)
+    high_count = sum(1 for f in findings if f.severity == Severity.HIGH)
 
     if has_critical:
         status, blocking = VerdictStatus.FAIL, True
@@ -309,8 +298,9 @@ def _apply_display_caps(findings: list[Finding]) -> tuple[list[Finding], int]:
         Severity.HIGH: 1,
         Severity.MEDIUM: 2,
         Severity.LOW: 3,
+        Severity.PROPS: 4,
     }
-    ranked = sorted(findings, key=lambda f: (severity_order.get(f.severity, 4), -f.confidence))
+    ranked = sorted(findings, key=lambda f: (severity_order.get(f.severity, 5), -f.confidence))
 
     # Per-file cap: 5
     file_counts: dict[str, int] = {}

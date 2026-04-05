@@ -18,42 +18,24 @@ GitHub's REST API returns `406 Not Acceptable` when a PR diff exceeds their size
 
 **Workaround:** Split large fixture additions into separate PRs.
 
-### DEBT-002: No migration path for serialized Finding objects missing `finding_type`
+### DEBT-002: No migration path for serialized Finding objects missing PROPS severity
 
-**Filed:** 2026-04-04
-**Module:** `schema.py` — `Finding`, `FindingType`
+**Filed:** 2026-04-04, updated 2026-04-05
+**Module:** `schema.py` — `Finding`, `Severity`
 **Severity:** Low
 
-The `finding_type` field was added to `Finding` as required (no default) to avoid OpenAI structured output `$ref` + `default` keyword conflicts. Historical serialized `Finding` records (if any exist in databases or artifacts) will fail Pydantic validation on deserialization because they lack this field.
+The `finding_type` field was removed and replaced by the `PROPS` severity level. Historical serialized `Finding` records (if any exist in databases or artifacts) may contain `finding_type` fields that no longer exist in the model, or may lack `PROPS` as a valid severity.
 
 **Impact:** Low — no known production consumers persist `Finding` objects long-term. CI reviews are ephemeral.
 
-**Fix:** If persistent Finding storage is added, include a migration to inject `finding_type: "issue"` into legacy records.
+**Fix:** If persistent Finding storage is added, include a migration to drop `finding_type` from legacy records.
 
-### DEBT-003: Cached LLM agents may not emit `finding_type` field
+## Resolved
 
-**Filed:** 2026-04-04
-**Module:** `prompts_data/output-schema.md` — `finding_type` field
-**Severity:** Low
+### ~~DEBT-003: Cached LLM agents may not emit `finding_type` field~~ (RESOLVED)
 
-Older orchestrators or LLM agents running on cached prompts without the `finding_type` field will produce `Finding` objects that fail Pydantic validation. The field is required, so missing it causes a parse error.
+**Resolved:** 2026-04-05 — `finding_type` field removed entirely. Severity axis now carries the full signal (PROPS for positive observations). No longer a concern.
 
-**Impact:** Low — grippy CI always runs from the current commit's prompts. Only affects external consumers using stale schema docs.
+### ~~DEBT-004: Formalize appreciative inquiry in review output~~ (RESOLVED)
 
-**Fix:** No action needed unless grippy is deployed as a service with cached prompt versions.
-
-### DEBT-004: Formalize appreciative inquiry in review output
-
-**Filed:** 2026-04-04
-**Module:** `prompts_data/system-core.md`, `prompts_data/scoring-rubric.md`, `schema.py`
-**Severity:** Enhancement
-
-Grippy naturally produces positive observations about good code alongside problems — the `finding_type: "note"` field now supports this structurally. Formalizing this as appreciative inquiry (deliberately surfacing what's working well, not just what's broken) would improve the review experience for humans. Research shows balanced feedback increases engagement with review findings and reduces defensive responses to criticism.
-
-**Shape:**
-- Prompt guidance: instruct grippy to include 1-2 notes per review highlighting strong patterns, good test coverage, or security improvements — not just problems
-- Scoring rubric: notes don't deduct (already implemented) but could contribute to a "strengths" section in the summary
-- Summary format: pair findings with acknowledged strengths ("3 issues found, 2 strong patterns noted")
-- Personality: grippy's grudging-respect tone is a natural fit for appreciative inquiry — "I hate to admit it, but this auth flow is actually solid"
-
-**Why:** Code review tools that only report problems train humans to dread their output. Balanced feedback produces better outcomes than pure criticism.
+**Resolved:** 2026-04-05 — PROPS severity level implements appreciative inquiry. Prompt guidance in system-core.md Step 4 and scoring-rubric.md. Grounded in research on appreciative inquiry, motivational interviewing, and feedback psychology. `SeveritySpec` dataclass ensures properties are structural, not scattered.

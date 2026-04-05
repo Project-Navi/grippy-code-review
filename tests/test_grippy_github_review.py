@@ -23,7 +23,6 @@ def _make_finding(
 ) -> Finding:
     return Finding(
         id="F-001",
-        finding_type="issue",
         severity=severity,
         confidence=90,
         category=category,
@@ -1563,7 +1562,6 @@ class TestCommentSanitization:
         # Rebuild with malicious description — Finding is frozen, so create fresh
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1589,7 +1587,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1610,7 +1607,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1631,7 +1627,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1653,7 +1648,6 @@ class TestCommentSanitization:
 
         finding = Finding(
             id="F-001",
-            finding_type="issue",
             severity="HIGH",
             confidence=90,
             category="security",
@@ -1872,6 +1866,17 @@ class TestVerdictMarkers:
         assert result["merge_blocking"] is True
         assert result["findings_count"] == 3
         assert result["rule_gate_failed"] is True
+
+    def test_non_dict_json_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """isinstance(data, dict) guard rejects non-object JSON payloads."""
+        from grippy import github_review
+        from grippy.github_review import parse_grippy_meta
+
+        # The regex constrains input to {...} so json.loads normally returns
+        # a dict.  Patch json.loads to return a list to exercise the guard.
+        monkeypatch.setattr(github_review.json, "loads", lambda _s: [1, 2, 3])
+        body = '<!-- grippy-meta {"score": 85, "verdict": "PASS"} -->'
+        assert parse_grippy_meta(body) is None
 
     def test_unknown_fields_stripped(self) -> None:
         """Extra fields in meta are stripped by allowlist."""

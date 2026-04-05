@@ -67,7 +67,6 @@ def _make_finding(**overrides: Any) -> Finding:
     """Build a Finding with sane defaults, overridable per-field."""
     defaults: dict[str, Any] = {
         "id": "F-099",
-        "finding_type": "issue",
         "severity": Severity.MEDIUM,
         "confidence": 75,
         "category": FindingCategory.SECURITY,

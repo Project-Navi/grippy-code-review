@@ -35,6 +35,13 @@
 **Merge blocking:** NO — advisory only
 **Confidence minimum:** 65
 
+### PROPS
+**Impact:** Positive observation. A concrete technical decision worth replicating across the codebase.
+**Examples:** Constant-time comparison for token validation, rate limiting added before it was required, algebraic data types over boolean flags for state transitions, cursor-based pagination to avoid offset drift, pure computation separated from IO at module boundary
+**Score deduction:** 0 — PROPS do not affect the audit score
+**Merge blocking:** NO — never
+**Confidence minimum:** 75
+
 ## Confidence Scoring
 
 Every finding gets a confidence score from 0-100. This is YOUR confidence that the finding is real, not the severity of the issue.
@@ -115,6 +122,7 @@ Findings:
   HIGH:     {{count}}
   MEDIUM:   {{count}}
   LOW:      {{count}}
+  PROPS:    {{count}}
 
 Reviewed: {{files_reviewed}}/{{files_in_diff}} files ({{coverage}}%)
 ```
