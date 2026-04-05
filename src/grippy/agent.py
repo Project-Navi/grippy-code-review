@@ -277,6 +277,7 @@ def format_pr_context(
     learnings: str = "",
     rule_findings: str = "",
     changed_since_last_review: str = "",
+    graph_context: str = "",
 ) -> str:
     """Format PR context as the user message, matching pr-review.md input format."""
     sections = [
@@ -312,6 +313,9 @@ def format_pr_context(
         sections.append(
             f"<review_context>\n{_escape_xml(changed_since_last_review)}\n</review_context>"
         )
+
+    if graph_context:
+        sections.append(f"<graph_context>\n{_escape_xml(graph_context)}\n</graph_context>")
 
     sections.append(f"<diff>\n{_escape_xml(diff)}\n</diff>")
 

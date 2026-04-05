@@ -206,6 +206,7 @@ Disabled (`add_history_to_context = False`). Prior LLM responses may contain att
 | TB-7 | Config/credentials boundary | `_resolve_transport()`, `_PROVIDERS` dict (module paths + class names) | agent |
 | TB-8 | Rule coverage validation | `_validate_rule_coverage()`, `_safe_error_summary()` | retry |
 | TB-9 | Session history boundary | `add_history_to_context` setting in `Agent()` constructor | agent |
+| TB-10 | Graph store egress | `format_context_for_llm()`, `format_pr_context()` graph_context param | graph-context, agent, review |
 
 **Critical data flow:** PR content → `_escape_xml` → agent prompt → LLM → `run_review` JSON parse → `_validate_rule_coverage` → `github_review` sanitization → GitHub API. Any code touching this path gets extra scrutiny.
 
@@ -229,7 +230,7 @@ These standards define the bar for this project. Some are fully met today; other
 
 ### Change Review
 
-- **Boundary changes** (touches trust boundary anchors from TB-1 through TB-9) → require security review + adversarial test verification
+- **Boundary changes** (touches trust boundary anchors from TB-1 through TB-10) → require security review + adversarial test verification
 - **Rule changes** (modifies detection patterns in `rules/*.py`) → require fixture matrix update covering positive/negative/adversarial
 - **Prompt changes** (modifies prompt chain in `prompts_data/` or `agent.py`) → require adversarial test review for injection resistance
 - **Infrastructure changes** (everything else) → standard review

@@ -102,7 +102,13 @@ def build_context_pack(
 
 
 def format_context_for_llm(pack: ContextPack, max_chars: int = 2000) -> str:
-    """Format context pack as sanitized text for LLM prompt context."""
+    """Format context pack as Unicode-normalized text for downstream consumption.
+
+    NOT prompt-safe — callers that inject this into LLM prompts MUST apply full
+    prompt-ingress sanitization (e.g. ``_escape_xml()`` in ``format_pr_context()``).
+    This function normalizes Unicode (strips bidi, homoglyphs, invisible chars)
+    but does NOT neutralize injection patterns or escape XML.
+    """
     if not pack.touched_files:
         return ""
 
@@ -111,7 +117,7 @@ def format_context_for_llm(pack: ContextPack, max_chars: int = 2000) -> str:
     if pack.blast_radius_files:
         lines.append("Files with downstream dependents:")
         for path, count in pack.blast_radius_files[:10]:
-            lines.append(f"- {path}: imported by {count} module(s)")
+            lines.append(f"- {navi_sanitize.clean(path)}: imported by {count} module(s)")
         lines.append("")
 
     if pack.recurring_findings:
@@ -119,18 +125,23 @@ def format_context_for_llm(pack: ContextPack, max_chars: int = 2000) -> str:
         for f in pack.recurring_findings[:10]:
             sev = navi_sanitize.clean(str(f.get("severity", "UNKNOWN")))
             title = navi_sanitize.clean(str(f.get("title", "")))
-            lines.append(f"- {f['file']}: {sev} — {title}")
+            file = navi_sanitize.clean(str(f["file"]))
+            lines.append(f"- {file}: {sev} — {title}")
         lines.append("")
 
     if pack.file_history:
         lines.append("File history:")
         for path, obs in list(pack.file_history.items())[:5]:
+            clean_path = navi_sanitize.clean(path)
             for o in obs[-3:]:  # last 3 observations per file
-                lines.append(f"- {path}: {o}")
+                lines.append(f"- {clean_path}: {navi_sanitize.clean(o)}")
         lines.append("")
 
     if pack.author_risk_summary:
-        parts = [f"{count}x {sev}" for sev, count in sorted(pack.author_risk_summary.items())]
+        parts = [
+            f"{count}x {navi_sanitize.clean(sev)}"
+            for sev, count in sorted(pack.author_risk_summary.items())
+        ]
         lines.append(f"Author history: {', '.join(parts)}")
         lines.append("")
 
