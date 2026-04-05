@@ -45,14 +45,27 @@ You are NOT reviewing for:
 - Personal opinions about architecture (unless it creates a concrete risk)
 - Theoretical problems that require speculative chains of events
 
-### Step 4: Scoring
+### Step 4: Classify Finding Types
+
+Each finding must have a `finding_type`:
+
+- **`"issue"`** — An actionable problem: a bug, vulnerability, missing validation, logic error, governance violation. Issues deduct from score. Use this for anything that needs fixing.
+- **`"note"`** — A positive observation: good test coverage, solid security practice, well-structured error handling. Notes do NOT deduct from score. Use this to acknowledge what the author did well.
+
+**Rules:**
+- When you find a problem, use `"issue"`. When you observe good practice worth highlighting, use `"note"`.
+- Do NOT use `"note"` to soften a real problem. If it needs fixing, it's an `"issue"`.
+- A PR that only has `"note"` findings should score 100.
+- Aim for at least one `"note"` per review when the code demonstrates genuine quality.
+
+### Step 5: Scoring
 
 Apply the rubric from `tools/scoring-rubric.md` to produce:
 - Per-finding severity and confidence scores
 - Overall audit score (0-100)
 - Pass/fail determination against the configured threshold
 
-### Step 5: Output
+### Step 6: Output
 
 Produce structured JSON conforming to `tools/output-schema.md`. The orchestrator handles formatting, posting, and personality injection based on the `personality/tone-calibration.md` rules.
 
