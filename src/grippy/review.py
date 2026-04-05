@@ -307,6 +307,31 @@ def _format_rule_findings(results: list[RuleResult]) -> str:
     return "\n".join(lines)
 
 
+def _early_exit_code(meta: dict[str, Any], github_output: str) -> int:
+    """Write validated grippy-meta to GITHUB_OUTPUT and return exit code.
+
+    Derives merge-blocking from verdict if not explicitly stored (backward compat
+    with old 2-field meta format). Returns 1 for blocking verdicts, 0 otherwise.
+    """
+    score = meta["score"]
+    verdict = meta["verdict"]
+    merge_blocking = meta.get("merge_blocking", verdict == "FAIL")
+    findings_count = meta.get("findings_count", 0)
+    rule_gate_failed = meta.get("rule_gate_failed", False)
+
+    if github_output:
+        with open(github_output, "a") as f:
+            f.write(f"score={score}\n")
+            f.write(f"verdict={verdict}\n")
+            f.write(f"findings-count={findings_count}\n")
+            f.write(f"merge-blocking={str(merge_blocking).lower()}\n")
+            f.write("rule-findings-count=0\n")
+            f.write(f"rule-gate-failed={str(rule_gate_failed).lower()}\n")
+            f.write("profile=security\n")
+
+    return 1 if (merge_blocking or rule_gate_failed) else 0
+
+
 def main(*, profile: str | None = None) -> None:
     """CI entry point — reads env, runs review, posts comment."""
     # Load .dev.vars if present (local dev only — never in CI)
@@ -375,16 +400,7 @@ def main(*, profile: str | None = None) -> None:
                     f"Already reviewed {head_sha_early[:7]}, skipping (score={existing['score']})"
                 )
                 github_output = os.environ.get("GITHUB_OUTPUT", "")
-                if github_output:
-                    with open(github_output, "a") as f:
-                        f.write(f"score={existing['score']}\n")
-                        f.write(f"verdict={existing['verdict']}\n")
-                        f.write("findings-count=0\n")
-                        f.write("merge-blocking=false\n")
-                        f.write("rule-findings-count=0\n")
-                        f.write("rule-gate-failed=false\n")
-                        f.write("profile=security\n")
-                sys.exit(0)
+                sys.exit(_early_exit_code(existing, github_output))
         except SystemExit:
             raise  # don't catch our own sys.exit(0)
         except Exception as exc:
@@ -721,6 +737,9 @@ def main(*, profile: str | None = None) -> None:
             summary_only_findings=review.summary_only_findings,
             policy_bypassed=review.meta.policy_bypassed,
             display_capped_count=review.meta.display_capped_count,
+            merge_blocking=review.verdict.merge_blocking,
+            findings_count=len(review.findings),
+            rule_gate_failed=rule_gate_failed,
         )
         print("  Done.")
     except Exception as exc:
