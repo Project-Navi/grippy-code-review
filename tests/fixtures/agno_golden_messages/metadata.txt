@@ -1,0 +1,86 @@
+Agno Golden Message Capture Metadata
+==================================================
+
+Mode: pr_review
+  Cloud message length: 63668 chars
+  Local message length: 71505 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
+
+Mode: security_audit
+  Cloud message length: 64249 chars
+  Local message length: 72086 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
+
+Mode: governance_check
+  Cloud message length: 64289 chars
+  Local message length: 72126 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
+
+Mode: surprise_audit
+  Cloud message length: 63930 chars
+  Local message length: 71767 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
+
+Mode: cli
+  Cloud message length: 66520 chars
+  Local message length: 74357 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
+
+Mode: github_app
+  Cloud message length: 66172 chars
+  Local message length: 74009 chars
+  JSON schema delta: +7837 chars
+  Message role: system
+  Instruction count: 12
+  Has description (identity): True
+  Has instructions: True
+  use_instruction_tags: False
+  markdown: False
+  add_history_to_context: False
+  structured_outputs: False
+  model.supports_native_structured_outputs: False
