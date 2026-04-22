@@ -27,6 +27,10 @@ from agno.tools.toolkit import Toolkit
 
 log = logging.getLogger(__name__)
 
+# Maximum file size (in bytes) that read_file will return.
+# Kept as a module-level constant for consistency with other safety limits.
+_MAX_FILE_SIZE = 1_000_000
+
 # --- Constants ---
 
 _DEFAULT_EXTENSIONS = frozenset({".py", ".md", ".yaml", ".yml", ".toml"})
@@ -690,13 +694,31 @@ def _make_grep_code(repo_root: Path) -> Any:
             return f"Invalid regex: {e}"
 
         try:
-            # Use -r (not -R) to prevent following symlinks on GNU grep.
-            # On BSD grep, -r follows symlinks; -S is needed to prevent it,
-            # but -S is not recognised by GNU grep.  Since CI targets Linux
-            # (GNU grep), -r alone is sufficient.
+            # Prefer not to follow symlinks:
+            # - On GNU grep, -r does not follow symlinks, so -r alone is fine.
+            # - On BSD grep, -r follows symlinks; -S is needed to prevent it,
+            #   but -S is not recognised by GNU grep.
+            # We therefore try to detect GNU grep via `grep --version` and
+            # only add -S when we don't see a GNU signature.
+            grep_flags = ["-r", "-n"]
+            try:
+                version_check = subprocess.run(
+                    ["grep", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
+                )
+                version_text = (version_check.stdout or "") + (version_check.stderr or "")
+                if "GNU grep" not in version_text:
+                    # Likely BSD or other implementation; avoid following symlinks.
+                    grep_flags.insert(1, "-S")
+            except (subprocess.SubprocessError, OSError, ValueError):
+                # If version detection fails for any reason, fall back to default flags.
+                pass
+
             cmd = [
                 "grep",
-                "-rn",
+                *grep_flags,
                 "--max-count=50",
                 f"--include={glob}",
                 f"-C{context_lines}",
@@ -783,8 +805,10 @@ def _make_read_file(repo_root: Path) -> Any:
             file_size = target.stat().st_size
         except OSError as e:
             return f"Error reading file: {e}"
-        if file_size > 1_000_000:
-            return f"Error: file too large ({file_size} bytes, limit 1 MB)."
+        if file_size > _MAX_FILE_SIZE:
+            return (
+                f"Error: file too large ({file_size} bytes, limit {_MAX_FILE_SIZE} bytes)."
+            )
 
         try:
             lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -808,6 +832,9 @@ def _make_read_file(repo_root: Path) -> Any:
         return result
 
     return read_file
+
+
+_GLOB_TIMEOUT_SECONDS = 5.0
 
 
 def _make_list_files(repo_root: Path) -> Any:
@@ -843,7 +870,7 @@ def _make_list_files(repo_root: Path) -> Any:
             truncated = False
             glob_start = time.monotonic()
             for entry in target.glob(glob_pattern):
-                if time.monotonic() - glob_start > 5.0:
+                if time.monotonic() - glob_start > _GLOB_TIMEOUT_SECONDS:
                     return "Error: glob timeout — use a more specific pattern."
                 if entry.resolve().is_relative_to(resolved_root):
                     collected.append(entry)
