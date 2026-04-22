@@ -712,9 +712,10 @@ def _make_grep_code(repo_root: Path) -> Any:
                 if "GNU grep" not in version_text:
                     # Likely BSD or other implementation; avoid following symlinks.
                     grep_flags.insert(1, "-S")
-            except (subprocess.SubprocessError, OSError, ValueError):
+            except (subprocess.SubprocessError, OSError, ValueError) as e:
                 # If version detection fails for any reason, fall back to default flags.
-                pass
+                # Log at debug level so operators can diagnose on BSD systems.
+                log.debug("grep --version check failed; BSD symlink protection not applied: %s", e)
 
             cmd = [
                 "grep",
