@@ -22,7 +22,15 @@ INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"(?i)(?:confidence|severity)\s+(?:below|under|above|less\s+than)\s+\d+"),
         "[BLOCKED]",
     ),
+    (
+        re.compile(
+            r"(?i)set\s+(?:the\s+)?confidence\s+of\s+all\s+(?:the\s+)?findings?\s+to\s+\d+"
+        ),
+        "[BLOCKED]",
+    ),
+    (re.compile(r"(?i)low\s+confidence\s+only"), "[BLOCKED]"),
     (re.compile(r"(?i)IMPORTANT\s+SYSTEM\s+UPDATE"), "[BLOCKED]"),
+    (re.compile(r"(?i)bypass\s+(?:all\s+)?security\s+checks?"), "[BLOCKED]"),
     (re.compile(r"(?i)you\s+are\s+now\s+"), "[BLOCKED] "),
     (re.compile(r"(?i)skip\s+(?:security\s+)?analysis"), "[BLOCKED]"),
     (re.compile(r"(?i)no\s+findings?\s+needed"), "[BLOCKED]"),
